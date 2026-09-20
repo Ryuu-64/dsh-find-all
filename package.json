@@ -1,0 +1,67 @@
+{
+  "name": "dsh-find-all",
+  "version": "0.1.0",
+  "description": "DSH web plugin: a Cmd/Ctrl+F find bar for the desktop Electron shell that searches the WHOLE current conversation — it pages older history in automatically instead of only searching the rendered tail.",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE.md",
+    "LICENSE"
+  ],
+  "author": "Ryuu-64",
+  "contributors": [
+    "secyborg (upstream dsh-find-bar, MIT)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ryuu-64/dsh-find-all.git"
+  },
+  "homepage": "https://github.com/Ryuu-64/dsh-find-all#readme",
+  "bugs": {
+    "url": "https://github.com/Ryuu-64/dsh-find-all/issues"
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.1.5-rc.1"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "check": "node --check lib/index.js && node --check lib/client.js && node --test \"test/**/*.test.mjs\""
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "find",
+    "search",
+    "conversation"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-chat"
+      ],
+      "platform": "web"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.1.5-rc.1": "compatible",
+        "0.1.5-rc.2": "compatible"
+      }
+    }
+  }
+}

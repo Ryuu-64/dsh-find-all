@@ -1,0 +1,7 @@
+# dsh-find-all bundle patch: one loader row.
+#
+# The host half is a deliberate no-op (see lib/index.js) — the whole feature
+# lives in the client bundle, so nothing here needs configuration.
+- insert:
+    - id: find-all
+      name: 'dsh-find-all'

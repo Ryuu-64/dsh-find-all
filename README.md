@@ -10,7 +10,7 @@ DSH web 插件：给桌面 App（Electron 壳）补上 **⌘F / Ctrl+F 页内查
 
 ## 为什么需要它
 
-DSH 桌面窗口是 Electron，本身没有浏览器那种查找栏；而会话视图**一次只保留最近 50 条消息**在页面里（点一次「加载更早」再多 50 条）。所以用普通查找条搜一个存在于更早历史里的词，结果永远是 0——哪怕这段对话里明明有。
+DSH 桌面窗口是 Electron，本身没有浏览器那种查找栏；而会话视图**一次只保留最近 50 条消息**在页面里（点一次「加载更早」再多 50 条）。所以用普通查找条搜一个存在于更早历史里的词，结果永远是 0——哪怕这段会话里明明有。
 
 本插件在你输入关键词后，通过会话服务把更早的历史一页页加载进来，每加载一页就重搜一次，直到整段会话都在页面里。于是命中计数和高亮覆盖的是**整个会话**。
 
@@ -25,19 +25,26 @@ DSH 桌面窗口是 Electron，本身没有浏览器那种查找栏；而会话�
 - **高亮**：CSS Custom Highlight API 绘制，不改 DOM，与 React 渲染零冲突；不支持该 API 的环境退回 `window.find()`
 - 切换会话时自动重置并重新开始搜索
 
-## 原理（两个接口）
+## 它是怎么搜到"还没显示出来"的内容的
 
-- `ctx.sessions`（由 `@deepseek-ai/dsh-api-session-controller` 提供）：`list.getSnapshot().current` 拿当前会话，`binding(id).session` 拿会话面。
-- 会话面 `loadOlder()` 翻一页（50 条）；`getSnapshot().hasMore` 判断是否还有更早的历史。取不到时退回"翻到页面不再变化为止"。
+插件先问会话服务"现在是哪个会话"，然后一页一页地请它把更早的消息加载出来（一页 50 条）。每加载完一页就重新搜一遍，所以计数和高亮最后覆盖的是整段会话。
+"还有没有更早的"由会话服务自己报；报不出来的时候，它就一直翻到页面不再变化为止。
+
+（给开发者：用的是客户端 `sessions` 服务——`ctx.sessions.list.getSnapshot().current` 取当前会话、`ctx.sessions.binding(id).session` 取会话面，翻页调 `loadOlder()`，判断用快照里的 `hasMore`。）
 
 ## 安装
 
 ```sh
-npm pack
-dsh plugin --profile desktop add ./dsh-find-all-0.1.0.tgz
+dsh plugin --profile desktop add @ryuu-64/dsh-find-all
 ```
 
 装完**完整重启一次 DSH Desktop**（插件清单只在启动时装载）。
+
+不想走 npm 就装本地源码（改完不用重新打包，重启即可）：
+
+```sh
+dsh plugin --profile desktop add link:/path/to/dsh-find-all
+```
 
 > 注意：它与 `dsh-find-bar` **都会抢 Ctrl+F**，请只保留一个：
 > ```sh
@@ -47,8 +54,8 @@ dsh plugin --profile desktop add ./dsh-find-all-0.1.0.tgz
 ## 卸载 / 回退
 
 ```sh
-dsh plugin --profile desktop remove dsh-find-all    # 卸载
-dsh plugin --profile desktop add <dsh-find-bar-0.1.0.tgz>   # 退回原插件
+dsh plugin --profile desktop remove @ryuu-64/dsh-find-all   # 卸载
+dsh plugin --profile desktop add dsh-find-bar               # 退回上游那个插件
 ```
 
 ## 已知限制

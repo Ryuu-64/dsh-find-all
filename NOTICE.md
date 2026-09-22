@@ -22,8 +22,8 @@
 
 相对上游快照 `ce7eb75`，本仓库改动如下（原上游功能一律保留）：
 
-1. 插件与包的名称、cordis 行 id：`dsh-find-bar` → `dsh-find-all`；
-2. **新增"整段会话"搜索**：通过会话服务 `ctx.sessions`（`binding(id).session.loadOlder()` + 快照里的 `hasMore`）把尚未加载的历史分页拉进页面，每页之后重跑匹配，使命中计数覆盖整段对话；宿主读不到 `hasMore` 时退化为"翻到页面不再变化为止"；
+1. 插件的名称与 cordis 行 id：`dsh-find-bar` → `dsh-find-all`（npm 包名：`@ryuu-64/dsh-find-all`）；
+2. **新增"整段会话"搜索**：通过会话服务 `ctx.sessions`（`binding(id).session.loadOlder()` + 快照里的 `hasMore`）把尚未加载的历史分页拉进页面，每页之后重跑匹配，使命中计数覆盖整段会话；宿主读不到 `hasMore` 时退化为"翻到页面不再变化为止"；
 3. 新增范围切换（`整段` / `本页`）、进度提示（含点击停止）、加载页数上限与会话切换时的状态重置；
 4. `test/find-logic.test.mjs` 由上游测试改写为 `node:test` 并扩充：新增匹配器、键盘路由与分页状态机的 19 项用例；
 5. 新增 README、`NOTICE.md`（本文件）与仓库元数据。

@@ -1,7 +1,7 @@
 {
-  "name": "dsh-find-all",
+  "name": "@ryuu-64/dsh-find-all",
   "version": "0.1.0",
-  "description": "DSH web plugin: a Cmd/Ctrl+F find bar for the desktop Electron shell that searches the WHOLE current conversation — it pages older history in automatically instead of only searching the rendered tail.",
+  "description": "Ctrl+F find bar for the DSH desktop app: it searches the whole conversation, not just the messages already on screen.",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -29,9 +29,14 @@
   "bugs": {
     "url": "https://github.com/Ryuu-64/dsh-find-all/issues"
   },
-  "engines": {
-    "node": ">=20",
-    "dsh": ">=0.1.5-rc.1"
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-api-session-controller": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0",
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0"
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
@@ -59,7 +64,6 @@
     },
     "compatibility": {
       "dshReleases": {
-        "0.1.5-rc.1": "compatible",
         "0.1.5-rc.2": "compatible"
       }
     }

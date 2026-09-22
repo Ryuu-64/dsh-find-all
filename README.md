@@ -46,10 +46,61 @@ dsh plugin --profile desktop add @ryuu-64/dsh-find-all
 dsh plugin --profile desktop add link:/path/to/dsh-find-all
 ```
 
+### 不依赖 npm 的安装（profile 用本仓库打好的 tarball）
+
+当 registry 上还是旧版本（或发布被 2FA 卡住）时用这条：脚本把本仓库 `npm pack` 出来的
+tarball **拷进 profile 目录**，并把依赖改成 `file:./dsh-find-all-<版本>.tgz`。pnpm 从它安装，
+**以后再跑 `pnpm install` 也只会从这个 tarball 重装，不会去 registry 把旧版本拉回来**；
+tarball 放在 profile 里（而不是仓库里），所以仓库的 `git clean -xfd` 不会把它扫掉，
+锁文件里存的也是相对路径。
+
+```sh
+npm run install:local          # 打包 → 校验 tarball 里的注册 id → 装进 profile → 逐字节自证
+```
+
+换回 registry 版本（发布成功之后）：
+
+```sh
+npm run deploy:profile         # 把依赖改回 ^<版本>，并证明装出来的字节与 registry 产物一致
+```
+
+> `deploy:profile` 会先确认目标版本**确实已发布**（否则拒绝并保持 profile 不变），
+> 所以不会出现"依赖指向一个解析不到的版本、下次 install 直接崩"的情况。
+
 > 注意：它与 `dsh-find-bar` **都会抢 Ctrl+F**，请只保留一个：
 > ```sh
 > dsh plugin --profile desktop remove dsh-find-bar
 > ```
+
+## 排障：GUI 报「Failed to load plugins / 部分插件加载失败」
+
+如果报错长这样：
+
+```text
+failed to import loader entry <id>: client-modules: bundle /plugins/??...&rev=... 
+loaded without registering "@ryuu-64/dsh-find-all" via __ModuleLoader__.load
+```
+
+**这不是 DSH 版本不兼容，别去恢复模式卸载、也别新建 Profile。** 它只有一个含义：
+`lib/client.js` 里 `window.__ModuleLoader__.load({ id })` 的 id 与**包名**不一致。
+
+宿主（`@deepseek-ai/dsh-client-modules`）用「解析出的 package.json 包名」当浏览器模块身份
+（规范的 `WebBootEntry.id` 注释就是 *Entry name == package name*），
+`ClientModuleSystem.arrive()` 在脚本加载成功后按这个 key 查 factory 表，查不到就抛这一句。
+
+0.1.0 就是这个毛病：fork 自非 scoped 的 `dsh-find-bar` 时，包名改成 `@ryuu-64/dsh-find-all`，
+bundle 里的 id 却写成了裸名 `dsh-find-all`。0.1.1 已修，并加了门禁：
+
+```sh
+npm run check:registration   # 期望值从 package.json 读，比 bundle 实际注册值
+npm run verify:release       # 打包成 tarball 再验一遍（发布前跑）
+```
+
+> **Fork / 改名提醒**：给 scoped 包 fork 一个非 scoped 包时，危险的不是包名本身，
+> 而是散落在 bundle 里的**派生字面量**。官方工具链（`packages/client/tsdown.client.ts`
+> 的 `clientBundle(id, ...)`）把 id 当参数盖章，社区脚手架（`create-dsh-plugin`）用
+> `{{PKG_NAME}}` 模板变量注入——都是为了让这个字面量无法被手写错。
+> 本包的 bundle 是手写并入库的，所以用上面两条命令代替盖章。
 
 ## 卸载 / 回退
 

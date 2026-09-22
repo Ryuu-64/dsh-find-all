@@ -26,6 +26,8 @@ const mod = loadClient();
 test("the bundle registers itself under its own id", () => {
 	assert.equal(globalThis.window.__ModuleLoader__ === undefined, false);
 	assert.equal(typeof mod.apply, "function");
+	// The id itself is asserted in bundle-registration.test.mjs, which reads the
+	// expected value from package.json — the host matches on that name exactly.
 });
 
 test("it injects the sessions service and nothing else", () => {

@@ -1,6 +1,6 @@
 {
   "name": "@ryuu-64/dsh-find-all",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Ctrl+F find bar for the DSH desktop app: it searches the whole conversation, not just the messages already on screen.",
   "type": "module",
   "license": "MIT",
@@ -14,6 +14,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "CHANGELOG.md",
     "NOTICE.md",
     "LICENSE"
   ],
@@ -40,7 +41,11 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "check": "node --check lib/index.js && node --check lib/client.js && node --test \"test/**/*.test.mjs\""
+    "check:registration": "node scripts/check-client-registration.mjs",
+    "check": "node --check lib/index.js && node --check lib/client.js && npm run check:registration && node --test \"test/**/*.test.mjs\"",
+    "verify:release": "node scripts/verify-release.mjs",
+    "install:local": "node scripts/install-local.mjs",
+    "deploy:profile": "node scripts/deploy-profile.mjs"
   },
   "keywords": [
     "dsh",

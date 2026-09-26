@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **`CONTRIBUTING.md` deleted.** It was written as a chronological account of what changed rather
+  than a document with a point of view: the registration-id section worked through the 0.1.0
+  post-mortem before saying what to do about it, and the structure, commands, and version-number
+  sections restated the commit history. Nothing in it was needed to use the plugin, and the
+  README was the only file linking to it.
+- One item in it was not recoverable from anywhere else and is gone with the file: that a
+  `failed to import loader entry <id> … loaded without registering` banner means the client
+  bundle registered under the wrong id, and is not a DSH version incompatibility. It stays
+  reachable in git history, and `scripts/check-client-registration.mjs` still fails the build on
+  the underlying defect.
+
 ## 0.1.3
 
 Documentation only: no code, no bundle, no behavior changed. Published so the README on the npm

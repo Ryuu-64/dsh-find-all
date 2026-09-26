@@ -72,5 +72,3 @@ dsh plugin --profile desktop add dsh-find-bar               # 想换回上游那
 本插件 fork 自 [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar)（作者 secyborg，MIT），在上游的基础上加了「整段会话」搜索。上游原有的查找条界面、高亮、`n/N` 计数和键盘导航都保留了下来。
 
 版权与许可为 MIT 双署名：`Copyright (c) 2026 secyborg` 与 `Copyright (c) 2026 Ryuu-64`。上游 README 原样保存在 `README.fork-origin.md`，改动清单与致谢见 `NOTICE.md`。
-
-参与开发、打包发布、以及「Failed to load plugins」报错的排查，见 `CONTRIBUTING.md`。

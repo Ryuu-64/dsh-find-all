@@ -1,6 +1,6 @@
 {
   "name": "@ryuu-64/dsh-find-all",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Ctrl+F find bar for the DSH desktop app: it searches the whole conversation, not just the messages already on screen.",
   "type": "module",
   "license": "MIT",

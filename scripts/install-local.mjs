@@ -163,7 +163,7 @@ try {
 	rmSync(staging, { recursive: true, force: true });
 	console.log(`\ninstalled ${PACKAGE}@${artifactManifest.version} into ${profile} from a local tarball`);
 	console.log("reload the DSH Desktop window (Ctrl+R) to pick it up.");
-	console.log("\nto move to the registry once 0.1.1 is published:");
+	console.log("\nto move to the registry once this version is published:");
 	console.log(`  node scripts/deploy-profile.mjs        # rewrites the dependency and proves the installed bytes`);
 } catch (error) {
 	console.error(`\nFAILED: ${error.message}`);

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.3
+
+Documentation only: no code, no bundle, no behavior changed. Published so the README on the npm
+package page is the user-facing one — npm serves the README carried by the latest release.
+
+### Changed
+
+- **`README.md` is now written for users.** It had been carrying maintainer material: internal
+  session-service calls, the tarball install for when publishing is blocked, the 0.1.0
+  registration post-mortem, the derived-literal warning for future forkers, and the test
+  commands. A user opening the page had to work out which parts applied to them. The README now
+  answers what the plugin does, how to install it, the keyboard reference, known limitations, and
+  how to uninstall.
+
+### Added
+
+- **`CONTRIBUTING.md`** takes that material rather than dropping it, plus a note on why release
+  coordinates cannot be reused (the reason 0.1.1 became 0.1.2). It is not in `package.json`'s
+  `files` whitelist, so npm users do not receive it.
+
+### Fixed
+
+- `scripts/install-local.mjs` told the operator to move to the registry "once 0.1.1 is published",
+  a version that can never exist. It now refers to the installed version generically.
+
 ## 0.1.2
 
 Nothing about the code changed — this release exists only because **0.1.1 can never be

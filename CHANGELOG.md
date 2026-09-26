@@ -1,19 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
+
+Documentation only: no code, no bundle, no behavior changed — `lib/` is untouched, so 0.1.4
+behaves exactly like 0.1.3.
+
+0.1.3 fixed the README but sent it with a link to `CONTRIBUTING.md`, a file that same release had
+just added. That file has now been deleted (see below), which would have left the published README
+pointing at nothing. npm serves the README carried by the latest release, so correcting the link
+on the package page means publishing again — that is the only reason this version exists.
 
 ### Removed
 
-- **`CONTRIBUTING.md` deleted.** It was written as a chronological account of what changed rather
-  than a document with a point of view: the registration-id section worked through the 0.1.0
-  post-mortem before saying what to do about it, and the structure, commands, and version-number
-  sections restated the commit history. Nothing in it was needed to use the plugin, and the
-  README was the only file linking to it.
+- **`CONTRIBUTING.md` deleted, in the repository and in the published package.** It was written as
+  a chronological account of what changed rather than a document with a point of view: the
+  registration-id section worked through the 0.1.0 post-mortem before saying what to do about it,
+  and the structure, commands, and version-number sections restated the commit history. Nothing in
+  it was needed to use the plugin.
 - One item in it was not recoverable from anywhere else and is gone with the file: that a
   `failed to import loader entry <id> … loaded without registering` banner means the client
   bundle registered under the wrong id, and is not a DSH version incompatibility. It stays
   reachable in git history, and `scripts/check-client-registration.mjs` still fails the build on
   the underlying defect.
+
+### Fixed
+
+- `README.md` no longer links to the deleted file.
 
 ## 0.1.3
 

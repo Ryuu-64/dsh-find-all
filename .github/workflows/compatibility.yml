@@ -19,6 +19,7 @@ jobs:
           node-version: '24'
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: npm run check
+      - run: npm install --global --ignore-scripts pnpm@11.19.0
       - run: npx playwright install --with-deps chromium
       - name: Pack one candidate artifact
         run: |

@@ -97,6 +97,7 @@ test('multiple instances require focus; chosen instance survives focus in the fi
     h.faces.set('session-b', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
     h.open(); h.search('needle'); await h.advance(251);
     assert.equal(h.count(), '0/0'); assert.equal(h.requested.length, 0);
+    assert.match(h.status(), /Select a visible conversation/);
     h.open(b.anchor); h.search('needle'); await h.advance(1200);
     assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-b']);
     a.panel.hidden = true;
@@ -113,6 +114,7 @@ test('uncertain, replaced, hidden or mismatched DOM fails closed', async () => {
     v => v.panel.querySelector('[data-conversation-content]').setAttribute('data-conversation-session', 'wrong'),
     v => v.flow.appendChild(v.flow.cloneNode(true)),
     v => v.panel.style.visibility = 'hidden',
+    v => v.panel.style.opacity = '0',
     v => v.panel.dataset.phase = 'hero',
   ]) {
     const h = setup();

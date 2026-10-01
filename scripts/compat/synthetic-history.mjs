@@ -85,9 +85,9 @@ async function eventually(read, expected, label, timeout = 30_000) {
 
 export async function exerciseHistory(page, home, queryPath, output) {
   async function openSession(label) {
-    const searchButton = page.getByRole('button', { name: 'Search sessions', exact: true });
+    const searchButton = page.getByRole('button', { name: 'Search sessions' });
     if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click();
-    await page.getByRole('textbox', { name: 'Search sessions...', exact: true }).fill(`FIND_ALL_${label}_USER_001`);
+    await page.getByRole('textbox', { name: /^(Search sessions\.\.\.|Search session names)$/ }).fill(`FIND_ALL_${label}_USER_001`);
     const results = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem');
     await eventually(() => results.count(), 1, 'synthetic session search result', 60_000);
     await results.click();
@@ -97,11 +97,19 @@ export async function exerciseHistory(page, home, queryPath, output) {
     await anchor.waitFor({ state: 'visible' });
     return anchor;
   }
+  const visited = new Set();
   for (const label of ['A', 'B', 'A']) {
     const anchor = await openSession(label);
+    if (!visited.has(label)) {
+      const rendered = await page.locator('[data-chat-flow]').innerText();
+      const initial = rendered.split(`FIND_ALL_${label}_USER_`).length - 1;
+      assert.ok(initial > 0 && initial < 80, 'fixture must start partially loaded to test actual paging');
+      visited.add(label);
+    }
     await anchor.click();
     const bar = page.locator('#dsh-find-all-root');
     await bar.locator('input').fill(`FIND_ALL_${label}_USER_`);
+    if (await bar.locator('.scope').innerText() === 'Page') await bar.locator('.scope').click();
     await eventually(() => bar.locator('.count').innerText(), '1/80', 'whole history must be scoped and completely paged', 60_000);
     await eventually(() => bar.locator('.status').innerText(), 'Whole conversation loaded', 'successful completion must be explicit', 60_000);
     const ranges = await page.evaluate(() => [...(CSS.highlights.get('dsh-find-all-hit') || [])].map(range => range.toString()));

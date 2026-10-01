@@ -37,7 +37,10 @@ function npmInstall(dir, filename) {
 // pins (e.g. Cordis Loader) are preserved as declared by the target packages.
 const seen = new Set(['@deepseek-ai/dsh']);
 let queue = ['@deepseek-ai/dsh'];
-const overrides = {};
+// Each pin comes from vendor/*/package.json at that exact official release tag.
+const vendorVersions = JSON.parse(fs.readFileSync(new URL('./vendor-versions.json', import.meta.url)))[version];
+assert.ok(vendorVersions, 'vendor baseline must be researched for this target');
+const overrides = { ...vendorVersions };
 const manifests = {};
 while (queue.length) {
   const batch = queue.splice(0, 12);
@@ -72,15 +75,18 @@ fs.writeFileSync(path.join(output, 'target-manifests.json'), JSON.stringify(mani
 fs.writeFileSync(path.join(runtime, 'package.json'), JSON.stringify(manifest));
 npmInstall(runtime, 'exact-install.log');
 const runtimeRequire = createRequire(path.join(runtime, 'node_modules/@deepseek-ai/dsh/package.json'));
-const exactLock = JSON.parse(fs.readFileSync(path.join(runtime, 'package-lock.json')));
+const exactLockText = fs.readFileSync(path.join(runtime, 'package-lock.json'), 'utf8');
+fs.writeFileSync(path.join(output, 'runtime-lock.json'), exactLockText);
+const exactLock = JSON.parse(exactLockText);
 const observed = {};
 for (const location of Object.keys(exactLock.packages)) {
   const packageName = location.split('node_modules/').at(-1);
-  if (packageName !== '@deepseek-ai/dsh' && !packageName.startsWith('@deepseek-ai/dsh-')) continue;
+  const isDsh = packageName === '@deepseek-ai/dsh' || packageName.startsWith('@deepseek-ai/dsh-');
+  if (!isDsh && !vendorVersions[packageName]) continue;
   const file = path.join(runtime, location, 'package.json');
   if (!fs.existsSync(file)) continue; // npm may record an uninstalled optional platform package.
   observed[location] = JSON.parse(fs.readFileSync(file)).version;
-  assert.equal(observed[location], version, `version drift: ${location}`);
+  assert.equal(observed[location], isDsh ? version : vendorVersions[packageName], `version drift: ${location}`);
 }
 for (const name of ['dsh-client-ui-chat', 'dsh-client-ui-conversation', 'dsh-api-session-controller', 'dsh-client-ui-renderer', 'dsh-client-ui-session', 'dsh-app-boot']) {
   const file = runtimeRequire.resolve(`@deepseek-ai/${name}/package.json`);
@@ -113,6 +119,13 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   assert.ok(url, 'host startup did not provide its temporary local URL');
+  let ready = false;
+  for (let elapsed = 0; elapsed < 60; elapsed++) {
+    assert.equal(server.exitCode, null, 'host exited after announcing its URL; inspect server.log');
+    try { if ((await fetch(url)).ok) { ready = true; break; } } catch {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  assert.ok(ready, 'host did not become HTTP-ready');
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US' });
   const errors = [];
@@ -122,6 +135,8 @@ try {
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible', timeout: 30_000 });
+  // Keep bootstrap read-only with respect to history, including seeded runs.
+  await bar.locator('.scope').click(); // default Whole -> Page
   await bar.locator('input').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
   await page.waitForTimeout(400);
   assert.equal(await bar.locator('.count').innerText(), '0/0');
@@ -142,7 +157,7 @@ try {
   if (report.bootstrap !== 'passed') report.bootstrap = 'failed';
   else if (full) report.syntheticHistory = 'failed';
   report.error = String(error).replace(/token=[^\s]+/g, 'token=[redacted]');
-  throw error;
+  throw new Error(report.error);
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

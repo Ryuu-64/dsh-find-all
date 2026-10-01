@@ -161,6 +161,11 @@ try {
   await notice.waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await notice.waitFor({ state: 'hidden' });
+  // The observed keyless onboarding offers this explicit no-account path.
+  const configureLater = page.getByRole('button', { name: 'Configure later', exact: true });
+  await configureLater.waitFor({ state: 'visible', timeout: 30_000 });
+  await configureLater.click();
+  await configureLater.waitFor({ state: 'hidden' });
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible', timeout: 30_000 });

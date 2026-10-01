@@ -220,3 +220,23 @@ test('repeated disable and enable does not duplicate shortcuts or leave session 
     }
   } finally { h.w.close(); }
 });
+
+test('an unsupported focused view never redirects search to another valid view', async () => {
+  const h = setup();
+  try {
+    const unsupported = await h.mount('session-a');
+    await h.mount('session-b', true);
+    unsupported.flow.removeAttribute('data-chat-flow');
+    h.faces.set('session-b', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    for (const target of [unsupported.anchor, unsupported.panel.querySelector('textarea')]) {
+      h.open(target); h.search('needle'); await h.advance(1200);
+      assert.equal(h.count(), '0/0');
+      assert.deepEqual(h.requested, []);
+      assert.match(h.status(), /scope unavailable/i);
+    }
+    const valid = h.w.document.querySelector('[data-find-all-session="session-b"]');
+    h.open(valid); h.search('needle'); await h.advance(300);
+    assert.equal(h.count(), '1/1');
+    assert.deepEqual(h.requested, ['session-b']);
+  } finally { await h.finish(); }
+});

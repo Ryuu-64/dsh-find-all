@@ -26,7 +26,22 @@ const full = process.env.FIND_ALL_FULL_ACCEPTANCE === '1';
 const queryPath = path.join(run, 'content-index.sqlite');
 for (const dir of [discovery, runtime, home]) fs.mkdirSync(dir, { recursive: true });
 const manifest = { name: 'find-all-synthetic-acceptance', private: true, type: 'module', dependencies: { '@deepseek-ai/dsh': version } };
-const env = { ...process.env, HOME: home, npm_config_ignore_scripts: 'true' };
+const env = { ...process.env };
+// Never inherit a developer's DSH home, skill roots, or model credentials.
+// The fixture's Node/npm children need only public-registry access.
+for (const name of Object.keys(env)) {
+  if (name.startsWith('DSH_') || /(?:KEY|TOKEN|SECRET|PASSWORD)/i.test(name)) delete env[name];
+}
+Object.assign(env, {
+  HOME: home,
+  DSH_HOME: path.join(home, '.dsh'),
+  DSH_AGENTS_HOME: path.join(home, '.agents'),
+  DSH_BUNDLED_SKILL_DIR: path.join(home, '.bundled-skills'),
+  npm_config_ignore_scripts: 'true',
+  npm_config_cache: path.join(process.env.RUNNER_TEMP || '/tmp', 'find-all-registry-cache'),
+  npm_config_registry: 'https://registry.npmjs.org',
+  npm_config_userconfig: path.join(home, '.npmrc'),
+});
 function npmInstall(dir, filename) {
   const log = fs.openSync(path.join(output, filename), 'w');
   try { execFileSync('npm', ['install', '--ignore-scripts', '--strict-peer-deps', '--no-audit', '--no-fund'], { cwd: dir, env, stdio: ['ignore', log, log], timeout: 600_000 }); }

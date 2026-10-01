@@ -10,3 +10,10 @@ test('public CI evidence strips tokens, cookies, URL queries and authentication 
   assert.ok(safe.includes('http://127.0.0.1:4195/'));
   assert.ok(safe.includes('https://example.test/path'));
 });
+
+
+test('JSON authentication fields are removed too', () => {
+  const redact = createRedactor();
+  const result = redact('{"headers":{"cookie":"opaque-session","authorization":"Bearer private"},"secret":"hidden"}');
+  for (const secret of ['opaque-session', 'Bearer private', 'hidden']) assert.ok(!result.includes(secret));
+});

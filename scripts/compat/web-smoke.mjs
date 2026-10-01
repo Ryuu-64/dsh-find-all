@@ -199,6 +199,7 @@ try {
   await new Promise(resolve => setTimeout(resolve, 500));
   if (server.exitCode === null) server.kill('SIGKILL');
   fs.writeFileSync(path.join(output, 'server.log'), redact(serverLog));
-  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report));
+  const safeReport = JSON.stringify(report, (_key, value) => typeof value === 'string' ? redact(value) : value, 2);
+  fs.writeFileSync(path.join(output, 'result.json'), safeReport);
+  console.log(safeReport);
 }

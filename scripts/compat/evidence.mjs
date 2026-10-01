@@ -11,6 +11,7 @@ export function createRedactor(secrets = new Set()) {
         return url.href;
       } catch { return '[redacted URL]'; }
     });
+    text = text.replace(/(["'](?:authorization|cookie|set-cookie|x-api-key|password|secret)["']\s*:\s*)["'][^"'\r\n]*["']/gi, '$1"[redacted]"');
     return text.replace(/(^|\n)(\s*(?:authorization|cookie|set-cookie|x-api-key|password|secret)\s*[:=])[^\r\n]*/gi, '$1$2 [redacted]');
   };
 }

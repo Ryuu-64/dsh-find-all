@@ -65,6 +65,8 @@ export function setFixturePatch(home, queryPath, disabled = false) {
   const file = path.join(home, '.dsh', 'profiles', 'web', 'cordis.patch.yml');
   // Web profile uses the official live patch reload mode. JSON is valid YAML.
   const patches = [
+    // The official Web scaffold also disables background LLM title generation.
+    { id: 'session-title-llm', disabled: true },
     { id: 'session-query-sqlite', config: { path: queryPath, openAt: 'first-search' } },
     { id: 'find-all', disabled },
   ];

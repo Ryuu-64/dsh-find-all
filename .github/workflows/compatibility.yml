@@ -22,7 +22,7 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: npm run check
       - run: npm install --global --ignore-scripts pnpm@11.19.0
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium --only-shell
       - name: Pack one candidate artifact
         run: |
           mkdir -p evidence/artifact

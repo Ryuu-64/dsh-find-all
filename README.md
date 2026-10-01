@@ -72,3 +72,9 @@ dsh plugin --profile desktop add dsh-find-bar               # 想换回上游那
 本插件 fork 自 [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar)（作者 secyborg，MIT），在上游的基础上加了「整段会话」搜索。上游原有的查找条界面、高亮、`n/N` 计数和键盘导航都保留了下来。
 
 版权与许可为 MIT 双署名：`Copyright (c) 2026 secyborg` 与 `Copyright (c) 2026 Ryuu-64`。上游 README 原样保存在 `README.fork-origin.md`，改动清单与致谢见 `NOTICE.md`。
+
+## 兼容性开发说明
+
+当前候选改动由会话标题栏中的查找按钮取得明确的会话身份；多会话时先点击或聚焦目标会话。无法识别可靠的会话正文范围时会提示先选择会话，不退回整页搜索。历史加载失败或中断时保留已显示的部分结果，并说明尚未搜完。
+
+开发者应区分逻辑/DOM fixture、实际 Web 宿主和 Electron Desktop 验收。完整版本矩阵仍是合并前的验收条件；本候选不扩大已声明的宿主版本范围。详见 [兼容性验收记录](docs/compatibility.md)。

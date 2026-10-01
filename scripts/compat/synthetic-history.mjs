@@ -86,8 +86,9 @@ async function eventually(read, expected, label, timeout = 30_000) {
 }
 
 export async function exerciseHistory(page, home, queryPath, output) {
-  // Same session-list initialization barrier as the official browser fixtures.
-  await page.getByText('Ungrouped', { exact: true }).waitFor({ timeout: 30_000 });
+  // CLI profiles group these seeds under their actual temporary workspace;
+  // the upstream scaffold's 'Ungrouped' barrier does not apply to this layout.
+  await page.getByRole('button', { name: 'Search sessions' }).waitFor({ state: 'visible', timeout: 30_000 });
   async function openSession(label) {
     const searchButton = page.getByRole('button', { name: 'Search sessions' });
     if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click();

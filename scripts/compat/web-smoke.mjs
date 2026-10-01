@@ -152,6 +152,11 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url, { waitUntil: 'load' });
   await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').waitFor({ state: 'attached', timeout: 30_000 });
+  // Fresh official profiles show this non-binding preview notice.
+  const notice = page.getByText(/^(Internal Testing Notice|Preview Notice)$/);
+  await notice.waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await notice.waitFor({ state: 'hidden' });
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible', timeout: 30_000 });

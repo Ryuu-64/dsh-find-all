@@ -166,6 +166,13 @@ try {
   await configureLater.waitFor({ state: 'visible', timeout: 30_000 });
   await configureLater.click();
   await configureLater.waitFor({ state: 'hidden' });
+  // Handle only the already inspected, non-binding prompts if a legacy reload
+  // presents them again. Unknown agreements or permission prompts still fail.
+  await page.addLocatorHandler(notice, async () => {
+    assert.equal(await page.getByRole('checkbox').count(), 0, 'unexpected consent control');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  });
+  await page.addLocatorHandler(configureLater, async () => { await configureLater.click(); });
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible', timeout: 30_000 });
@@ -183,7 +190,7 @@ try {
   report.bootstrap = 'passed';
   if (full) {
     report.seeds = seeded;
-    report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact));
+    report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact), version);
     report.syntheticHistory = 'passed';
   }
   report.browserErrors = errors.map(redact);

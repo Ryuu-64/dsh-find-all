@@ -33,6 +33,18 @@ jobs:
       - name: Current exact host acceptance
         if: ${{ !cancelled() }}
         run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.2
+      - name: Exact host 0.1.5-rc.3 acceptance
+        if: ${{ !cancelled() }}
+        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.3 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.3
+      - name: Exact host 0.1.6-alpha.2 acceptance
+        if: ${{ !cancelled() }}
+        run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.6-alpha.2
+      - name: Exact host 0.1.7-rc.2 acceptance
+        if: ${{ !cancelled() }}
+        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-rc.2
+      - name: Exact host 0.2.0-rc.1 acceptance
+        if: ${{ !cancelled() }}
+        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.1
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: ${{ !cancelled() }}
         with:

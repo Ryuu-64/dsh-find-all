@@ -85,7 +85,8 @@ async function eventually(read, expected, label, timeout = 30_000) {
   assert.equal(value, expected, label);
 }
 
-export async function exerciseHistory(page, home, queryPath, capture) {
+export async function exerciseHistory(page, home, queryPath, capture, version) {
+  const refreshRequired = ['0.1.5-rc.2', '0.1.5-rc.3'].includes(version);
   // CLI profiles group these seeds under their actual temporary workspace;
   // the upstream scaffold's 'Ungrouped' barrier does not apply to this layout.
   await page.getByRole('button', { name: 'Search sessions' }).waitFor({ state: 'visible', timeout: 30_000 });
@@ -127,8 +128,24 @@ export async function exerciseHistory(page, home, queryPath, capture) {
     await capture(`history-${label}`);
     await page.keyboard.press('Escape');
   }
+  // Old official HMR clients deliberately ignore graph frames. A fresh SSE
+  // connection reads the server's actual graph before we test a required reload.
+  async function graphContainsPlugin() {
+    return page.evaluate(() => new Promise((resolve, reject) => {
+      const source = new EventSource('/plugins/events');
+      const timer = setTimeout(() => { source.close(); reject(new Error('graph handshake timeout')); }, 5000);
+      source.onmessage = event => {
+        const frame = JSON.parse(event.data);
+        if (frame.type !== 'graph') return;
+        clearTimeout(timer);
+        source.close();
+        resolve(frame.graph.entries.some(row => row.id === '@ryuu-64/dsh-find-all'));
+      };
+      source.onerror = () => { clearTimeout(timer); source.close(); reject(new Error('graph handshake failed')); };
+    }));
+  }
   // Toggle the actual installed plugin through the official live profile patch.
-  // The page may not reload: this must exercise client teardown and re-apply.
+  // Modern hosts must not reload. The two legacy hosts require explicit reloads.
   let navigations = 0;
   const navigation = frame => { if (frame === page.mainFrame()) navigations++; };
   page.on('framenavigated', navigation);
@@ -137,12 +154,23 @@ export async function exerciseHistory(page, home, queryPath, capture) {
       await page.locator('[data-find-all-session]').click();
       await page.locator('#dsh-find-all-root input').fill('FIND_ALL_A_USER_');
       setFixturePatch(home, queryPath, true);
-      await eventually(() => page.locator('#dsh-find-all-root').count(), 0, 'hot disable removes the find bar');
+      if (refreshRequired) {
+        await eventually(graphContainsPlugin, false, 'server graph acknowledges disable');
+        assert.equal(await page.locator('#dsh-find-all-root').count(), 1, 'legacy host does not hot-unload graph entries');
+        await page.reload({ waitUntil: 'load' });
+        await page.getByRole('button', { name: 'Search sessions' }).click();
+      }
+      await eventually(() => page.locator('#dsh-find-all-root').count(), 0, 'disable removes the find bar after the supported lifecycle');
       assert.equal(await page.locator('[data-find-all-session]').count(), 0);
       assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
       await page.keyboard.press('Control+f');
       assert.equal(await page.locator('#dsh-find-all-root').count(), 0);
       setFixturePatch(home, queryPath, false);
+      if (refreshRequired) {
+        await eventually(graphContainsPlugin, true, 'server graph acknowledges re-enable');
+        await page.reload({ waitUntil: 'load' });
+        await openSession('A');
+      }
       await page.locator('[data-find-all-session]').waitFor({ state: 'visible', timeout: 30_000 });
       assert.equal(await page.locator('[data-find-all-session]').count(), 1);
       await page.locator('[data-find-all-session]').click();
@@ -151,7 +179,7 @@ export async function exerciseHistory(page, home, queryPath, capture) {
       await eventually(() => page.locator('#dsh-find-all-root .count').innerText(), '1/80', 'find works once after re-enable');
       await page.keyboard.press('Escape');
     }
-    assert.equal(navigations, 0, 'hot lifecycle must not be replaced by page reload');
+    assert.equal(navigations, refreshRequired ? 4 : 0, 'only legacy lifecycle may require explicit page reloads');
   } finally { page.off('framenavigated', navigation); }
-  return { histories: ['A', 'B', 'A'], turnsPerSession: 80, hotCycles: 2 };
+  return { histories: ['A', 'B', 'A'], turnsPerSession: 80, nativeHotUnload: refreshRequired ? 'unsupported-by-host' : 'passed', hotCycles: refreshRequired ? 0 : 2, refreshCycles: refreshRequired ? 2 : 0 };
 }

@@ -1,0 +1,38 @@
+name: Candidate Web compatibility
+on:
+  push:
+    branches: [fix/session-scoped-compatibility]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: find-all-compat-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  web-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - name: Pack one candidate artifact
+        run: |
+          mkdir -p evidence/artifact
+          npm pack --ignore-scripts --pack-destination evidence/artifact
+          sha256sum evidence/artifact/*.tgz | tee evidence/artifact/SHA256SUMS
+      - name: Oldest exact host bootstrap
+        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.2
+      - name: Current exact host bootstrap
+        if: ${{ !cancelled() }}
+        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.2
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: ${{ !cancelled() }}
+        with:
+          name: candidate-web-evidence
+          path: evidence/
+          retention-days: 7

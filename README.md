@@ -77,4 +77,4 @@ dsh plugin --profile desktop add dsh-find-bar               # 想换回上游那
 
 当前候选改动由会话标题栏中的查找按钮取得明确的会话身份；多会话时先点击或聚焦目标会话。无法识别可靠的会话正文范围时会提示先选择会话，不退回整页搜索。历史加载失败或中断时保留已显示的部分结果，并说明尚未搜完。
 
-开发者应区分逻辑/DOM fixture、实际 Web 宿主和 Electron Desktop 验收。完整版本矩阵仍是合并前的验收条件；本候选不扩大已声明的宿主版本范围。详见 [兼容性验收记录](docs/compatibility.md)。
+开发者应区分逻辑/DOM fixture、实际 Web 宿主和 Electron Desktop 验收。完整版本矩阵仍是合并前的验收条件；Draft 中的 peer 列表仅列出六个待验的精确目标版本，不代表它们已通过验收；不新增兼容声明、不发布，验收失败的目标须修复或从最终列表移除。详见 [兼容性验收记录](docs/compatibility.md)。

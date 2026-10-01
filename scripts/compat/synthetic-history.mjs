@@ -85,7 +85,7 @@ async function eventually(read, expected, label, timeout = 30_000) {
   assert.equal(value, expected, label);
 }
 
-export async function exerciseHistory(page, home, queryPath, output) {
+export async function exerciseHistory(page, home, queryPath, capture) {
   // CLI profiles group these seeds under their actual temporary workspace;
   // the upstream scaffold's 'Ungrouped' barrier does not apply to this layout.
   await page.getByRole('button', { name: 'Search sessions' }).waitFor({ state: 'visible', timeout: 30_000 });
@@ -124,7 +124,7 @@ export async function exerciseHistory(page, home, queryPath, output) {
     assert.equal(await bar.locator('.count').innerText(), '2/80');
     await page.keyboard.press('Shift+F3');
     assert.equal(await bar.locator('.count').innerText(), '1/80');
-    await page.screenshot({ path: path.join(output, `history-${label}.png`) });
+    await capture(`history-${label}`);
     await page.keyboard.press('Escape');
   }
   // Toggle the actual installed plugin through the official live profile patch.

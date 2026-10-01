@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { seedHistory, setFixturePatch, exerciseHistory } from './synthetic-history.mjs';
+import { createRedactor, captureSafePage } from './evidence.mjs';
+const secrets = new Set();
+const redact = createRedactor(secrets);
 
 const [version, artifactArg, outputArg] = process.argv.slice(2);
 const versions = ['0.1.5-rc.2', '0.1.5-rc.3', '0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.1', '0.2.0-rc.2'];
@@ -134,6 +137,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   assert.ok(url, 'host startup did not provide its temporary local URL');
+  secrets.add(new URL(url).searchParams.get('token'));
   let ready = false;
   for (let elapsed = 0; elapsed < 60; elapsed++) {
     assert.equal(server.exitCode, null, 'host exited after announcing its URL; inspect server.log');
@@ -167,26 +171,25 @@ try {
   assert.equal(await bar.locator('.count').innerText(), '0/0');
   report.initialSessionViews = await page.locator('[data-find-all-session]').count();
   if (report.initialSessionViews === 0) assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
-  await page.screenshot({ path: path.join(output, 'empty-session-find.png') });
+  await captureSafePage(page, path.join(output, 'empty-session-find'), secrets, redact);
   await page.keyboard.press('Escape');
   await bar.waitFor({ state: 'hidden' });
   assert.equal(await page.evaluate(() => CSS.highlights?.has('dsh-find-all-hit') || false), false);
   report.bootstrap = 'passed';
   if (full) {
     report.seeds = seeded;
-    report.historyEvidence = await exerciseHistory(page, home, queryPath, output);
+    report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact));
     report.syntheticHistory = 'passed';
   }
-  report.browserErrors = errors;
+  report.browserErrors = errors.map(redact);
   assert.deepEqual(errors, [], 'unhandled browser errors');
 } catch (error) {
   if (report.bootstrap !== 'passed') report.bootstrap = 'failed';
   else if (full) report.syntheticHistory = 'failed';
-  report.error = String(error).replace(/token=[^\s]+/g, 'token=[redacted]');
+  report.error = redact(error);
   if (page) {
     try {
-      await page.screenshot({ path: path.join(output, 'failure.png') });
-      fs.writeFileSync(path.join(output, 'failure-page.txt'), (await page.locator('body').innerText()).slice(0, 30_000));
+      report.failureScreenshot = await captureSafePage(page, path.join(output, 'failure-page'), secrets, redact);
     } catch {}
   }
   throw new Error(report.error);
@@ -195,7 +198,7 @@ try {
   server.kill('SIGTERM');
   await new Promise(resolve => setTimeout(resolve, 500));
   if (server.exitCode === null) server.kill('SIGKILL');
-  fs.writeFileSync(path.join(output, 'server.log'), serverLog.replace(/token=[^\s]+/g, 'token=[redacted]'));
+  fs.writeFileSync(path.join(output, 'server.log'), redact(serverLog));
   fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report));
 }

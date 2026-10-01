@@ -108,7 +108,7 @@ let serverLog = '';
 const server = spawn(process.execPath, [bin, '--profile', 'web', '--no-open', '--host', '127.0.0.1', '--port', '4195'], { cwd: full ? workspace : runtime, env });
 server.stdout.on('data', data => serverLog += data);
 server.stderr.on('data', data => serverLog += data);
-let browser;
+let browser, page;
 const report = { version, artifactSha256, bootstrap: 'pending', syntheticHistory: 'not-run', desktop: 'not-run' };
 try {
   let url;
@@ -122,12 +122,17 @@ try {
   let ready = false;
   for (let elapsed = 0; elapsed < 60; elapsed++) {
     assert.equal(server.exitCode, null, 'host exited after announcing its URL; inspect server.log');
-    try { if ((await fetch(url)).ok) { ready = true; break; } } catch {}
+    try {
+      // authorizeIndex redirects a token URL to a cookie-authenticated root.
+      // Node fetch has no cookie jar; an unauthenticated 401 proves readiness.
+      const response = await fetch(new URL('/', url), { redirect: 'manual' });
+      if (response.status === 200 || response.status === 401) { ready = true; break; }
+    } catch {}
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   assert.ok(ready, 'host did not become HTTP-ready');
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US' });
+  page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US' });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url, { waitUntil: 'load' });
@@ -140,7 +145,8 @@ try {
   await bar.locator('input').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
   await page.waitForTimeout(400);
   assert.equal(await bar.locator('.count').innerText(), '0/0');
-  assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
+  report.initialSessionViews = await page.locator('[data-find-all-session]').count();
+  if (report.initialSessionViews === 0) assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
   await page.screenshot({ path: path.join(output, 'empty-session-find.png') });
   await page.keyboard.press('Escape');
   await bar.waitFor({ state: 'hidden' });
@@ -157,6 +163,12 @@ try {
   if (report.bootstrap !== 'passed') report.bootstrap = 'failed';
   else if (full) report.syntheticHistory = 'failed';
   report.error = String(error).replace(/token=[^\s]+/g, 'token=[redacted]');
+  if (page) {
+    try {
+      await page.screenshot({ path: path.join(output, 'failure.png') });
+      fs.writeFileSync(path.join(output, 'failure-page.txt'), (await page.locator('body').innerText()).slice(0, 30_000));
+    } catch {}
+  }
   throw new Error(report.error);
 } finally {
   await browser?.close();

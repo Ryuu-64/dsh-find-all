@@ -9,11 +9,12 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { seedHistory, setFixturePatch, exerciseHistory } from './synthetic-history.mjs';
 import { createRedactor, captureSafePage } from './evidence.mjs';
+import { npmCommand } from './npm-command.mjs';
 const secrets = new Set();
 const redact = createRedactor(secrets);
 
 const [version, artifactArg, outputArg] = process.argv.slice(2);
-const versions = ['0.1.5-rc.2', '0.1.5-rc.3', '0.1.6-alpha.2', '0.1.7-rc.2', '0.2.0-rc.1', '0.2.0-rc.2'];
+const versions = Object.keys(JSON.parse(fs.readFileSync(new URL('./vendor-versions.json', import.meta.url))));
 assert.ok(versions.includes(version), 'use an explicit acceptance target');
 const artifact = path.resolve(artifactArg);
 const output = path.resolve(outputArg);
@@ -47,7 +48,8 @@ Object.assign(env, {
 });
 function npmInstall(dir, filename) {
   const log = fs.openSync(path.join(output, filename), 'w');
-  try { execFileSync('npm', ['install', '--ignore-scripts', '--strict-peer-deps', '--no-audit', '--no-fund'], { cwd: dir, env, stdio: ['ignore', log, log], timeout: 600_000 }); }
+  const npm = npmCommand(['install', '--ignore-scripts', '--strict-peer-deps', '--no-audit', '--no-fund']);
+  try { execFileSync(npm.command, npm.args, { cwd: dir, env, stdio: ['ignore', log, log], timeout: 600_000 }); }
   finally { fs.closeSync(log); }
 }
 // Resolve the target's official dependency graph from metadata, without first
@@ -63,7 +65,8 @@ const manifests = {};
 while (queue.length) {
   const batch = queue.splice(0, 12);
   const records = await Promise.all(batch.map(name => new Promise((resolve, reject) => {
-    const child = spawn('npm', ['view', `${name}@${version}`, '--json'], { env });
+    const npm = npmCommand(['view', `${name}@${version}`, '--json']);
+    const child = spawn(npm.command, npm.args, { env });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => stdout += data);
     child.stderr.on('data', data => stderr += data);

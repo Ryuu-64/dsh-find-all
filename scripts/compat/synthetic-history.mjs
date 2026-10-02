@@ -6,12 +6,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export async function seedHistory(runtimeRequire, home, workspace) {
-  const { Session, SessionId, SESSION_FORMAT_VERSION } = await import(runtimeRequire.resolve('@deepseek-ai/dsh-session'));
-  const { createUserMessage, createAssistantMessage, createSystemMessage } = await import(runtimeRequire.resolve('@deepseek-ai/dsh-llm'));
-  const { Context } = await import(runtimeRequire.resolve('@deepseek-ai/cordis'));
-  const { default: Jsonl } = await import(runtimeRequire.resolve('@deepseek-ai/dsh-session-persistence-jsonl'));
+  const load = name => import(pathToFileURL(runtimeRequire.resolve(name)).href);
+  const { Session, SessionId, SESSION_FORMAT_VERSION } = await load('@deepseek-ai/dsh-session');
+  const { createUserMessage, createAssistantMessage, createSystemMessage } = await load('@deepseek-ai/dsh-llm');
+  const { Context } = await load('@deepseek-ai/cordis');
+  const { default: Jsonl } = await load('@deepseek-ai/dsh-session-persistence-jsonl');
   fs.mkdirSync(workspace, { recursive: true });
   const ctx = new Context();
   const summary = [];
@@ -86,7 +88,7 @@ async function eventually(read, expected, label, timeout = 30_000) {
 }
 
 export async function exerciseHistory(page, home, queryPath, capture, version) {
-  const refreshRequired = ['0.1.5-rc.2', '0.1.5-rc.3'].includes(version);
+  const refreshRequired = ['0.1.5-rc.2', '0.1.5-rc.3', '0.1.6-alpha.1'].includes(version);
   // CLI profiles group these seeds under their actual temporary workspace;
   // the upstream scaffold's 'Ungrouped' barrier does not apply to this layout.
   await page.getByRole('button', { name: 'Search sessions' }).waitFor({ state: 'visible', timeout: 30_000 });
@@ -112,7 +114,13 @@ export async function exerciseHistory(page, home, queryPath, capture, version) {
       assert.ok(initial > 0 && initial < 80, 'fixture must start partially loaded to test actual paging');
       visited.add(label);
     }
-    await anchor.click();
+    if (label === 'A' && visited.size === 1) {
+      // Regression: no anchor click or conversation-focus preparation. Start
+      // with body focus after the host has mounted its session header utility.
+      await page.evaluate(() => document.activeElement?.blur());
+      assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
+      await page.keyboard.press('Control+f');
+    } else await anchor.click();
     const bar = page.locator('#dsh-find-all-root');
     await bar.locator('input').fill(`FIND_ALL_${label}_USER_`);
     if (await bar.locator('.scope').innerText() === 'Page') await bar.locator('.scope').click();
@@ -181,5 +189,5 @@ export async function exerciseHistory(page, home, queryPath, capture, version) {
     }
     assert.equal(navigations, refreshRequired ? 4 : 0, 'only legacy lifecycle may require explicit page reloads');
   } finally { page.off('framenavigated', navigation); }
-  return { histories: ['A', 'B', 'A'], turnsPerSession: 80, nativeHotUnload: refreshRequired ? 'unsupported-by-host' : 'passed', hotCycles: refreshRequired ? 0 : 2, refreshCycles: refreshRequired ? 2 : 0 };
+  return { histories: ['A', 'B', 'A'], firstBodyShortcutWithoutAnchorClick: 'passed', turnsPerSession: 80, nativeHotUnload: refreshRequired ? 'unsupported-by-host' : 'passed', hotCycles: refreshRequired ? 0 : 2, refreshCycles: refreshRequired ? 2 : 0 };
 }

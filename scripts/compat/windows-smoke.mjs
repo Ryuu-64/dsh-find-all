@@ -75,14 +75,16 @@ async function stopOwnedProcessTree(child) {
 // A failed instrumented launch is not proof that the installed application
 // cannot start normally. Collect one bounded, non-interactive baseline only;
 // it does not satisfy any UI acceptance gate and changes no security setting.
-async function diagnoseNormalLaunch() {
-  const file = path.join(installation.runDirectory, 'electron-normal.log');
+async function diagnoseNormalLaunch({ mode = 'normal-same-environment-and-profile', environment = env, useUserDataDir = true } = {}) {
+  const file = path.join(installation.runDirectory, `electron-${mode}.log`);
   chromiumLogs.push(file);
   report.launches ??= [];
-  const launchRecord = { mode: 'normal-same-environment-and-profile', startUtc: new Date().toISOString() };
+  const launchRecord = { mode, startUtc: new Date().toISOString() };
   report.launches.push(launchRecord);
-  const child = spawn(installation.executable, ['--lang=en-US', '--enable-logging=file', `--log-file=${file}`], {
-    cwd: installation.runDirectory, env, stdio: ['ignore', 'pipe', 'pipe'],
+  const args = ['--lang=en-US', '--enable-logging=file', `--log-file=${file}`];
+  if (useUserDataDir) args.push(`--user-data-dir=${installation.testUserData}`);
+  const child = spawn(installation.executable, args, {
+    cwd: installation.runDirectory, env: environment, stdio: ['ignore', 'pipe', 'pipe'],
   });
   launchRecord.pid = child.pid;
   children.add(child);
@@ -91,7 +93,7 @@ async function diagnoseNormalLaunch() {
   child.stderr.on('data', data => { text += data.toString(); });
   let timer;
   try {
-    report.normalLaunchDiagnostic = await Promise.race([
+    launchRecord.outcome = await Promise.race([
       new Promise(resolve => {
         child.once('error', error => resolve({ outcome: 'launch-error', error: redact(error.message) }));
         child.once('exit', (code, signal) => resolve({ outcome: 'exited', code, signal }));
@@ -102,8 +104,9 @@ async function diagnoseNormalLaunch() {
     clearTimeout(timer);
     await stopOwnedProcessTree(child);
     children.delete(child);
-    writeSafe('desktop-normal-launch.log', text);
+    writeSafe(`desktop-${mode}.log`, text);
   }
+  return launchRecord.outcome;
 }
 async function until(check, message, timeout = 60_000) {
   const deadline = Date.now() + timeout;
@@ -145,7 +148,7 @@ async function launch() {
   report.launches.push({ mode: 'instrumented', startUtc: new Date().toISOString() });
   app = await electron.launch({
     executablePath: installation.executable, cwd: installation.runDirectory,
-    env, args: ['--lang=en-US', '--enable-logging=file', `--log-file=${chromiumLog}`], timeout: 120_000,
+    env, args: ['--lang=en-US', `--user-data-dir=${installation.testUserData}`, '--enable-logging=file', `--log-file=${chromiumLog}`], timeout: 120_000,
   });
   report.launches.at(-1).launcherPid = app.process().pid;
   app.process().stdout?.on('data', data => { appOutput += data.toString(); });
@@ -182,12 +185,7 @@ async function launch() {
   assert.equal(identity.runtimeDescriptor.arch, 'x64');
   assert.equal(path.resolve(identity.executable).toLowerCase(), installation.executable.toLowerCase());
   assert.equal(identity.dshHome, env.DSH_HOME);
-  // Electron userData stays in the disposable hosted-runner profile. Do not use
-  // undocumented packaged overrides or inject an app.setPath startup shim.
-  const runnerProfile = path.resolve(process.env.USERPROFILE).toLowerCase() + path.sep;
-  const temporaryProfile = path.resolve(installation.runDirectory).toLowerCase() + path.sep;
-  const actualUserData = path.resolve(identity.userData).toLowerCase();
-  assert.ok(actualUserData.startsWith(runnerProfile) || actualUserData.startsWith(temporaryProfile), 'Electron userData escaped the disposable runner profile');
+  assert.equal(path.resolve(identity.userData).toLowerCase(), path.resolve(installation.testUserData).toLowerCase(), 'documented user-data-dir must isolate the Electron profile');
   report.appIdentity = identity;
   if (!report.testedScope.includes('installed Electron identity')) report.testedScope.push('installed Electron identity');
   return app;
@@ -327,7 +325,7 @@ try {
     if (/^(?:DSH_|ELECTRON_|NODE_OPTIONS$|DEBUG$|PWDEBUG$|NPM_CONFIG_|npm_config_)/i.test(key) || /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete env[key];
   }
   Object.assign(env, {
-    HOME: home, USERPROFILE: home, DSH_HOME: path.join(home, '.dsh'),
+    HOME: home, DSH_HOME: path.join(home, '.dsh'),
     DSH_AGENTS_HOME: path.join(home, '.agents'),
     // Official rc2 apps/cli/reference/README.zh.md documents this OTel opt-out;
     // packages/bundle/base/cordis.patch.yml reads it, and Desktop's official
@@ -340,9 +338,20 @@ try {
     npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(home, 'npm-cache'),
   });
   fs.writeFileSync(path.join(home, '.npmrc'), 'ignore-scripts=true\nregistry=https://registry.npmjs.org/\n');
-  report.isolation = 'fresh temporary DSH_HOME; Electron userData in disposable GitHub-hosted runner profile; no inherited model credentials';
+  installation.testUserData = path.join(installation.runDirectory, 'electron-user-data');
+  report.isolation = 'real disposable-runner USERPROFILE retained; fresh DSH_HOME and explicit user-data-dir; no inherited model credentials';
   report.stage = 'prepare-startup-diagnostics';
   diagnostics = await startDiagnostics(installation, env, redact);
+  // Controlled reproduction of the user report: same executable, DSH_HOME,
+  // HOME, cwd and default native appData path; only USERPROFILE changes.
+  // Both profiles belong to this new hosted runner, never a user's desktop.
+  const comparisonEnv = { ...env, DSH_HOME: path.join(home, 'comparison-dsh'), DSH_AGENTS_HOME: path.join(home, 'comparison-agents') };
+  report.profileEnvironmentComparison = {
+    changedVariable: 'USERPROFILE', userDataOverride: false,
+    temporary: await diagnoseNormalLaunch({ mode: 'temporary-userprofile', environment: { ...comparisonEnv, USERPROFILE: home }, useUserDataDir: false }),
+    original: await diagnoseNormalLaunch({ mode: 'original-userprofile', environment: comparisonEnv, useUserDataDir: false }),
+    limitation: 'Process survival is a startup diagnostic, not Desktop UI acceptance; the actual smoke below uses its own explicit user-data-dir.',
+  };
   report.diagnosticCollector = diagnostics.ready;
   report.stage = 'initialize-desktop-profile';
   await launch();
@@ -398,7 +407,7 @@ try {
   report.status = 'failed';
   report.error = redact(error instanceof Error ? error.message : error);
   if (report.stage === 'initialize-desktop-profile' && !app && installation && env) {
-    try { await diagnoseNormalLaunch(); }
+    try { report.normalLaunchDiagnostic = await diagnoseNormalLaunch(); }
     catch (diagnosticError) { report.normalLaunchDiagnostic = { error: redact(diagnosticError.message) }; }
   }
   if (page && !page.isClosed()) {

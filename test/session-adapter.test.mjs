@@ -121,6 +121,35 @@ test('multiple instances require focus; chosen instance survives focus in the fi
   } finally { await h.finish(); }
 });
 
+test('first body-focused Ctrl+F discovers the sole visible registered conversation without a preparatory click', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    assert.equal(h.w.document.activeElement, h.w.document.body);
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/1');
+    assert.deepEqual(h.requested, ['session-a']);
+    assert.equal(h.status(), 'Whole conversation loaded');
+  } finally { await h.finish(); }
+});
+
+test('first body shortcut cannot infer A while an unregistered visible B panel also exists', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a');
+    const b = h.w.document.createElement('section');
+    b.dataset.phase = 'active';
+    b.innerHTML = '<div data-conversation-scroll><div data-chat-flow>unregistered needle</div></div>';
+    h.w.document.body.append(b);
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    b.remove();
+    h.open(h.w.document.body); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+
 test('uncertain, replaced, hidden or mismatched DOM fails closed', async () => {
   for (const corrupt of [
     v => v.flow.removeAttribute('data-chat-flow'),

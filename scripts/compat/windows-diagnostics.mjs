@@ -47,14 +47,14 @@ export async function startDiagnostics(installation, appEnv, redact) {
   // Electron app.getName prefers the installed manifest's productName, then
   // name; app.getPath(userData) defaults to APPDATA/name. rc2 never overrides it.
   // https://www.electronjs.org/docs/latest/api/app#appgetpathname
-  const userData = path.join(appEnv.APPDATA, manifest.productName || manifest.name);
+  const userData = installation.testUserData || path.join(appEnv.APPDATA, manifest.productName || manifest.name);
   const prefix = path.resolve(appEnv.APPDATA).toLowerCase() + path.sep;
-  assert.ok(path.resolve(userData).toLowerCase().startsWith(prefix));
+  assert.ok(path.resolve(userData).toLowerCase().startsWith(prefix) || path.resolve(userData).toLowerCase().startsWith(path.resolve(installation.runDirectory).toLowerCase() + path.sep));
   const context = {
     startUtc: new Date().toISOString(), nodePid: process.pid,
     executable: installation.executable, runDirectory: installation.runDirectory,
     installedManifest: { name: manifest.name, productName: manifest.productName, version: manifest.version },
-    userData, userDataBasis: 'installed ASAR manifest plus documented Electron default; runtime path cross-check when launch succeeds',
+    userData, userDataBasis: installation.testUserData ? 'explicit documented user-data-dir inside owned temporary directory; cross-check actual app.getPath after launch' : 'installed ASAR manifest plus documented Electron default; runtime path cross-check when launch succeeds',
     mainDiagnosticFile: appEnv.DSH_DESKTOP_DIAGNOSTIC_FILE,
     runnerPaths: Object.fromEntries(['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'TEMP', 'TMP'].map(key => [key, process.env[key] ?? null])),
     paths: Object.fromEntries(['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'TEMP', 'TMP', 'DSH_HOME', 'DSH_AGENTS_HOME'].map(key => [key, appEnv[key] ?? null])),

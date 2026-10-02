@@ -106,6 +106,10 @@ export async function exerciseSidebarIsolation(page, home, queryPath, capture, p
     assert.match(await bar.locator('.status').innerText(), /Select a visible conversation|Search scope unavailable/);
     assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
     await capture('sidebar-neutral-ambiguity');
+    // At the installed Desktop's 1024px width the find bar overlaps the main
+    // header utility. Dismiss it normally before selecting that visible control.
+    await page.keyboard.press('Escape');
+    await bar.waitFor({ state: 'hidden' });
     await anchor.click();
     await bar.locator('input').fill('FIND_ALL_A_USER_');
     await eventually(() => bar.locator('.count').innerText(), '1/80', 'explicit main selection remains available beside a sidebar');

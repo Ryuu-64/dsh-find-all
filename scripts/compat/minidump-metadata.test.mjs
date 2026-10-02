@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readMinidumpMetadata, sanitizeCleanStack, sanitizeDebuggerReport } from './minidump-metadata.mjs';
+import { readMinidumpMetadata, sanitizeCleanStack, sanitizeDebuggerReport, sanitizeSourceStack } from './minidump-metadata.mjs';
 
 function fixture(file) {
   const out = Buffer.alloc(1024);
@@ -59,4 +59,22 @@ test('does not label a default-thread stack as exception context when ecxr faile
   const value = sanitizeDebuggerReport('\nFIND_ALL_CONTEXT_BEGIN\nrax=private rsp=private rip=00000001`40001234\n' + stack);
   assert.deepEqual(value, { contextInstructionAddress: '0x140001234', frames: ['electron!fault+0x1'] });
   assert.doesNotMatch(JSON.stringify(value), /private|rax|rsp/);
+});
+
+test('source-stack projection keeps offsets and source basenames, discards addresses and private paths', () => {
+  const context = '\nFIND_ALL_CONTEXT_BEGIN\nrip=00007ff7`12345678\nFIND_ALL_STACK_BEGIN\nelectron!fault\nFIND_ALL_STACK_END\n';
+  const stack = 'FIND_ALL_SOURCE_STACK_BEGIN\n'
+    + '00 000000f0`12340000 00007ff7`12345678 electron!BrowserProcessImpl::PostEarlyInitialization+0x123 [C:\\private-build\\src\\electron\\shell\\browser\\browser_process_impl.cc @ 154]\n'
+    + '01 (Inline Function) --------`-------- electron!logging::CheckFailure+0x5 [C:\\private-build\\src\\base\\check.cc @ 42]\n'
+    + '02 000000f0`12340000 00007ff7`12345678 kernel32!BaseThreadInitThunk+0x14\n'
+    + '03 000000f0`12340000 00007ff7`12345678 electron!fn(password=secret)\n'
+    + 'rax=secret rsp=private\n0000 raw-memory\nFIND_ALL_SOURCE_STACK_END\n';
+  const value = sanitizeSourceStack(context + stack);
+  assert.deepEqual(value, [
+    { symbol: 'electron!BrowserProcessImpl::PostEarlyInitialization+0x123', source: { file: 'browser_process_impl.cc', line: 154 } },
+    { symbol: 'electron!logging::CheckFailure+0x5', source: { file: 'check.cc', line: 42 } },
+    { symbol: 'kernel32!BaseThreadInitThunk+0x14' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(value), /private-build|secret|12340000|12345678|rax|rsp/);
+  assert.deepEqual(sanitizeSourceStack(stack), []);
 });

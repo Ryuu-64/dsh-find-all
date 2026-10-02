@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { readMinidumpMetadata, sanitizeDebuggerReport } from './minidump-metadata.mjs';
+import { readMinidumpMetadata, sanitizeDebuggerReport, sanitizeSourceStack } from './minidump-metadata.mjs';
 
 function isX64PE(file) {
   const fd = fs.openSync(file, 'r');
@@ -22,7 +22,7 @@ async function cleanStack(tool, dump, context) {
   // Documented CDB dump opening and kc clean stack; no parameters/raw-memory
   // commands and no option that permits mismatched symbols.
   const args = ['-y', symbolPath, '-i', path.dirname(context.executable), '-z', dump,
-    '-c', '.echo FIND_ALL_CONTEXT_BEGIN; .ecxr; .echo FIND_ALL_STACK_BEGIN; kc; .echo FIND_ALL_STACK_END; q'];
+    '-c', '.lines -e; .echo FIND_ALL_CONTEXT_BEGIN; .ecxr; .echo FIND_ALL_STACK_BEGIN; kc; .echo FIND_ALL_STACK_END; .echo FIND_ALL_SOURCE_STACK_BEGIN; k 20; .echo FIND_ALL_SOURCE_STACK_END; q'];
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|^_NT_|^DEBUG|^NODE_OPTIONS$/i.test(key)) delete env[key];
   return await new Promise(resolve => {
@@ -44,8 +44,8 @@ async function cleanStack(tool, dump, context) {
         tool: { name: tool.name, version: tool.version, signatureStatus: tool.signatureStatus },
         officialSymbolServers: ['https://msdl.microsoft.com/download/symbols', 'https://symbols.electronjs.org'],
         symbolMatching: 'debugger defaults; no mismatch override; module RSDS identity retained separately',
-        symbolWarnings: mismatch, ...projected,
-        limitation: 'Only filtered kc module/function lines are retained. No registers, arguments, raw debugger output or dump bytes are saved. A frame list alone is not a root-cause assertion.' });
+        symbolWarnings: mismatch, ...projected, sourceFrames: sanitizeSourceStack(raw),
+        limitation: 'Only filtered module/function+offset and source basenames/line numbers are retained. No address columns, full source paths, registers, arguments, raw debugger output or dump bytes are saved. A frame list alone is not a root-cause assertion.' });
       raw = '';
     });
   });

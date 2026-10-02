@@ -104,3 +104,23 @@ export function sanitizeDebuggerReport(text) {
   if (!match) return { contextInstructionAddress: null, frames: [] };
   return { contextInstructionAddress: `0x${BigInt('0x' + match[1].replaceAll('`', '')).toString(16)}`, frames: sanitizeCleanStack(text) };
 }
+
+// The documented plain k command includes addresses and optional source lines,
+// but no function arguments. Discard address columns and the full source path.
+export function sanitizeSourceStack(text) {
+  if (!sanitizeDebuggerReport(text).contextInstructionAddress) return [];
+  const lines = text.split(/\r?\n/);
+  const begin = lines.findIndex(line => line.trim() === 'FIND_ALL_SOURCE_STACK_BEGIN');
+  const end = lines.findIndex((line, index) => index > begin && line.trim() === 'FIND_ALL_SOURCE_STACK_END');
+  if (begin < 0 || end < 0) return [];
+  return lines.slice(begin + 1, end).flatMap(line => {
+    const match = line.match(/^\s*(?:[0-9a-f]{1,3}\s+)?(?:[0-9a-f`]{8,17}\s+[0-9a-f`]{8,17}|\(Inline Function\)\s+[-`]{8,17})\s+([\w.-]+![\w?$@<>:.,~+`-]{1,240}|[\w.-]+\+0x[0-9a-f]+)(?:\s+\[([^\]\r\n]{1,1024})\s+@\s+(\d{1,7})\])?\s*$/i);
+    if (!match) return [];
+    const frame = { symbol: match[1] };
+    if (match[2]) {
+      const file = basename(match[2].trim());
+      if (/^[\w.+-]{1,160}\.(?:cc|cpp|c|h|hpp|asm)$/i.test(file)) frame.source = { file, line: Number(match[3]) };
+    }
+    return [frame];
+  }).slice(0, 32);
+}

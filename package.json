@@ -16,6 +16,7 @@
     "README.md",
     "CHANGELOG.md",
     "NOTICE.md",
+    "docs/compatibility.md",
     "LICENSE"
   ],
   "author": "Ryuu-64",
@@ -35,9 +36,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-api-session-controller": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0",
-    "@deepseek-ai/dsh-client-ui-chat": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0",
-    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0"
+    "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.2 || 0.1.5-rc.3 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2 || 0.1.7-rc.1 || 0.1.7-rc.2 || 0.2.0-rc.1 || 0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-chat": "0.1.5-rc.2 || 0.1.5-rc.3 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2 || 0.1.7-rc.1 || 0.1.7-rc.2 || 0.2.0-rc.1 || 0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.5-rc.2 || 0.1.5-rc.3 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2 || 0.1.7-rc.1 || 0.1.7-rc.2 || 0.2.0-rc.1 || 0.2.0-rc.2"
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
@@ -72,5 +73,11 @@
         "0.1.5-rc.2": "compatible"
       }
     }
+  },
+  "devDependencies": {
+    "jsdom": "27.4.0",
+    "playwright": "1.56.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }

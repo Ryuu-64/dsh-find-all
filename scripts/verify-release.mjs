@@ -55,7 +55,7 @@ try {
 	ok(`packed bundle is the checked-in bundle (${bundleHash.slice(0, 16)}…)`);
 
 	ok(execFileSync(process.execPath, [check, root], { encoding: "utf8" }).trim());
-	console.log(`\nverify-release: ${pkg.name}@${pkg.version} is safe to publish`);
+	console.log(`\nverify-release: ${pkg.name}@${pkg.version} artifact checks passed (host compatibility is a separate acceptance gate)`);
 } finally {
 	rmSync(staging, { recursive: true, force: true });
 }

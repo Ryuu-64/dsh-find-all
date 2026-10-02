@@ -30,8 +30,8 @@ test("the bundle registers itself under its own id", () => {
 	// expected value from package.json — the host matches on that name exactly.
 });
 
-test("it injects the sessions service and nothing else", () => {
-	assert.deepEqual(mod.inject, ["sessions"]);
+test("it injects session and slot services", () => {
+	assert.deepEqual(mod.inject, ["sessions", "slots"]);
 });
 
 //#region matcher

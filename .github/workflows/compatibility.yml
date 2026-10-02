@@ -55,7 +55,9 @@ jobs:
   windows-desktop-smoke:
     needs: web-bootstrap
     if: ${{ !cancelled() }}
-    runs-on: windows-latest
+    # Explicit second supported image distinguishes the recorded Server 2025
+    # pre-plugin startup failure from plugin behavior; security stays enabled.
+    runs-on: windows-2022
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

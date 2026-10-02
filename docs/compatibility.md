@@ -1,6 +1,6 @@
 # Issue #1: compatibility acceptance
 
-This candidate implements the approved [Issue #1 plan](https://github.com/Ryuu-64/dsh-find-all/issues/1#issuecomment-5933617888). It is not a release or a new compatibility claim. Issues #2–#8 are outside this change.
+This implementation follows the approved [Issue #1 plan](https://github.com/Ryuu-64/dsh-find-all/issues/1#issuecomment-5933617888), with the accepted release scope and unverified Desktop limits recorded in [PR #9](https://github.com/Ryuu-64/dsh-find-all/pull/9). This does not promise compatibility with untested or future hosts. Issues #2–#8 are outside this change.
 
 ## Contract research
 

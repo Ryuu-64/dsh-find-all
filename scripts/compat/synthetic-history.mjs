@@ -76,7 +76,7 @@ export async function seedHistory(runtimeRequire, home, workspace, { sidebarChil
   return summary;
 }
 
-export async function exerciseSidebarIsolation(page, home, queryPath, capture) {
+export async function exerciseSidebarIsolation(page, home, queryPath, capture, profile = 'web') {
   // Use the official rc2 Subagent catalog/Sidebar controls. Do not fabricate
   // a second DOM pane: it must be rendered by the real host from child C.
   // https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/apps/web/tests/subagent-conversation.e2e.ts
@@ -92,9 +92,9 @@ export async function exerciseSidebarIsolation(page, home, queryPath, capture) {
   const anchor = page.locator('[data-find-all-session="find-all-synthetic-a"]');
   try {
     // Native re-enable creates a pristine plugin while both real panes remain.
-    setFixturePatch(home, queryPath, true);
+    setFixturePatch(home, queryPath, true, profile);
     await eventually(() => page.locator('[data-find-all-session]').count(), 0, 'disable before neutral multi-view regression');
-    setFixturePatch(home, queryPath);
+    setFixturePatch(home, queryPath, false, profile);
     await anchor.waitFor({ state: 'visible' });
     await page.evaluate(() => document.activeElement?.blur());
     assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
@@ -132,9 +132,10 @@ export async function exerciseSidebarIsolation(page, home, queryPath, capture) {
   }
 }
 
-export function setFixturePatch(home, queryPath, disabled = false) {
-  const file = path.join(home, '.dsh', 'profiles', 'web', 'cordis.patch.yml');
-  // Web profile uses the official live patch reload mode. JSON is valid YAML.
+export function setFixturePatch(home, queryPath, disabled = false, profile = 'web') {
+  assert.ok(['web', 'desktop'].includes(profile), 'only owned Web/Desktop fixture profiles are allowed');
+  const file = path.join(home, '.dsh', 'profiles', profile, 'cordis.patch.yml');
+  // Both profiles use the official live profile patch reload mode. JSON is valid YAML.
   const patches = [
     // The official Web scaffold also disables background LLM title generation.
     { id: 'session-title-llm', disabled: true },
@@ -156,7 +157,7 @@ async function eventually(read, expected, label, timeout = 30_000) {
   assert.equal(value, expected, label);
 }
 
-export async function exerciseHistory(page, home, queryPath, capture, version) {
+export async function exerciseHistory(page, home, queryPath, capture, version, profile = 'web') {
   const refreshRequired = ['0.1.5-rc.2', '0.1.5-rc.3', '0.1.6-alpha.1'].includes(version);
   // CLI profiles group these seeds under their actual temporary workspace;
   // the upstream scaffold's 'Ungrouped' barrier does not apply to this layout.
@@ -230,7 +231,7 @@ export async function exerciseHistory(page, home, queryPath, capture, version) {
     for (let cycle = 0; cycle < 2; cycle++) {
       await page.locator('[data-find-all-session]').click();
       await page.locator('#dsh-find-all-root input').fill('FIND_ALL_A_USER_');
-      setFixturePatch(home, queryPath, true);
+      setFixturePatch(home, queryPath, true, profile);
       if (refreshRequired) {
         await eventually(graphContainsPlugin, false, 'server graph acknowledges disable');
         assert.equal(await page.locator('#dsh-find-all-root').count(), 1, 'legacy host does not hot-unload graph entries');
@@ -242,7 +243,7 @@ export async function exerciseHistory(page, home, queryPath, capture, version) {
       assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
       await page.keyboard.press('Control+f');
       assert.equal(await page.locator('#dsh-find-all-root').count(), 0);
-      setFixturePatch(home, queryPath, false);
+      setFixturePatch(home, queryPath, false, profile);
       if (refreshRequired) {
         await eventually(graphContainsPlugin, true, 'server graph acknowledges re-enable');
         await page.reload({ waitUntil: 'load' });

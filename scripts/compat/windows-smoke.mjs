@@ -1,5 +1,5 @@
-// Bounded installed Electron acceptance. This deliberately does NOT seed history
-// or qualify the six-release Desktop matrix. Only synthetic empty-profile data.
+// Installed Electron acceptance for the exact current release. This does not
+// qualify other Desktop releases. Only synthetic profile/history data is used.
 // Usage: node scripts/compat/windows-smoke.mjs <candidate.tgz> <evidence-directory>
 // First run install-windows.ps1 with that same fresh evidence directory.
 //
@@ -16,6 +16,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
@@ -52,9 +54,11 @@ const report = {
     'fresh Desktop profile initialized through keyless welcome',
     'same candidate tgz installed using the official bundled Desktop CLI with --ignore-scripts',
     'actual loaded plugin CSS and Ctrl+F empty-session bar, Page scope 0/0, Esc cleanup, repeated open/close',
+    'actual synthetic history search, paging, A/B/A switching and native hot unload/re-enable',
+    'main/sidebar instance isolation in the installed Electron renderer',
     'clean application shutdown before plugin installation and after testing',
   ],
-  excludedScope: ['conversation search', 'history paging', 'session switching', 'plugin hot lifecycle', 'other Desktop versions', 'physical OS keyboard input'],
+  excludedScope: ['other Desktop versions', 'physical OS keyboard input'],
 };
 let app, page, env, installation, diagnostics, playwrightLog;
 let appOutput = '';
@@ -202,7 +206,7 @@ async function launch() {
     // runtime-tree.ts defines this descriptor at the immutable dsh tree root.
     const runtime = JSON.parse(readFileSync(join(app.getAppPath(), 'dsh', 'desktop-runtime.json'), 'utf8'));
     return {
-      packageName: manifest.name,
+      packageName: manifest.name, runtimeRoot: join(app.getAppPath(), 'dsh'),
       runtimeDescriptor: {
         schemaVersion: runtime.schemaVersion, version: runtime.release.version,
         platform: runtime.platform, arch: runtime.arch,
@@ -450,6 +454,40 @@ try {
   report.emptySessionFind = 'passed';
   report.testedScope.push('two Ctrl+F/Esc cycles, empty-session Page scope 0/0, no highlight residue');
   await quit();
+  report.stage = 'seed-synthetic-desktop-history';
+  const workspace = path.join(home, 'synthetic-workspace');
+  const queryPath = path.join(home, 'desktop-query.sqlite');
+  const seedScript = fileURLToPath(new URL('./desktop-seed-history.mjs', import.meta.url));
+  const seedOutput = await new Promise((resolve, reject) => {
+    const child = spawn(installation.executable, [seedScript, report.appIdentity.runtimeRoot, home, workspace, version], {
+      cwd: installation.runDirectory, env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    children.add(child);
+    let stdout = '', stderr = '';
+    child.stdout.on('data', data => { stdout += data.toString(); });
+    child.stderr.on('data', data => { stderr += data.toString(); });
+    const timer = setTimeout(() => { void stopOwnedProcessTree(child); reject(new Error('Installed-runtime history seeding timed out')); }, 60_000);
+    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('close', code => {
+      clearTimeout(timer);
+      writeSafe('desktop-seed.log', stdout + '\n' + stderr);
+      if (code === 0) resolve(stdout); else reject(new Error(`Installed-runtime history seeding failed (${code}); see desktop-seed.log`));
+    });
+  });
+  report.seededHistory = JSON.parse(seedOutput.trim().split('\n').at(-1));
+  assert.equal(report.seededHistory.status, 'passed');
+  setFixturePatch(home, queryPath, false, 'desktop');
+  report.stage = 'desktop-history-and-lifecycle';
+  await launch();
+  await keylessWelcome();
+  await finishKnownOnboarding();
+  const capture = name => captureSafePage(page, path.join(output, `desktop-${name}`), secrets, redact);
+  report.historyEvidence = await exerciseHistory(page, home, queryPath, capture, version, 'desktop');
+  report.syntheticHistory = 'passed';
+  report.sidebarIsolation = await exerciseSidebarIsolation(page, home, queryPath, capture, 'desktop');
+  report.testedScope.push('installed Electron: first body Ctrl+F, 80-match paging, A/B/A, F3/Shift+F3, two native unload/re-enable cycles, real embedded sidebar isolation');
+  await quit();
   report.cleanShutdown = 'passed';
   assert.deepEqual(report.browserErrors, [], 'unhandled browser errors');
   // Preserve all raw errors; only the documented, exactly correlated intentional
@@ -484,8 +522,22 @@ try {
   }
   writeSafe('desktop-process.log', appOutput);
   if (playwrightLog && fs.existsSync(playwrightLog)) writeSafe('playwright-early.log', fs.readFileSync(playwrightLog, 'utf8'));
+  report.nativeStartupErrors = [];
   for (const file of chromiumLogs) {
-    if (fs.existsSync(file)) writeSafe(path.basename(file), fs.readFileSync(file, 'utf8'));
+    if (!fs.existsSync(file)) continue;
+    const contents = fs.readFileSync(file, 'utf8');
+    writeSafe(path.basename(file), contents);
+    // Electron can emit bootstrap failures before Playwright has a Page to
+    // subscribe to. Keep the known raw failure visible and failing separately.
+    for (const [index, line] of contents.split('\n').entries()) {
+      if (/sandboxed_renderer\.bundle\.js script failed to run|Cannot destructure property 'preloadScripts'/.test(line)) {
+        report.nativeStartupErrors.push({ file: path.basename(file), line: index + 1, text: redact(line) });
+      }
+    }
+  }
+  if (report.nativeStartupErrors.length) {
+    report.status = 'failed'; process.exitCode = 1;
+    report.nativeStartupErrorGate = 'failed: Electron bootstrap error; root cause not established';
   }
   const json = JSON.stringify(report, (_key, value) => typeof value === 'string' ? redact(value) : value, 2);
   fs.writeFileSync(resultPath, json);

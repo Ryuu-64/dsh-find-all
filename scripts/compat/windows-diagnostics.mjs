@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { awaitDiagnosticReady, ownDiagnosticStartup, stopDiagnosticCollector } from './diagnostic-handshake.mjs';
 import { analyzeExistingDumps } from './analyze-existing-dumps.mjs';
 
 export function readAsarManifest(archive) {
@@ -37,7 +38,6 @@ export function readAsarManifest(archive) {
   } finally { fs.closeSync(fd); }
 }
 
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function startDiagnostics(installation, appEnv, redact) {
   assert.equal(process.platform, 'win32');
   const manifest = readAsarManifest(path.join(installation.installDirectory, 'resources', 'app.asar'));
@@ -71,12 +71,26 @@ export async function startDiagnostics(installation, appEnv, redact) {
   let helperOutput = '';
   child.stdout.on('data', data => { helperOutput += data; });
   child.stderr.on('data', data => { helperOutput += data; });
+  let processClosed = false, processError;
   const closed = new Promise(resolve => {
-    child.once('error', error => { helperOutput += error.message; resolve(-1); });
-    child.once('close', resolve);
+    child.on('error', error => { helperOutput += error.message; processError = error; });
+    child.once('close', code => { processClosed = true; resolve(code); });
   });
-  for (let i = 0; i < 100 && !fs.existsSync(readyFile) && child.exitCode === null; i++) await wait(100);
-  const ready = fs.existsSync(readyFile) ? JSON.parse(fs.readFileSync(readyFile, 'utf8').replace(/^\uFEFF/, '')) : { error: 'diagnostic helper did not signal readiness' };
+  async function waitClosed(ms) {
+    let timer;
+    return Promise.race([closed, new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), ms); })])
+      .finally(() => clearTimeout(timer));
+  }
+  const stopCollector = () => stopDiagnosticCollector({
+    signalStop: () => fs.writeFileSync(stopFile, new Date().toISOString()),
+    kill: () => child.kill(), // This owned helper only, never process-name matching.
+    waitClosed,
+    detach: () => { child.stdout.destroy(); child.stderr.destroy(); child.unref(); },
+  });
+  const ready = await ownDiagnosticStartup(
+    () => awaitDiagnosticReady(() => fs.readFileSync(readyFile, 'utf8'), () => !processClosed && !processError),
+    stopCollector,
+  );
   return {
     context, ready,
     async finish(output, observedUserData) {
@@ -91,10 +105,7 @@ export async function startDiagnostics(installation, appEnv, redact) {
         }
         fs.writeFileSync(contextFile, JSON.stringify(context));
       }
-      fs.writeFileSync(stopFile, new Date().toISOString());
-      let timer;
-      const exitCode = await Promise.race([closed, new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), 30_000); })]).finally(() => clearTimeout(timer));
-      if (exitCode === 'timeout') child.kill();
+      const exitCode = await stopCollector();
       const summary = { context, ready, exitCode, helperOutput: redact(helperOutput) };
       if (fs.existsSync(resultFile)) {
         const raw = JSON.parse(fs.readFileSync(resultFile, 'utf8').replace(/^\uFEFF/, ''));

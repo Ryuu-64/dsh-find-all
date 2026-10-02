@@ -9,6 +9,18 @@
 param([string]$ContextFile, [string]$ReadyFile, [string]$StopFile, [string]$ResultFile, [switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+function Write-AtomicJson([string]$Path, $Value, [int]$Depth) {
+    # Publish complete UTF-8 bytes by same-directory rename, never truncate the
+    # path that the Node reader treats as readiness. File.Move overwrite is a
+    # supported .NET Core API; no permissions or security settings are changed.
+    $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    try {
+        [IO.File]::WriteAllText($temporary, ($Value | ConvertTo-Json -Depth $Depth), [Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temporary, $Path, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
+}
 function Read-EventFields([xml]$Document) {
     # Use actual DOM nodes: PowerShell's .EventData.Data adapter can unwrap
     # un-attributed Data elements into plain strings.
@@ -19,7 +31,16 @@ if ($SelfTest) {
     [xml]$fixture = '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><EventData><Data Name="AppPath">synthetic.exe</Data><Data>unnamed value</Data><Data Name="Empty" /></EventData></Event>'
     $fields = @(Read-EventFields $fixture)
     if ($fields.Count -ne 3 -or $fields[0].name -ne 'AppPath' -or $fields[0].value -ne 'synthetic.exe' -or $fields[1].name -ne '' -or $fields[1].value -ne 'unnamed value' -or $fields[2].value -ne '') { throw 'Event XML field regression failed.' }
-    Write-Output 'Event XML named, unnamed and empty Data elements passed.'
+    $scratch = Join-Path ([IO.Path]::GetTempPath()) ('find-all-json-' + [guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($scratch)
+    try {
+        $file = Join-Path $scratch 'ready.json'
+        Write-AtomicJson $file @{ observerRegistered = $true; observedUtc = [DateTime]::UtcNow.ToString('o'); revision = 1 } 5
+        Write-AtomicJson $file @{ observerRegistered = $false; observedUtc = [DateTime]::UtcNow.ToString('o'); revision = 2 } 5
+        $ready = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+        if ($ready.revision -ne 2 -or $ready.observerRegistered -ne $false -or @(Get-ChildItem -LiteralPath $scratch).Count -ne 1) { throw 'Atomic JSON publication regression failed.' }
+    } finally { Remove-Item -LiteralPath $scratch -Recurse -Force }
+    Write-Output 'Event XML fields and complete JSON publication/replacement passed.'
     return
 }
 if (-not $IsWindows -or $env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'Disposable hosted Windows runner required.' }
@@ -93,7 +114,7 @@ try {
         }
         $result.acl += $entry
     }
-    @{ observedUtc = [DateTime]::UtcNow.ToString('o'); observerRegistered = $observerRegistered; session = $result.processSession } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReadyFile -Encoding utf8
+    Write-AtomicJson $ReadyFile @{ observedUtc = [DateTime]::UtcNow.ToString('o'); observerRegistered = $observerRegistered; session = $result.processSession } 5
     $deadline = [DateTime]::UtcNow.AddMinutes(20)
     while (-not (Test-Path -LiteralPath $StopFile) -and [DateTime]::UtcNow -lt $deadline) { Drain-Starts; Start-Sleep -Milliseconds 200 }
     Drain-Starts
@@ -166,5 +187,5 @@ try {
 finally {
     if ($observerRegistered) { Unregister-Event -SourceIdentifier $sourceName -ErrorAction SilentlyContinue }
     $result.endUtc = [DateTime]::UtcNow.ToString('o')
-    $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultFile -Encoding utf8
+    Write-AtomicJson $ResultFile $result 12
 }

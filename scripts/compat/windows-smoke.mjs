@@ -60,6 +60,12 @@ const report = {
   ],
   excludedScope: ['other Desktop versions', 'physical OS keyboard input'],
 };
+function setStage(stage) {
+  report.stage = stage;
+  console.log(`[desktop-stage] ${new Date().toISOString()} ${stage}`);
+}
+const heartbeat = setInterval(() => console.log(`[desktop-progress] ${new Date().toISOString()} ${report.stage}`), 15_000);
+heartbeat.unref();
 let app, page, env, installation, diagnostics, playwrightLog;
 let appOutput = '';
 const chromiumLogs = [];
@@ -390,12 +396,12 @@ try {
   fs.writeFileSync(path.join(home, '.npmrc'), 'ignore-scripts=true\nregistry=https://registry.npmjs.org/\n');
   installation.testUserData = path.join(installation.runDirectory, 'electron-user-data');
   report.isolation = 'real disposable-runner USERPROFILE retained; fresh DSH_HOME and explicit user-data-dir; no inherited model credentials';
-  report.stage = 'readiness-dom-regression';
+  setStage('readiness-dom-regression');
   // Preserve DEBUG_FILE initialization before the fixture first loads Playwright.
   await loadPlaywright();
   const { verifyDesktopReadinessFixture } = await import('./desktop-readiness-fixture.mjs');
   report.readinessFixture = await verifyDesktopReadinessFixture();
-  report.stage = 'prepare-startup-diagnostics';
+  setStage('prepare-startup-diagnostics');
   diagnostics = await startDiagnostics(installation, env, redact);
   // Controlled reproduction of the user report: same executable, DSH_HOME,
   // HOME, cwd and default native appData path; only USERPROFILE changes.
@@ -408,7 +414,7 @@ try {
     limitation: 'Process survival is a startup diagnostic, not Desktop UI acceptance; the actual smoke below uses its own explicit user-data-dir.',
   };
   report.diagnosticCollector = diagnostics.ready;
-  report.stage = 'initialize-desktop-profile';
+  setStage('initialize-desktop-profile');
   await launch();
   await keylessWelcome();
   // DOMContentLoaded is earlier than client-module activation. Finish the
@@ -418,7 +424,7 @@ try {
   await quit();
   report.profileInitialization = 'passed';
   report.testedScope.push('fresh Desktop profile initialization and clean exit');
-  report.stage = 'install-plugin-with-bundled-cli';
+  setStage('install-plugin-with-bundled-cli');
   await runCli(['plugin', '--profile', 'desktop', 'add', artifact, '--ignore-scripts'], 'desktop-plugin-install.log');
   assert.equal(hash(artifact), report.artifactSha256, 'the shared candidate changed during installation');
   const profile = path.join(env.DSH_HOME, 'profiles', 'desktop');
@@ -426,14 +432,14 @@ try {
   assert.equal(plugin.name, packageName);
   report.installedPlugin = { name: plugin.name, version: plugin.version };
   report.testedScope.push('same candidate tgz installed through bundled Desktop CLI with --ignore-scripts');
-  report.stage = 'reopen-installed-plugin';
+  setStage('reopen-installed-plugin');
   await launch();
   await keylessWelcome(); // The official skip choice applies to this launch only.
   await finishKnownOnboarding();
   assert.equal(await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').count(), 1);
   report.bootstrap = 'passed';
   report.testedScope.push('actual plugin CSS loaded after packaged application restart');
-  report.stage = 'empty-session-find';
+  setStage('empty-session-find');
   const bar = page.locator('#dsh-find-all-root');
   for (let cycle = 1; cycle <= 2; cycle++) {
     await page.bringToFront();
@@ -454,7 +460,7 @@ try {
   report.emptySessionFind = 'passed';
   report.testedScope.push('two Ctrl+F/Esc cycles, empty-session Page scope 0/0, no highlight residue');
   await quit();
-  report.stage = 'seed-synthetic-desktop-history';
+  setStage('seed-synthetic-desktop-history');
   const workspace = path.join(home, 'synthetic-workspace');
   const queryPath = path.join(home, 'desktop-query.sqlite');
   const seedScript = fileURLToPath(new URL('./desktop-seed-history.mjs', import.meta.url));
@@ -478,7 +484,7 @@ try {
   report.seededHistory = JSON.parse(seedOutput.trim().split('\n').at(-1));
   assert.equal(report.seededHistory.status, 'passed');
   setFixturePatch(home, queryPath, false, 'desktop');
-  report.stage = 'desktop-history-and-lifecycle';
+  setStage('desktop-history-and-lifecycle');
   await launch();
   await keylessWelcome();
   await finishKnownOnboarding();
@@ -495,10 +501,11 @@ try {
   report.consoleClassification = classifyDesktopConsole(report);
   assert.deepEqual(report.consoleClassification.unexpected, [], 'unexpected browser console errors');
   report.status = 'passed';
-  report.stage = 'complete';
+  setStage('complete');
 } catch (error) {
   report.status = 'failed';
   report.error = redact(error instanceof Error ? error.message : error);
+  report.errorStack = error instanceof Error ? redact(error.stack || '') : undefined;
   if (report.stage === 'initialize-desktop-profile' && !app && installation && env) {
     try { report.normalLaunchDiagnostic = await diagnoseNormalLaunch(); }
     catch (diagnosticError) { report.normalLaunchDiagnostic = { error: redact(diagnosticError.message) }; }
@@ -539,6 +546,7 @@ try {
     report.status = 'failed'; process.exitCode = 1;
     report.nativeStartupErrorGate = 'failed: Electron bootstrap error; root cause not established';
   }
+  clearInterval(heartbeat);
   const json = JSON.stringify(report, (_key, value) => typeof value === 'string' ? redact(value) : value, 2);
   fs.writeFileSync(resultPath, json);
   console.log(json);

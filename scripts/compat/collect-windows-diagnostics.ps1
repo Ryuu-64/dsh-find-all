@@ -50,7 +50,7 @@ try {
     } catch { Record-Error 'process-start-observer' $_ }
     foreach ($target in @($context.executable, $context.runDirectory, (Split-Path $context.runDirectory), $context.userData, $context.paths.APPDATA, $context.paths.USERPROFILE, $context.paths.DSH_HOME)) {
         if (-not $target) { continue }
-        $entry = [ordered]@{ path = $target; exists = (Test-Path -LiteralPath $target); sddl = $null; owner = $null }
+        $entry = [ordered]@{ phase = 'before-launch'; path = $target; exists = (Test-Path -LiteralPath $target); sddl = $null; owner = $null }
         if ($entry.exists) {
             try { $acl = Get-Acl -LiteralPath $target; $entry.sddl = $acl.Sddl; $entry.owner = $acl.Owner }
             catch { Record-Error 'read-acl' $_ }
@@ -62,26 +62,42 @@ try {
     while (-not (Test-Path -LiteralPath $StopFile) -and [DateTime]::UtcNow -lt $deadline) { Drain-Starts; Start-Sleep -Milliseconds 200 }
     Drain-Starts
     $context = Get-Content -LiteralPath $ContextFile -Raw | ConvertFrom-Json
-    $matching = @()
-    # Read existing events only. Absence is recorded; WER is never enabled or reconfigured.
+    $eventMap = @{}
+    # Read the complete bounded interval: Event 1001 can arrive after 1000.
+    # Absence is distinct from a failed read; WER is never reconfigured.
     for ($attempt = 0; $attempt -lt 6; $attempt++) {
         try {
-            $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000,1001; StartTime = $start; EndTime = [DateTime]::UtcNow } -ErrorAction SilentlyContinue)
-            $matching = @($events | Where-Object {
-                $xml = $_.ToXml()
-                $xml.IndexOf($context.executable, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
-                ($_.ProviderName -eq 'Windows Error Reporting' -and $xml.IndexOf('>DeepSeek Harness.exe<', [StringComparison]::OrdinalIgnoreCase) -ge 0)
-            })
-            if ($matching.Count -gt 0 -or $attempt -eq 5) { break }
-        } catch { Record-Error 'application-events' $_; break }
-        Start-Sleep -Seconds 2
+            $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000,1001; StartTime = $start; EndTime = [DateTime]::UtcNow } -ErrorAction Stop)
+        } catch {
+            if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound*') { $events = @() }
+            else { Record-Error 'application-events' $_; break }
+        }
+        foreach ($event in $events) {
+            $xml = $event.ToXml()
+            if ($xml.IndexOf($context.executable, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                ($event.ProviderName -eq 'Windows Error Reporting' -and $xml.IndexOf('>DeepSeek Harness.exe<', [StringComparison]::OrdinalIgnoreCase) -ge 0)) {
+                $eventMap[[string]$event.RecordId] = $event
+            }
+        }
+        if ($attempt -lt 5) { Start-Sleep -Seconds 2 }
     }
+    $matching = @($eventMap.Values | Sort-Object RecordId)
     foreach ($event in @($matching)) {
         $xmlText = $event.ToXml(); [xml]$xml = $xmlText
         $fields = @($xml.Event.EventData.Data | ForEach-Object { [ordered]@{ name = $_.GetAttribute('Name'); value = $_.InnerText } })
         $result.events += [ordered]@{ id = $event.Id; recordId = $event.RecordId; provider = $event.ProviderName; utc = $event.TimeCreated.ToUniversalTime().ToString('o'); fields = $fields; xml = $xmlText }
     }
     $logs = Join-Path $context.userData 'logs'
+    # The directory may not exist until startup. Preserve both pre/post facts.
+    foreach ($target in @((Split-Path $context.userData), $context.userData, $logs, $context.paths.DSH_HOME)) {
+        $entry = [ordered]@{ phase = 'after-launch'; path = $target; exists = (Test-Path -LiteralPath $target); sddl = $null; owner = $null }
+        if ($entry.exists) {
+            try { $acl = Get-Acl -LiteralPath $target; $entry.sddl = $acl.Sddl; $entry.owner = $acl.Owner }
+            catch { Record-Error 'read-post-launch-acl' $_ }
+        }
+        $result.acl += $entry
+    }
+    $result.mainDiagnostic = [ordered]@{ path = $context.mainDiagnosticFile; exists = (Test-Path -LiteralPath $context.mainDiagnosticFile) }
     Inventory $logs 'crash-*.log' $false
     $fatalFiles = @()
     if (Test-Path -LiteralPath $logs) { $fatalFiles += @(Get-ChildItem -LiteralPath $logs -File -Filter 'crash-*.log' | Where-Object { $_.LastWriteTimeUtc -ge $start }) }
@@ -97,7 +113,9 @@ try {
         $folder = Join-Path $env:ProgramData ('Microsoft\Windows\WER\' + $store)
         $result.inventories += [ordered]@{ path = $folder; exists = (Test-Path -LiteralPath $folder); scope = 'only matching AppCrash_DeepSeek* directories are inspected below' }
         if (Test-Path -LiteralPath $folder) {
-            foreach ($dir in @(Get-ChildItem -LiteralPath $folder -Directory -Filter 'AppCrash_DeepSeek*' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTimeUtc -ge $start } | Select-Object -First 20)) { Inventory $dir.FullName '*' $true }
+            try {
+                foreach ($dir in @(Get-ChildItem -LiteralPath $folder -Directory -Filter 'AppCrash_DeepSeek*' -ErrorAction Stop | Where-Object { $_.LastWriteTimeUtc -ge $start } | Select-Object -First 20)) { Inventory $dir.FullName '*' $true }
+            } catch { Record-Error 'wer-directory-listing' $_ }
         }
     }
 } catch { Record-Error 'collector' $_ }

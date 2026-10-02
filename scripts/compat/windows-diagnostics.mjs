@@ -81,13 +81,18 @@ export async function startDiagnostics(installation, appEnv, redact) {
     async finish(output, observedUserData) {
       if (observedUserData) {
         const resolved = path.resolve(observedUserData).toLowerCase();
-        assert.ok(resolved.startsWith(prefix) || resolved.startsWith(path.resolve(installation.runDirectory).toLowerCase() + path.sep));
-        context.userData = observedUserData;
-        context.userDataBasis = 'observed app.getPath(userData) in the actual installed Electron process';
+        if (resolved.startsWith(prefix) || resolved.startsWith(path.resolve(installation.runDirectory).toLowerCase() + path.sep)) {
+          context.userData = observedUserData;
+          context.userDataBasis = 'observed app.getPath(userData) in the actual installed Electron process';
+        } else {
+          context.uncollectedUserData = observedUserData;
+          context.userDataWarning = 'Runtime path was outside the allowed diagnostic roots; it was not read.';
+        }
         fs.writeFileSync(contextFile, JSON.stringify(context));
       }
       fs.writeFileSync(stopFile, new Date().toISOString());
-      const exitCode = await Promise.race([closed, wait(30_000).then(() => 'timeout')]);
+      let timer;
+      const exitCode = await Promise.race([closed, new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), 30_000); })]).finally(() => clearTimeout(timer));
       if (exitCode === 'timeout') child.kill();
       const summary = { context, ready, exitCode, helperOutput: redact(helperOutput) };
       if (fs.existsSync(resultFile)) {

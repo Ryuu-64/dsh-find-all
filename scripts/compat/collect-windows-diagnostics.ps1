@@ -6,15 +6,28 @@
 # learn.microsoft.com/previous-versions/windows/desktop/krnlprov/win32-processstarttrace
 # electron/electron v44.0.0 shell/common/electron_paths.cc: userData/Crashpad
 [CmdletBinding()]
-param([string]$ContextFile, [string]$ReadyFile, [string]$StopFile, [string]$ResultFile)
+param([string]$ContextFile, [string]$ReadyFile, [string]$StopFile, [string]$ResultFile, [switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+function Read-EventFields([xml]$Document) {
+    # Use actual DOM nodes: PowerShell's .EventData.Data adapter can unwrap
+    # un-attributed Data elements into plain strings.
+    return @($Document.SelectNodes('//*[local-name()="EventData"]/*[local-name()="Data"]') |
+        ForEach-Object { [ordered]@{ name = $_.GetAttribute('Name'); value = $_.InnerText } })
+}
+if ($SelfTest) {
+    [xml]$fixture = '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><EventData><Data Name="AppPath">synthetic.exe</Data><Data>unnamed value</Data><Data Name="Empty" /></EventData></Event>'
+    $fields = @(Read-EventFields $fixture)
+    if ($fields.Count -ne 3 -or $fields[0].name -ne 'AppPath' -or $fields[0].value -ne 'synthetic.exe' -or $fields[1].name -ne '' -or $fields[1].value -ne 'unnamed value' -or $fields[2].value -ne '') { throw 'Event XML field regression failed.' }
+    Write-Output 'Event XML named, unnamed and empty Data elements passed.'
+    return
+}
 if (-not $IsWindows -or $env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'Disposable hosted Windows runner required.' }
 $context = Get-Content -LiteralPath $ContextFile -Raw | ConvertFrom-Json
 $start = [DateTime]::Parse($context.startUtc).ToUniversalTime()
 $result = [ordered]@{ startUtc = $context.startUtc; endUtc = $null; processSession = $null; processStarts = @(); events = @(); acl = @(); fatalLogs = @(); inventories = @(); errors = @() }
 $sourceName = 'find-all-start-' + [guid]::NewGuid().ToString('N')
-$subscription = $null
+$observerRegistered = $false
 function Record-Error([string]$Stage, $Failure) { $result.errors += [ordered]@{ stage = $Stage; message = [string]$Failure.Exception.Message } }
 function Drain-Starts {
     foreach ($event in @(Get-Event -SourceIdentifier $sourceName -ErrorAction SilentlyContinue)) {
@@ -46,7 +59,8 @@ try {
         $result.processSession = [ordered]@{ nodePid = $context.nodePid; sessionId = $process.SessionId; observedUtc = [DateTime]::UtcNow.ToString('o') }
     } catch { Record-Error 'runner-session' $_ }
     try {
-        $subscription = Register-CimIndicationEvent -Namespace root/cimv2 -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='DeepSeek Harness.exe'" -SourceIdentifier $sourceName
+        Register-CimIndicationEvent -Namespace root/cimv2 -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='DeepSeek Harness.exe'" -SourceIdentifier $sourceName | Out-Null
+        $observerRegistered = $true
     } catch { Record-Error 'process-start-observer' $_ }
     foreach ($target in @($context.executable, $context.runDirectory, (Split-Path $context.runDirectory), $context.userData, $context.paths.APPDATA, $context.paths.USERPROFILE, $context.paths.DSH_HOME)) {
         if (-not $target) { continue }
@@ -57,7 +71,7 @@ try {
         }
         $result.acl += $entry
     }
-    @{ observedUtc = [DateTime]::UtcNow.ToString('o'); observerRegistered = ($null -ne $subscription); session = $result.processSession } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReadyFile -Encoding utf8
+    @{ observedUtc = [DateTime]::UtcNow.ToString('o'); observerRegistered = $observerRegistered; session = $result.processSession } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReadyFile -Encoding utf8
     $deadline = [DateTime]::UtcNow.AddMinutes(20)
     while (-not (Test-Path -LiteralPath $StopFile) -and [DateTime]::UtcNow -lt $deadline) { Drain-Starts; Start-Sleep -Milliseconds 200 }
     Drain-Starts
@@ -66,6 +80,7 @@ try {
     # Read the complete bounded interval: Event 1001 can arrive after 1000.
     # Absence is distinct from a failed read; WER is never reconfigured.
     for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        Drain-Starts
         try {
             $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000,1001; StartTime = $start; EndTime = [DateTime]::UtcNow } -ErrorAction Stop)
         } catch {
@@ -81,11 +96,17 @@ try {
         }
         if ($attempt -lt 5) { Start-Sleep -Seconds 2 }
     }
+    Drain-Starts
     $matching = @($eventMap.Values | Sort-Object RecordId)
     foreach ($event in @($matching)) {
-        $xmlText = $event.ToXml(); [xml]$xml = $xmlText
-        $fields = @($xml.Event.EventData.Data | ForEach-Object { [ordered]@{ name = $_.GetAttribute('Name'); value = $_.InnerText } })
-        $result.events += [ordered]@{ id = $event.Id; recordId = $event.RecordId; provider = $event.ProviderName; utc = $event.TimeCreated.ToUniversalTime().ToString('o'); fields = $fields; xml = $xmlText }
+        try {
+            $xmlText = $event.ToXml()
+            $row = [ordered]@{ id = $event.Id; recordId = $event.RecordId; provider = $event.ProviderName; utc = $event.TimeCreated.ToUniversalTime().ToString('o'); fields = @(); xml = $xmlText }
+            # Keep the original XML even if optional field parsing fails.
+            try { $row.fields = @(Read-EventFields ([xml]$xmlText)) }
+            catch { Record-Error 'event-field-parsing' $_ }
+            $result.events += $row
+        } catch { Record-Error 'event-xml-read' $_ }
     }
     $logs = Join-Path $context.userData 'logs'
     # The directory may not exist until startup. Preserve both pre/post facts.
@@ -120,7 +141,7 @@ try {
     }
 } catch { Record-Error 'collector' $_ }
 finally {
-    if ($null -ne $subscription) { Unregister-Event -SourceIdentifier $sourceName -ErrorAction SilentlyContinue }
+    if ($observerRegistered) { Unregister-Event -SourceIdentifier $sourceName -ErrorAction SilentlyContinue }
     $result.endUtc = [DateTime]::UtcNow.ToString('o')
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultFile -Encoding utf8
 }

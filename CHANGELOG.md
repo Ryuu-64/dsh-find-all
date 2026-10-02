@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5
+
+Fix compatibility with newer DSH hosts while preserving the existing find controls and matching behavior.
+
+- Use the official session header slot and session identity instead of the removed global current-session field. Ambiguous, unsupported or stale conversation targets fail closed; highlights, paging and listeners stay scoped and are cleaned up with the host lifecycle.
+- Retain all previously admitted published runtimes and include the two tested 0.2 release candidates through an exact ten-version peer list. No version exemption or future-version guarantee is added.
+- Document the legacy Desktop plugin-manager UI installation route, alongside the current bundled CLI route.
+
+[Acceptance run 36998700597](https://github.com/Ryuu-64/dsh-find-all/actions/runs/36998700597) completed the plugin business checks on ten Web runtimes and three official Windows Desktop builds. The unavailable historical Desktop builds remain unverified. Host startup and shutdown errors also occurred without the plugin and remain recorded as an overall CI failure; this release does not claim to fix those host errors. See the README for the accepted version and installation boundaries.
+
+
 ## 0.1.4
 
 Documentation only: no code, no bundle, no behavior changed — `lib/` is untouched, so 0.1.4

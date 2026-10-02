@@ -16,6 +16,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { verifyDesktopReadinessFixture } from './desktop-readiness-fixture.mjs';
+import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
 let electron;
@@ -281,8 +283,10 @@ async function finishKnownOnboarding({ pluginExpected = true } = {}) {
       await configureLater.waitFor({ state: 'hidden' });
       return false;
     }
-    // Official ui-sidebar SidebarRoot aria-label uses session.new.label (not visible session.new).
-    if (!await page.getByRole('button', { name: 'New session', exact: true }).isVisible()) return false;
+    // SidebarRoot renders both the expanded brand shortcut and the ordinary
+    // New session control with this exact aria-label (official rc2 lines 244–276).
+    // This is a readiness read, not an action choosing one of those buttons.
+    if (!await workspaceControlsVisible(page)) { readySince = undefined; return false; }
     if (pluginExpected && !await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').count()) return false;
     // CSS can load before a React first-run dialog mounts. Require a short
     // stable interval and reset it after each recognized prompt.
@@ -338,6 +342,9 @@ try {
   assert.equal(process.env.GITHUB_ACTIONS, 'true');
   assert.equal(process.env.RUNNER_ENVIRONMENT, 'github-hosted', 'only a disposable hosted runner is authorized');
   assert.ok(process.env.USERPROFILE && process.env.RUNNER_TEMP);
+  report.stage = 'readiness-dom-regression';
+  report.readinessFixture = await verifyDesktopReadinessFixture();
+  report.stage = 'preflight';
   assert.ok(artifact.endsWith('.tgz') && fs.statSync(artifact).isFile(), 'supply the same candidate tgz as Web acceptance');
   report.runner = { osRelease: os.release(), imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion };
   report.artifactSha256 = hash(artifact);

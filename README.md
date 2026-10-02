@@ -22,23 +22,29 @@ DSH 桌面窗口是 Electron 壳，本身没有浏览器那种查找栏。而会
 
 ## 安装
 
-用 DSH 自带的插件命令装：
+先按 **DSH 运行时版本**选择安装入口；它不一定等于 Desktop 产品版本。本次 PR 候选尚未发布到 npm，下面的包名用于安装已发布版本；验收本候选时，请替换为对应 `.tgz` 的绝对路径。
+
+**运行时 0.2.0-rc.2**：用 Desktop 自带的插件命令安装：
 
 ```sh
 dsh plugin --profile desktop add @ryuu-64/dsh-find-all
 ```
 
-装完请**完整重启一次 DSH Desktop**——插件清单只在启动的时候装载，不重启不会生效。
+**运行时 0.2.0-rc.1 / 0.1.7-rc.2**：这两个官方安装包没有上述新版 CLI 入口，通用 `dsh plugin --profile desktop` 也会拒绝操作。请在 Desktop 中打开「插件 / Plugins」→「添加插件 / Add plugin」，填入 `@ryuu-64/dsh-find-all`（验收候选时填 `.tgz` 绝对路径），点击「安装 / Install」，完成后点击「立即启用 / Enable now」。不要用版本豁免绕过安装错误。
+
+安装后**完整重启一次 DSH Desktop**，再检查插件是否正常加载。已验证的三个桌面版本支持原生禁用/重新启用；旧宿主的刷新要求见下方兼容表说明。
 
 装完按 **⌘F / Ctrl+F**，右上角出现查找栏就算装好了。
 
 ### 和 dsh-find-bar 只能留一个
 
-`dsh-find-bar` 和本插件**都会抢 Ctrl+F**，两个同时装会互相顶掉。如果你之前装过它，先卸掉：
+`dsh-find-bar` 和本插件**都会抢 Ctrl+F**，两个同时装会互相顶掉。如果你之前装过它，先卸掉。运行时 0.2.0-rc.2 可用：
 
 ```sh
 dsh plugin --profile desktop remove dsh-find-bar
 ```
+
+运行时 0.2.0-rc.1 / 0.1.7-rc.2 请在「插件 / Plugins」中找到 `dsh-find-bar` 并选择「卸载 / Uninstall」。
 
 ## 使用
 
@@ -62,10 +68,14 @@ dsh plugin --profile desktop remove dsh-find-bar
 
 ## 卸载 / 回退
 
+运行时 0.2.0-rc.2 可用：
+
 ```sh
 dsh plugin --profile desktop remove @ryuu-64/dsh-find-all   # 卸载
 dsh plugin --profile desktop add dsh-find-bar               # 想换回上游那个插件
 ```
+
+运行时 0.2.0-rc.1 / 0.1.7-rc.2 请在「插件 / Plugins」中卸载本插件；需要回退时，再通过「添加插件 / Add plugin」安装 `dsh-find-bar`。
 
 ## 关于这个项目
 
@@ -79,6 +89,14 @@ dsh plugin --profile desktop add dsh-find-bar               # 想换回上游那
 
 右侧嵌入会话暂不支持查找，会提示范围不可用，不会自动改搜主栏；明确选择主会话后仍可查找。
 
-开发者应区分逻辑/DOM fixture、实际 Web 宿主和 Electron Desktop 验收。完整版本矩阵仍是合并前的验收条件；Draft 中的 peer 列表仅列出十个待验的精确目标版本（含 Desktop 2.0.14 报告使用的 dsh 0.1.7-rc.1），不代表它们已通过验收；不新增兼容声明、不发布，验收失败须修复或明确披露；不能未经审查就收窄此前可安装的版本范围。详见 [兼容性验收记录](docs/compatibility.md)。
+[2026-10-02 验收记录（代码版本 `69c477c`）](https://github.com/Ryuu-64/dsh-find-all/actions/runs/36998700597)使用同一候选包完成十版 Web 和三个官方 Windows Desktop 的插件功能验收：首次快捷键、80 条结果的分页、会话切换、结果导航及宿主支持的启停行为。当前 rc2 还验证了实际右侧嵌入会话的范围隔离。
 
-旧宿主 0.1.5-rc.2 / rc.3 / 0.1.6-alpha.1 本身不支持插件图变更的热卸载：禁用或重新启用后须刷新页面或重启应用。0.1.6-alpha.2 及本次其余候选版本具有原生热卸载机制，验收会单独验证；不能将 Web 通过视为 Desktop 已通过。
+| DSH 运行时版本 | 实际 Web | 官方 Windows Desktop |
+| --- | --- | --- |
+| 0.1.5-rc.2、0.1.5-rc.3、0.1.6-alpha.2 | 功能验收通过 | 已核官方路径未取得安装包，未验证 |
+| 0.1.6-alpha.1、0.1.7-alpha.1、0.1.7-alpha.2、0.1.7-rc.1 | 功能验收通过 | 本轮未验证 |
+| 0.1.7-rc.2、0.2.0-rc.1、0.2.0-rc.2 | 功能验收通过 | 插件功能验收通过；宿主错误仍保留 |
+
+**该次 CI 整体仍为失败**：三个桌面版本均记录到宿主启动时的 `startupData/preloadScripts` 错误及退出时的连接错误，未装插件的基线也存在同类错误。没有忽略这些错误，也不把插件功能通过写成宿主整体无错误。Web 通过不代表对应 Desktop 已验证，未知未来版本不作承诺。详见 [兼容性验收方法与边界](docs/compatibility.md)；最终交付状态以 [PR #9](https://github.com/Ryuu-64/dsh-find-all/pull/9) 的独立审核为准。
+
+旧宿主 0.1.5-rc.2 / rc.3 / 0.1.6-alpha.1 本身不支持插件图变更的热卸载：禁用或重新启用后须刷新页面或重启应用。其余七个已验 Web 运行时和上述三个已验 Desktop 均通过了两次原生禁用/重新启用测试；未验证的 Desktop 不据此推定通过。

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { analyzeExistingDumps } from './analyze-existing-dumps.mjs';
 
 export function readAsarManifest(archive) {
   const fd = fs.openSync(archive, 'r');
@@ -111,6 +112,8 @@ export async function startDiagnostics(installation, appEnv, redact) {
           file.artifact = filename;
           delete file.text;
         }
+        try { summary.dumpAnalysis = await analyzeExistingDumps(raw, context); }
+        catch (error) { summary.dumpAnalysis = { status: 'failed', error: redact(error.message) }; }
         summary.evidence = raw;
       }
       fs.writeFileSync(path.join(output, 'windows-diagnostics.json'), JSON.stringify(summary, (_key, value) => typeof value === 'string' ? redact(value) : value, 2));

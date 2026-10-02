@@ -62,6 +62,28 @@ try {
         Register-CimIndicationEvent -Namespace root/cimv2 -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='DeepSeek Harness.exe'" -SourceIdentifier $sourceName | Out-Null
         $observerRegistered = $true
     } catch { Record-Error 'process-start-observer' $_ }
+    # Inventory existing Microsoft tools only. Never install or configure them.
+    # Microsoft ebpf-for-windows/docs/CrashDumpDebugging.md documents this SDK path.
+    $result.debuggers = @()
+    $toolNames = @('cdb.exe', 'cdbX64.exe', 'windbg.exe', 'symchk.exe', 'dumpchk.exe')
+    $toolPaths = @()
+    foreach ($name in $toolNames) {
+        $toolPaths += @(Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+        foreach ($root in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+            if ($root) { $toolPaths += Join-Path $root ('Windows Kits\10\Debuggers\x64\' + $name) }
+        }
+    }
+    $result.debuggerSearch = 'PATH and existing Windows Kits/10/Debuggers/x64; no installation or persistent symbol configuration'
+    foreach ($tool in @($toolPaths | Sort-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) { continue }
+        try {
+            $sig = Get-AuthenticodeSignature -LiteralPath $tool
+            $subject = $null
+            if ($null -ne $sig.SignerCertificate) { $subject = $sig.SignerCertificate.Subject }
+            $item = Get-Item -LiteralPath $tool
+            $result.debuggers += [ordered]@{ path = $tool; name = $item.Name; version = $item.VersionInfo.FileVersion; signatureStatus = [string]$sig.Status; publisher = $subject }
+        } catch { Record-Error 'debugger-inventory' $_ }
+    }
     foreach ($target in @($context.executable, $context.runDirectory, (Split-Path $context.runDirectory), $context.userData, $context.paths.APPDATA, $context.paths.USERPROFILE, $context.paths.DSH_HOME)) {
         if (-not $target) { continue }
         $entry = [ordered]@{ phase = 'before-launch'; path = $target; exists = (Test-Path -LiteralPath $target); sddl = $null; owner = $null }
@@ -127,7 +149,8 @@ try {
         if ($file.Length -le 1048576) { $result.fatalLogs += [ordered]@{ path = $file.FullName; bytes = $file.Length; text = (Get-Content -LiteralPath $file.FullName -Raw) } }
         else { $result.errors += @{ stage = 'fatal-log-size'; message = 'Fatal log exceeds 1 MiB; recorded existence only.' } }
     }
-    # Existing dump/Crashpad files: metadata only, never their bytes.
+    # This inventory records existence only. The separate bounded analyzer may
+    # read metadata from matching automatic dumps; no dump bytes are uploaded.
     Inventory (Join-Path $context.userData 'Crashpad') '*' $true
     Inventory (Join-Path $context.paths.LOCALAPPDATA 'CrashDumps') 'DeepSeek Harness.exe*' $false
     foreach ($store in @('ReportArchive', 'ReportQueue')) {

@@ -68,7 +68,7 @@ jobs:
       - name: Validate diagnostic collectors
         shell: pwsh
         run: |
-          node --test scripts/compat/windows-diagnostics.test.mjs
+          node --test scripts/compat/windows-diagnostics.test.mjs scripts/compat/minidump-metadata.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $parseTokens = $null
           $parseErrors = $null

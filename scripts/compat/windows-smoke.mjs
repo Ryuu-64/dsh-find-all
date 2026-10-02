@@ -18,6 +18,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
+import { disableFixtureInstallScripts, installThroughDesktopUi } from './desktop-plugin-install.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { runOwnedCommand } from './owned-command.mjs';
@@ -53,16 +54,16 @@ const report = {
   desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [], consoleEvents: [], networkFailures: [],
   testedScope: [],
   intendedScope: [
-    'valid signed official rc2 installer and installed executable',
+    'valid signed allowlisted official installer and installed executable',
     'real packaged Electron identity and sandboxed renderer preferences',
     'fresh Desktop profile initialized through keyless welcome',
-    'same candidate tgz installed using the official bundled Desktop CLI with --ignore-scripts',
+    'same candidate tgz installed through the release-supported official CLI or UI; scripts disabled',
     'actual loaded plugin CSS and Ctrl+F empty-session bar, Page scope 0/0, Esc cleanup, repeated open/close',
     'actual synthetic history search, paging, A/B/A switching and native hot unload/re-enable',
     'main/sidebar instance isolation in the installed Electron renderer',
     'clean application shutdown before plugin installation and after testing',
   ],
-  excludedScope: ['other Desktop versions', 'physical OS keyboard input'],
+  excludedScope: ['Desktop versions outside the three allowlisted official installers', 'physical OS keyboard input'],
 };
 function setStage(stage) {
   report.stage = stage;
@@ -371,7 +372,9 @@ try {
   const runnerTemp = path.resolve(process.env.RUNNER_TEMP).toLowerCase() + path.sep;
   assert.ok(path.resolve(installation.runDirectory).toLowerCase().startsWith(runnerTemp));
   assert.equal(installation.executable, path.join(installation.installDirectory, 'DeepSeek Harness.exe'));
-  assert.equal(installation.bundledCli, path.join(installation.installDirectory, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd'));
+  assert.equal(installation.pluginInstall, target.pluginInstall);
+  if (target.pluginInstall === 'bundled-cli') assert.equal(installation.bundledCli, path.join(installation.installDirectory, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd'));
+  else assert.equal(installation.bundledCli, null);
   assert.equal(hash(installation.installer), installation.installerSha256, 'installer changed after verification');
   assert.equal(hash(installation.executable), installation.executableSha256, 'installed executable changed after verification');
   report.installer = { sha256: installation.installerSha256, bytes: installation.installerBytes,
@@ -431,14 +434,32 @@ try {
   await quit();
   report.profileInitialization = 'passed';
   report.testedScope.push('fresh Desktop profile initialization and clean exit');
-  setStage('install-plugin-with-bundled-cli');
-  await runCli(['plugin', '--profile', 'desktop', 'add', artifact, '--ignore-scripts'], 'desktop-plugin-install.log');
+  if (target.pluginInstall === 'bundled-cli') {
+    setStage('install-plugin-with-bundled-cli');
+    await runCli(['plugin', '--profile', 'desktop', 'add', artifact, '--ignore-scripts'], 'desktop-plugin-install.log');
+    report.pluginInstallation = { status: 'passed', method: 'official-bundled-cli', buildScripts: 'disabled', versionExemptions: 'none' };
+  } else {
+    setStage('install-plugin-with-official-ui');
+    // pnpm 11 reads this setting from the project workspace, not .npmrc.
+    // Preserve the official core package overrides and every existing policy.
+    const policy = path.join(env.DSH_HOME, 'profiles', 'desktop', 'pnpm-workspace.yaml');
+    const originalPolicy = fs.readFileSync(policy, 'utf8');
+    const noScriptsPolicy = disableFixtureInstallScripts(originalPolicy);
+    fs.writeFileSync(policy, noScriptsPolicy);
+    await launch();
+    await keylessWelcome();
+    await finishKnownOnboarding({ pluginExpected: false });
+    assert.equal(fs.readFileSync(policy, 'utf8'), noScriptsPolicy, 'host changed the reviewed script policy');
+    report.pluginInstallation = await installThroughDesktopUi(page, artifact);
+    report.pluginInstallScreenshot = await captureSafePage(page, path.join(output, 'desktop-plugin-installed'), secrets, redact);
+    await quit();
+  }
   assert.equal(hash(artifact), report.artifactSha256, 'the shared candidate changed during installation');
   const profile = path.join(env.DSH_HOME, 'profiles', 'desktop');
   const plugin = JSON.parse(fs.readFileSync(path.join(profile, 'node_modules', '@ryuu-64', 'dsh-find-all', 'package.json'), 'utf8'));
   assert.equal(plugin.name, packageName);
   report.installedPlugin = { name: plugin.name, version: plugin.version };
-  report.testedScope.push('same candidate tgz installed through bundled Desktop CLI with --ignore-scripts');
+  report.testedScope.push(`same candidate tgz installed through ${report.pluginInstallation.method}; scripts disabled, no version exemptions`);
   setStage('reopen-installed-plugin');
   await launch();
   await keylessWelcome(); // The official skip choice applies to this launch only.

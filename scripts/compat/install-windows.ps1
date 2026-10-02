@@ -37,6 +37,8 @@ $report = [ordered]@{
     signature = $null
     executable = $null
     bundledCli = $null
+    pluginInstall = $target.pluginInstall
+    installedLayout = $null
     installationScope = 'current disposable runner user'
     arguments = '/S /D=<new empty temporary directory>'
     agreementReview = 'No EULA/acceptance page found in the three exact reviewed tag configurations and custom pages; unreviewed versions are refused.'
@@ -111,16 +113,23 @@ try {
     if ($setup.ExitCode -ne 0) { throw "Installer failed with exit code $($setup.ExitCode); no fallback or policy change is permitted." }
     $executable = Join-Path $install ($product + '.exe')
     $cli = Join-Path $install 'resources\runtime\cli\bin\dsh.cmd'
-    if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or -not (Test-Path -LiteralPath $cli -PathType Leaf)) {
-        throw 'The expected packaged executable or official bundled CLI is missing.'
+    $report.installedLayout = [ordered]@{
+        executable = (Test-Path -LiteralPath $executable -PathType Leaf)
+        asar = (Test-Path -LiteralPath (Join-Path $install 'resources\app.asar') -PathType Leaf)
+        pnpm = (Test-Path -LiteralPath (Join-Path $install 'resources\runtime\pnpm\bin\pnpm.mjs') -PathType Leaf)
+        cliWrapper = (Test-Path -LiteralPath $cli -PathType Leaf)
     }
+    if (-not $report.installedLayout.executable) { throw 'The expected installed executable is missing.' }
+    if (-not $report.installedLayout.asar -or -not $report.installedLayout.pnpm) { throw 'The expected official ASAR/runtime package manager is missing.' }
+    if ($target.pluginInstall -eq 'bundled-cli' -and -not $report.installedLayout.cliWrapper) { throw 'The rc2 official bundled CLI wrapper is missing.' }
+    if ($target.pluginInstall -notin @('bundled-cli', 'official-ui')) { throw 'Unreviewed plugin installation method.' }
     $report.stage = 'verify-installed-app'
     $report.appSignature = Read-Signature $executable
     if ($report.appSignature.status -ne 'Valid' -or $report.appSignature.thumbprint -ne $report.signature.thumbprint) {
         throw 'The installed executable signature is invalid or differs from the installer publisher.'
     }
     $report.executable = $executable
-    $report.bundledCli = $cli
+    if ($target.pluginInstall -eq 'bundled-cli') { $report.bundledCli = $cli }
     $report.executableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
     $report.status = 'passed'
     $report.stage = 'installed'

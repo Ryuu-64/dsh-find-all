@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { verifyDesktopPluginInstallFixture } from './desktop-plugin-install-fixture.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 
 // Static reconstruction of official dsh-v0.2.0-rc.2 SidebarRoot.tsx 216–277.
@@ -24,6 +25,7 @@ export async function verifyDesktopReadinessFixture() {
     assert.equal(await workspaceControlsVisible(page), false, 'visible lookalikes are not official controls');
     await page.setContent('<main>Loading workspace</main>');
     assert.equal(await workspaceControlsVisible(page), false, 'no shell');
+    await verifyDesktopPluginInstallFixture(page);
     console.log('Desktop readiness: old failures reproduced; six real DOM visibility cases passed');
   } finally { await browser.close(); }
   return { status: 'passed', cases: 6, oldCaseAndStrictFailuresReproduced: true };

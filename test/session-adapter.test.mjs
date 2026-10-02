@@ -196,6 +196,92 @@ test('a broken nested active panel remains a boundary and cannot resolve to its 
   } finally { await h.finish(); }
 });
 
+for (const phase of ['hero', 'settling', 'future-unsupported']) {
+  test(`first shortcut rejects another visible registered ${phase} instance`, async () => {
+    const h = setup();
+    try {
+      const a = await h.mount('session-a', true), b = await h.mount('session-b', true);
+      b.panel.dataset.phase = phase;
+      h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+      h.open(); h.search('needle'); await h.advance(1200);
+      assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+      h.open(a.anchor); h.search('needle'); await h.advance(1200);
+      assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+    } finally { await h.finish(); }
+  });
+}
+
+function embeddedConversation(h, phase = 'active') {
+  const sidebar = h.w.document.createElement('div');
+  sidebar.setAttribute('data-sidebar-chat', '');
+  // Exact rc2 SidebarChatTab + embedded ConversationContent attributes; no
+  // main data-phase root or session header utility is supplied by that layout.
+  sidebar.innerHTML = `<div data-conversation-content data-conversation-session="session-b" data-conversation-region="chat" data-content-phase="${phase}"><div data-conversation-scroll><div data-chat-flow><p>B needle</p></div><textarea data-phase="plain"></textarea></div></div>`;
+  h.w.document.body.append(sidebar);
+  return sidebar;
+}
+
+test('first shortcut accounts for a visible embedded sidebar without a header anchor', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    embeddedConversation(h);
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+
+for (const phase of ['active', 'hero', 'settling']) {
+  test(`explicit unregistered embedded ${phase} interaction stays rejected after it disappears`, async () => {
+    const h = setup();
+    try {
+      await h.mount('session-a', true);
+      const b = embeddedConversation(h, phase);
+      b.querySelector('textarea').focus(); b.remove();
+      h.open(); h.search('needle'); await h.advance(1200);
+      assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    } finally { await h.finish(); }
+  });
+}
+
+test('a hidden embedded view does not make the sole visible main conversation ambiguous', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    embeddedConversation(h).hidden = true;
+    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+  } finally { await h.finish(); }
+});
+
+test('an unbound Hero beside an already visible session does not reset explicit rejection', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    const hero = h.w.document.createElement('div');
+    hero.dataset.phase = 'hero';
+    hero.innerHTML = '<div data-conversation-scroll><textarea data-phase="plain"></textarea></div>';
+    h.w.document.body.append(hero);
+    hero.querySelector('textarea').focus(); hero.remove();
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+
+test('a visible registered unsupported panel still blocks discovery when its utility is hidden', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    const b = await h.mount('session-b', true);
+    b.panel.dataset.phase = 'future-unsupported';
+    b.panel.querySelector('[data-conversation-scroll]').remove();
+    b.anchor.hidden = true;
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+
 test('uncertain, replaced, hidden or mismatched DOM fails closed', async () => {
   for (const corrupt of [
     v => v.flow.removeAttribute('data-chat-flow'),

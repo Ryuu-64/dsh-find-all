@@ -8,18 +8,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export async function seedHistory(runtimeRequire, home, workspace) {
+export async function seedHistory(runtimeRequire, home, workspace, { sidebarChild = false } = {}) {
   const load = name => import(pathToFileURL(runtimeRequire.resolve(name)).href);
   const { Session, SessionId, SESSION_FORMAT_VERSION } = await load('@deepseek-ai/dsh-session');
   const { createUserMessage, createAssistantMessage, createSystemMessage } = await load('@deepseek-ai/dsh-llm');
   const { Context } = await load('@deepseek-ai/cordis');
   const { default: Jsonl } = await load('@deepseek-ai/dsh-session-persistence-jsonl');
+  const descriptor = sidebarChild ? (await load('@deepseek-ai/dsh-subagent')).snapshotSubagentDescriptor : null;
+  const createdAt = Date.now() - 60_000;
   fs.mkdirSync(workspace, { recursive: true });
   const ctx = new Context();
   const summary = [];
   try {
     await ctx.plugin(Jsonl, { root: path.join(home, '.dsh', 'sessions') });
-    for (const label of ['A', 'B']) {
+    for (const label of sidebarChild ? ['A', 'B', 'C'] : ['A', 'B']) {
       const id = SessionId(`find-all-synthetic-${label.toLowerCase()}`);
       const session = Session.create(id);
       for (let turn = 1; turn <= 80; turn++) {
@@ -32,6 +34,16 @@ export async function seedHistory(runtimeRequire, home, workspace) {
         const user = session.append('user/message', createUserMessage({
           content: [{ type: 'text', text: `FIND_ALL_${label}_USER_${suffix} synthetic user` }], source: { kind: 'user' },
         }), { surfaceOp: 'append' });
+        // Official rc2 subagent-conversation.e2e.ts authors completed one-shot
+        // child headers, descriptor events and parent catalog entries without
+        // asking a model. Keep A/B root histories unchanged and add child C.
+        if (turn === 1 && sidebarChild && label === 'A') session.append('subagent/catalog', {
+          version: 0, childId: SessionId('find-all-synthetic-c'), childCreatedAt: createdAt,
+          mode: 'one-shot', label: 'FIND_ALL_CHILD_SIDEBAR',
+        });
+        if (turn === 1 && sidebarChild && label === 'C') session.append('subagent/descriptor', descriptor({
+          mode: 'one-shot', provider: 'spawn', label: 'FIND_ALL_CHILD_SIDEBAR',
+        }));
         if (turn === 1) session.append('session/title', {
           title: `FIND_ALL_${label} synthetic compatibility`, messageSeqs: [user.seq], source: { kind: 'fallback' },
         });
@@ -52,8 +64,9 @@ export async function seedHistory(runtimeRequire, home, workspace) {
       const events = session.snapshotEvents();
       assert.equal(events.at(-1).type, 'turn/end');
       const handle = await ctx.sessionPersistence.create({
-        version: SESSION_FORMAT_VERSION, id, createdAt: Date.now() - 60_000,
-        isSeeded: false, cwd: workspace, delegationDepth: 0,
+        version: SESSION_FORMAT_VERSION, id, createdAt,
+        isSeeded: false, cwd: workspace, delegationDepth: label === 'C' ? 1 : 0,
+        ...(label === 'C' ? { parentSession: SessionId('find-all-synthetic-a'), origin: 'subagent' } : {}),
       });
       await handle.append(events);
       await handle.close();
@@ -61,6 +74,62 @@ export async function seedHistory(runtimeRequire, home, workspace) {
     }
   } finally { await ctx.fiber.dispose(); }
   return summary;
+}
+
+export async function exerciseSidebarIsolation(page, home, queryPath, capture) {
+  // Use the official rc2 Subagent catalog/Sidebar controls. Do not fabricate
+  // a second DOM pane: it must be rendered by the real host from child C.
+  // https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/apps/web/tests/subagent-conversation.e2e.ts
+  await page.getByRole('button', { name: '1 subagent', exact: true }).hover();
+  await page.getByRole('treeitem', { name: /FIND_ALL_CHILD_SIDEBAR/ })
+    .getByRole('button', { name: 'Open FIND_ALL_CHILD_SIDEBAR in sidebar', exact: true }).click();
+  const sidebar = page.locator('[data-sidebar-chat]');
+  await sidebar.getByText('FIND_ALL_C_USER_080 synthetic user', { exact: true }).waitFor();
+  const content = sidebar.locator('[data-conversation-content]');
+  assert.equal(await content.getAttribute('data-conversation-session'), 'find-all-synthetic-c');
+  assert.equal(await content.getAttribute('data-content-phase'), 'active');
+  assert.equal(await sidebar.locator('[data-find-all-session]').count(), 0, 'official embedded view has no utility anchor');
+  const anchor = page.locator('[data-find-all-session="find-all-synthetic-a"]');
+  try {
+    // Native re-enable creates a pristine plugin while both real panes remain.
+    setFixturePatch(home, queryPath, true);
+    await eventually(() => page.locator('[data-find-all-session]').count(), 0, 'disable before neutral multi-view regression');
+    setFixturePatch(home, queryPath);
+    await anchor.waitFor({ state: 'visible' });
+    await page.evaluate(() => document.activeElement?.blur());
+    assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
+    await page.keyboard.press('Control+f');
+    const bar = page.locator('#dsh-find-all-root');
+    await bar.locator('input').fill('FIND_ALL_A_USER_');
+    await page.waitForTimeout(1200);
+    assert.equal(await bar.locator('.count').innerText(), '0/0', 'main plus headerless sidebar is ambiguous on first neutral shortcut');
+    assert.match(await bar.locator('.status').innerText(), /Select a visible conversation|Search scope unavailable/);
+    assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
+    await capture('sidebar-neutral-ambiguity');
+    await anchor.click();
+    await bar.locator('input').fill('FIND_ALL_A_USER_');
+    await eventually(() => bar.locator('.count').innerText(), '1/80', 'explicit main selection remains available beside a sidebar');
+    const scoped = await page.evaluate(() => {
+      const flow = document.querySelector('[data-conversation-session="find-all-synthetic-a"] [data-chat-flow]');
+      return [...CSS.highlights.get('dsh-find-all-hit')].every(range => flow.contains(range.startContainer));
+    });
+    assert.equal(scoped, true);
+    await page.keyboard.press('Escape');
+    await sidebar.getByText('FIND_ALL_C_USER_080 synthetic user', { exact: true }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('Control+f');
+    await bar.locator('input').fill('FIND_ALL_A_USER_');
+    await page.waitForTimeout(1200);
+    assert.equal(await bar.locator('.count').innerText(), '0/0', 'unsupported sidebar interaction must not search main A');
+    await capture('sidebar-explicit-rejection');
+    return { layout: 'official rc2 embedded subagent sidebar', neutralAmbiguity: 'passed', explicitMainScope: 'passed', explicitSidebarRejection: 'passed', nativeResetCycles: 1 };
+  } finally {
+    await page.keyboard.press('Escape');
+    const close = page.locator('[data-sidebar-right-panel] [data-dockkit-tab-close]');
+    assert.equal(await close.count(), 1);
+    await close.click();
+    await sidebar.waitFor({ state: 'detached' });
+  }
 }
 
 export function setFixturePatch(home, queryPath, disabled = false) {

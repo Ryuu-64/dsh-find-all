@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { seedHistory, setFixturePatch, exerciseHistory } from './synthetic-history.mjs';
+import { seedHistory, setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { createRedactor, captureSafePage } from './evidence.mjs';
 import { npmCommand } from './npm-command.mjs';
 const secrets = new Set();
@@ -122,7 +122,7 @@ try {
 assert.equal(hash(), artifactSha256);
 let seeded;
 if (full) {
-  seeded = await seedHistory(runtimeRequire, home, workspace);
+  seeded = await seedHistory(runtimeRequire, home, workspace, { sidebarChild: version === '0.2.0-rc.2' });
   setFixturePatch(home, queryPath);
 }
 let serverLog = '';
@@ -212,6 +212,7 @@ try {
   if (full) {
     report.seeds = seeded;
     report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact), version);
+    if (version === '0.2.0-rc.2') report.sidebarIsolation = await exerciseSidebarIsolation(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact));
     report.syntheticHistory = 'passed';
   }
   report.browserErrors = errors.map(redact);

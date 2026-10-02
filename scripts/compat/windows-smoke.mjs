@@ -42,7 +42,7 @@ const report = {
   schemaVersion: 1, target: 'windows-x64-installed-electron', version,
   sourceTag: 'dsh-v0.2.0-rc.2', status: 'pending', stage: 'preflight',
   bootstrap: 'not-run', emptySessionFind: 'not-run', syntheticHistory: 'not-run',
-  desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [],
+  desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [], consoleEvents: [], networkFailures: [],
   testedScope: [],
   intendedScope: [
     'valid signed official rc2 installer and installed executable',
@@ -121,10 +121,28 @@ function writeSafe(name, value) { fs.writeFileSync(path.join(output, name), reda
 function attachPage(candidate) {
   if (observedPages.has(candidate)) return;
   observedPages.add(candidate);
+  const launchRecord = report.launches.at(-1);
   candidate.setDefaultTimeout(30_000);
   candidate.on('pageerror', error => report.browserErrors.push(redact(error.message)));
   candidate.on('console', message => {
-    if (message.type() === 'error') report.consoleErrors.push(redact(message.text()));
+    if (message.type() !== 'error') return;
+    const text = redact(message.text());
+    report.consoleErrors.push(text.slice(0, 4000));
+    report.consoleEvents.push({ utc: new Date().toISOString(), phase: launchRecord.phase,
+      launchUtc: launchRecord.startUtc, stage: report.stage, text: text.slice(0, 4000), truncated: text.length > 4000 });
+  });
+  function route(value) {
+    const url = new URL(value);
+    return redact(`${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}${url.pathname}`).slice(0, 2000);
+  }
+  candidate.on('requestfailed', request => {
+    if (report.networkFailures.length < 100) report.networkFailures.push({ utc: new Date().toISOString(),
+      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, route: route(request.url()),
+      resourceType: request.resourceType(), error: redact(request.failure()?.errorText || '') });
+  });
+  candidate.on('response', response => {
+    if (response.status() >= 400 && report.networkFailures.length < 100) report.networkFailures.push({ utc: new Date().toISOString(),
+      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, route: route(response.url()), status: response.status() });
   });
   // Do not dismiss/accept unknown dialogs, permissions, or agreements.
   candidate.on('dialog', dialog => {
@@ -145,7 +163,7 @@ async function launch() {
     ({ _electron: electron } = await import('playwright'));
   }
   report.launches ??= [];
-  report.launches.push({ mode: 'instrumented', startUtc: new Date().toISOString() });
+  report.launches.push({ mode: 'instrumented', startUtc: new Date().toISOString(), phase: 'running' });
   app = await electron.launch({
     executablePath: installation.executable, cwd: installation.runDirectory,
     env, args: ['--lang=en-US', `--user-data-dir=${installation.testUserData}`, '--enable-logging=file', `--log-file=${chromiumLog}`], timeout: 120_000,
@@ -234,7 +252,7 @@ async function keylessWelcome() {
   report.rendererSecurity = security;
   if (!report.testedScope.includes('keyless welcome and renderer security')) report.testedScope.push('keyless welcome and renderer security');
 }
-async function finishKnownOnboarding() {
+async function finishKnownOnboarding({ pluginExpected = true } = {}) {
   // Only the exact non-binding notice already inspected in the official Web
   // fixture is eligible. Never click a generic Continue/Accept in another modal.
   const notice = page.getByText(/^(Internal Testing Notice|Preview Notice)$/);
@@ -257,7 +275,8 @@ async function finishKnownOnboarding() {
       await configureLater.waitFor({ state: 'hidden' });
       return false;
     }
-    if (!await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').count()) return false;
+    if (!await page.getByRole('button', { name: 'New Session', exact: true }).isVisible()) return false;
+    if (pluginExpected && !await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').count()) return false;
     // CSS can load before a React first-run dialog mounts. Require a short
     // stable interval and reset it after each recognized prompt.
     readySince ??= Date.now();
@@ -267,6 +286,9 @@ async function finishKnownOnboarding() {
 async function quit() {
   if (!app) return;
   const closing = app;
+  const launchRecord = report.launches.at(-1);
+  launchRecord.phase = 'closing';
+  launchRecord.closingUtc = new Date().toISOString();
   let timer;
   try {
     await Promise.race([
@@ -275,6 +297,8 @@ async function quit() {
     ]);
     app = undefined;
     page = undefined;
+    launchRecord.phase = 'closed';
+    launchRecord.closedUtc = new Date().toISOString();
   } finally { clearTimeout(timer); }
 }
 async function runCli(args, logName) {
@@ -365,6 +389,9 @@ try {
   report.stage = 'initialize-desktop-profile';
   await launch();
   await keylessWelcome();
+  // DOMContentLoaded is earlier than client-module activation. Finish the
+  // actual shell/onboarding before deliberately closing its backend to install.
+  await finishKnownOnboarding({ pluginExpected: false });
   assert.ok(fs.existsSync(path.join(env.DSH_HOME, 'profiles', 'desktop', 'package.json')), 'Desktop must initialize its own profile');
   await quit();
   report.profileInitialization = 'passed';

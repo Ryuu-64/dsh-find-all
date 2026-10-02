@@ -1,7 +1,7 @@
 <#
-Install only the researched rc2 release on a disposable GitHub-hosted Windows runner.
+Install only the explicitly allowlisted, researched releases on a disposable GitHub-hosted Windows runner.
 Run with pwsh -NoProfile -File; do not change execution/security policy to run this file.
-The fixed latest URL is mutable: a different version or signature fails before execution.
+The rc2 latest URL is mutable; all targets enforce researched length, version and publisher before execution.
 
 Sources inspected at dsh-v0.2.0-rc.2 in deepseek-ai/deepseek-harness:
   apps/desktop/scripts/electron-builder-config.mjs (productName, per-user, no elevation)
@@ -11,12 +11,14 @@ Sources inspected at dsh-v0.2.0-rc.2 in deepseek-ai/deepseek-harness:
 No agreement, permissions prompt, unsigned fallback, or security-policy bypass is automated.
 #>
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$OutputDirectory)
+param([Parameter(Mandatory)][string]$OutputDirectory,
+    [ValidateSet('0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2')][string]$Version = '0.2.0-rc.2')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$version = '0.2.0-rc.2'
-$url = 'https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe'
+$targets = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'desktop-targets.json') -Raw | ConvertFrom-Json
+$target = $targets.PSObject.Properties[$Version].Value
+$url = $target.url
 $product = 'DeepSeek Harness'
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 [void][IO.Directory]::CreateDirectory($output)
@@ -26,7 +28,7 @@ $report = [ordered]@{
     schemaVersion = 1
     target = 'windows-x64-electron'
     version = $version
-    sourceTag = 'dsh-v0.2.0-rc.2'
+    sourceTag = "dsh-v$Version"
     sourceUrl = $url
     status = 'pending'
     stage = 'runner-preflight'
@@ -37,7 +39,7 @@ $report = [ordered]@{
     bundledCli = $null
     installationScope = 'current disposable runner user'
     arguments = '/S /D=<new empty temporary directory>'
-    agreementReview = 'No EULA/acceptance page found in the pinned rc2 installer configuration and custom pages; unreviewed versions are refused.'
+    agreementReview = 'No EULA/acceptance page found in the three exact reviewed tag configurations and custom pages; unreviewed versions are refused.'
 }
 $setup = $null
 function Read-Signature([string]$File) {
@@ -89,13 +91,14 @@ try {
     $report.productVersion = $item.VersionInfo.ProductVersion
     $report.signature = Read-Signature $installer
     $report.stage = 'verify-installer'
-    if ($item.Length -ne 289313640) { throw 'Installer byte length changed from the researched rc2 download; review the new artifact before running it.' }
+    if ($item.Length -ne $target.bytes) { throw 'Installer byte length changed from the researched official target; review the new artifact before running it.' }
     if ($report.fileVersion -ne $version -or $report.productVersion -ne $version) {
-        throw 'The mutable download URL no longer supplies the researched rc2 installer.'
+        throw 'The official download does not supply the researched exact installer version.'
     }
     if ($report.signature.status -ne 'Valid' -or -not $report.signature.thumbprint) {
         throw 'The official installer does not have a valid Windows Authenticode signature; no fallback is permitted.'
     }
+    if ($report.signature.subject -notmatch [regex]::Escape('Hangzhou DeepSeek Artificial Intelligence Co., Ltd.')) { throw 'Unexpected installer publisher; no execution is permitted.' }
     if (@(Get-ChildItem -LiteralPath $install -Force).Count -ne 0) { throw 'The temporary installation directory must be empty.' }
     $report.stage = 'install'
     # NSIS /D= must be last and unquoted, even for a path containing spaces.

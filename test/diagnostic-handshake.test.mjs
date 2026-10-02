@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { awaitDiagnosticReady, ownDiagnosticStartup, stopDiagnosticCollector } from '../scripts/compat/diagnostic-handshake.mjs';
+import { awaitDiagnosticReady, ownDiagnosticStartup, stopDiagnosticCollector, prepareAndStopCollector } from '../scripts/compat/diagnostic-handshake.mjs';
 
 const ready = { observerRegistered: true, observedUtc: '2026-10-02T08:29:04Z' };
 function clock() {
@@ -108,4 +108,24 @@ test('failed real handshake stops a live owned collector instead of leaving its 
     assert.equal(cleaned, true);
     assert.ok(child.exitCode !== null || child.signalCode !== null);
   } finally { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed; }
+});
+test('context rewrite failure still finalizes the live owned collector', async () => {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  const closed = once(child, 'close');
+  const failure = Object.assign(new Error('context rewrite denied'), { code: 'EACCES' });
+  let stopped = false;
+  try {
+    await assert.rejects(prepareAndStopCollector(() => { throw failure; }, async () => {
+      child.kill(); await closed; stopped = true; return null;
+    }), error => error === failure);
+    assert.equal(stopped, true);
+    assert.ok(child.exitCode !== null || child.signalCode !== null);
+  } finally { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed; }
+});
+test('finalization preserves context and cleanup errors and stops exactly once', async () => {
+  const prepare = new Error('context'), cleanup = new Error('collector'); let calls = 0;
+  await assert.rejects(prepareAndStopCollector(() => { throw prepare; }, async () => { calls++; throw cleanup; }),
+    error => error instanceof AggregateError && error.errors[0] === prepare && error.errors[1] === cleanup);
+  assert.equal(calls, 1);
+  assert.equal(await prepareAndStopCollector(() => {}, async () => 0), 0);
 });

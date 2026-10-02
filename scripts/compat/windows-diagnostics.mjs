@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { awaitDiagnosticReady, ownDiagnosticStartup, stopDiagnosticCollector } from './diagnostic-handshake.mjs';
+import { awaitDiagnosticReady, ownDiagnosticStartup, stopDiagnosticCollector, prepareAndStopCollector } from './diagnostic-handshake.mjs';
 import { analyzeExistingDumps } from './analyze-existing-dumps.mjs';
 
 export function readAsarManifest(archive) {
@@ -42,7 +42,8 @@ export async function startDiagnostics(installation, appEnv, redact) {
   assert.equal(process.platform, 'win32');
   const manifest = readAsarManifest(path.join(installation.installDirectory, 'resources', 'app.asar'));
   assert.equal(manifest.name, '@deepseek-ai/dsh-desktop');
-  assert.equal(manifest.version, '0.2.0-rc.2');
+  assert.ok(['0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2'].includes(installation.version));
+  assert.equal(manifest.version, installation.version);
   assert.ok(!manifest.productName || manifest.productName === 'DeepSeek Harness');
   // Electron app.getName prefers the installed manifest's productName, then
   // name; app.getPath(userData) defaults to APPDATA/name. rc2 never overrides it.
@@ -94,18 +95,19 @@ export async function startDiagnostics(installation, appEnv, redact) {
   return {
     context, ready,
     async finish(output, observedUserData) {
-      if (observedUserData) {
-        const resolved = path.resolve(observedUserData).toLowerCase();
-        if (resolved.startsWith(prefix) || resolved.startsWith(path.resolve(installation.runDirectory).toLowerCase() + path.sep)) {
-          context.userData = observedUserData;
-          context.userDataBasis = 'observed app.getPath(userData) in the actual installed Electron process';
-        } else {
-          context.uncollectedUserData = observedUserData;
-          context.userDataWarning = 'Runtime path was outside the allowed diagnostic roots; it was not read.';
+      const exitCode = await prepareAndStopCollector(() => {
+        if (observedUserData) {
+          const resolved = path.resolve(observedUserData).toLowerCase();
+          if (resolved.startsWith(prefix) || resolved.startsWith(path.resolve(installation.runDirectory).toLowerCase() + path.sep)) {
+            context.userData = observedUserData;
+            context.userDataBasis = 'observed app.getPath(userData) in the actual installed Electron process';
+          } else {
+            context.uncollectedUserData = observedUserData;
+            context.userDataWarning = 'Runtime path was outside the allowed diagnostic roots; it was not read.';
+          }
+          fs.writeFileSync(contextFile, JSON.stringify(context));
         }
-        fs.writeFileSync(contextFile, JSON.stringify(context));
-      }
-      const exitCode = await stopCollector();
+      }, stopCollector);
       const summary = { context, ready, exitCode, helperOutput: redact(helperOutput) };
       if (fs.existsSync(resultFile)) {
         const raw = JSON.parse(fs.readFileSync(resultFile, 'utf8').replace(/^\uFEFF/, ''));

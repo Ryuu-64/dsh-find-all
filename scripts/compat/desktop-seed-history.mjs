@@ -19,9 +19,10 @@ assert.equal(process.versions.node, descriptor.release.nodeVersion);
 assert.equal(descriptor.platform, process.platform);
 assert.equal(descriptor.arch, process.arch);
 const runtimeRequire = createRequire(path.join(runtime, 'package.json'));
-for (const name of ['dsh-session', 'dsh-llm', 'dsh-session-persistence-jsonl', 'dsh-subagent']) {
+const sidebarChild = version === '0.2.0-rc.2';
+for (const name of ['dsh-session', 'dsh-llm', 'dsh-session-persistence-jsonl', ...(sidebarChild ? ['dsh-subagent'] : [])]) {
   assert.equal(JSON.parse(fs.readFileSync(runtimeRequire.resolve(`@deepseek-ai/${name}/package.json`))).version, version);
 }
-const sessions = await seedHistory(runtimeRequire, home, workspace, { sidebarChild: true });
+const sessions = await seedHistory(runtimeRequire, home, workspace, { sidebarChild });
 console.log(JSON.stringify({ status: 'passed', version, node: process.versions.node,
   electron: process.versions.electron, runtime: 'installed ASAR dependency tree', sessions }));

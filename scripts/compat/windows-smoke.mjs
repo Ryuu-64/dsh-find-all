@@ -20,18 +20,22 @@ import { fileURLToPath } from 'node:url';
 import { setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
+import { runOwnedCommand } from './owned-command.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
 let electron;
 import { createRedactor, captureSafePage } from './evidence.mjs';
 
-const [artifactArg, outputArg] = process.argv.slice(2);
+const [artifactArg, outputArg, requestedVersion] = process.argv.slice(2);
 assert.ok(artifactArg && outputArg, 'usage: windows-smoke.mjs <candidate.tgz> <evidence-directory>');
 const artifact = path.resolve(artifactArg);
 const output = path.resolve(outputArg);
 fs.mkdirSync(output, { recursive: true });
 const resultPath = path.join(output, 'desktop-result.json');
 assert.ok(!fs.existsSync(resultPath), 'use a fresh Desktop evidence directory');
-const version = '0.2.0-rc.2';
+const targets = JSON.parse(fs.readFileSync(new URL('./desktop-targets.json', import.meta.url), 'utf8'));
+const version = requestedVersion || '0.2.0-rc.2';
+assert.ok(Object.hasOwn(targets, version), 'only exact researched Desktop versions are allowed');
+const target = targets[version];
 const packageName = '@ryuu-64/dsh-find-all';
 const secrets = new Set();
 const basicRedact = createRedactor(secrets);
@@ -44,7 +48,7 @@ function redact(value) {
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const report = {
   schemaVersion: 1, target: 'windows-x64-installed-electron', version,
-  sourceTag: 'dsh-v0.2.0-rc.2', status: 'pending', stage: 'preflight',
+  sourceTag: `dsh-v${version}`, status: 'pending', stage: 'preflight',
   bootstrap: 'not-run', emptySessionFind: 'not-run', syntheticHistory: 'not-run',
   desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [], consoleEvents: [], networkFailures: [],
   testedScope: [],
@@ -360,7 +364,8 @@ try {
   installation = JSON.parse(fs.readFileSync(path.join(output, 'installer.json'), 'utf8').replace(/^\uFEFF/, ''));
   assert.equal(installation.status, 'passed', 'installer verification must pass before launch');
   assert.equal(installation.version, version);
-  assert.equal(installation.sourceUrl, 'https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe');
+  assert.equal(installation.sourceUrl, target.url);
+  assert.equal(installation.installerBytes, target.bytes);
   assert.equal(installation.signature.status, 'Valid');
   assert.equal(installation.appSignature.status, 'Valid');
   const runnerTemp = path.resolve(process.env.RUNNER_TEMP).toLowerCase() + path.sep;
@@ -378,7 +383,7 @@ try {
   fs.mkdirSync(home);
   env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^(?:DSH_|ELECTRON_|NODE_OPTIONS$|DEBUG$|PWDEBUG$|NPM_CONFIG_|npm_config_)/i.test(key) || /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete env[key];
+    if (/^(?:DSH_|ELECTRON_|NODE_OPTIONS$|DEBUG(?:_FILE)?$|PWDEBUG$|NPM_CONFIG_|npm_config_)/i.test(key) || /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(key)) delete env[key];
   }
   Object.assign(env, {
     HOME: home, DSH_HOME: path.join(home, '.dsh'),
@@ -407,12 +412,14 @@ try {
   // HOME, cwd and default native appData path; only USERPROFILE changes.
   // Both profiles belong to this new hosted runner, never a user's desktop.
   const comparisonEnv = { ...env, DSH_HOME: path.join(home, 'comparison-dsh'), DSH_AGENTS_HOME: path.join(home, 'comparison-agents') };
-  report.profileEnvironmentComparison = {
-    changedVariable: 'USERPROFILE', userDataOverride: false,
-    temporary: await diagnoseNormalLaunch({ mode: 'temporary-userprofile', environment: { ...comparisonEnv, USERPROFILE: home }, useUserDataDir: false }),
-    original: await diagnoseNormalLaunch({ mode: 'original-userprofile', environment: comparisonEnv, useUserDataDir: false }),
-    limitation: 'Process survival is a startup diagnostic, not Desktop UI acceptance; the actual smoke below uses its own explicit user-data-dir.',
-  };
+  if (version === '0.2.0-rc.2') {
+    report.profileEnvironmentComparison = {
+      changedVariable: 'USERPROFILE', userDataOverride: false,
+      temporary: await diagnoseNormalLaunch({ mode: 'temporary-userprofile', environment: { ...comparisonEnv, USERPROFILE: home }, useUserDataDir: false }),
+      original: await diagnoseNormalLaunch({ mode: 'original-userprofile', environment: comparisonEnv, useUserDataDir: false }),
+      limitation: 'Process survival is a startup diagnostic, not Desktop UI acceptance; the actual smoke below uses its own explicit user-data-dir.',
+    };
+  } else report.profileEnvironmentComparison = { status: 'not-repeated', reason: 'the deliberate temporary-USERPROFILE crash control was already established on rc2; this case preserves the real runner USERPROFILE' };
   report.diagnosticCollector = diagnostics.ready;
   setStage('initialize-desktop-profile');
   await launch();
@@ -491,8 +498,11 @@ try {
   const capture = name => captureSafePage(page, path.join(output, `desktop-${name}`), secrets, redact);
   report.historyEvidence = await exerciseHistory(page, home, queryPath, capture, version, 'desktop');
   report.syntheticHistory = 'passed';
-  report.sidebarIsolation = await exerciseSidebarIsolation(page, home, queryPath, capture, 'desktop');
-  report.testedScope.push('installed Electron: first body Ctrl+F, 80-match paging, A/B/A, F3/Shift+F3, two native unload/re-enable cycles, real embedded sidebar isolation');
+  report.sidebarIsolation = target.sidebar
+    ? await exerciseSidebarIsolation(page, home, queryPath, capture, 'desktop')
+    : { status: 'not-run', reason: 'additional embedded-sidebar fixture is scoped to the researched current rc2 layout' };
+  report.testedScope.push('installed Electron: first body Ctrl+F, 80-match paging, A/B/A, F3/Shift+F3, two native unload/re-enable cycles');
+  if (target.sidebar) report.testedScope.push('real embedded sidebar isolation');
   await quit();
   report.cleanShutdown = 'passed';
   assert.deepEqual(report.browserErrors, [], 'unhandled browser errors');
@@ -525,7 +535,10 @@ try {
   for (const child of children) await stopOwnedProcessTree(child);
   if (diagnostics) {
     try { report.diagnostics = await diagnostics.finish(output, report.appIdentity?.userData); }
-    catch (error) { report.diagnostics = { error: redact(error.message) }; }
+    catch (error) {
+      report.diagnostics = { error: redact(error.message), stack: redact(error.stack || '') };
+      report.status = 'failed'; process.exitCode = 1;
+    }
   }
   writeSafe('desktop-process.log', appOutput);
   if (playwrightLog && fs.existsSync(playwrightLog)) writeSafe('playwright-early.log', fs.readFileSync(playwrightLog, 'utf8'));
@@ -550,4 +563,26 @@ try {
   const json = JSON.stringify(report, (_key, value) => typeof value === 'string' ? redact(value) : value, 2);
   fs.writeFileSync(resultPath, json);
   console.log(json);
+}
+
+// The workflow invokes the current version once. Explicit version arguments are
+// child cases and never recurse. Every failure remains a failure while later
+// independently installed versions can still provide useful acceptance evidence.
+if (!requestedVersion) {
+  const { runHistoricalDesktopCases } = await import('./desktop-matrix.mjs');
+  const matrix = await runHistoricalDesktopCases({
+    artifact, output, currentReport: report, installation,
+    save(file, value) { fs.writeFileSync(file, JSON.stringify(value, (_key, item) => typeof item === 'string' ? redact(item) : item, 2)); },
+    async run(executable, args, log, timeoutMs) {
+      console.log(`[desktop-matrix] ${new Date().toISOString()} ${path.basename(log)}`);
+      const childEnv = { ...process.env };
+      delete childEnv.DEBUG; delete childEnv.DEBUG_FILE; delete childEnv.PWDEBUG;
+      return runOwnedCommand(executable, args, {
+        env: childEnv, timeoutMs, stop: stopOwnedProcessTree,
+        capture: text => writeSafe(path.relative(output, log), text),
+      });
+    },
+  });
+  if (matrix.status !== 'passed') process.exitCode = 1;
+  console.log(JSON.stringify(matrix));
 }

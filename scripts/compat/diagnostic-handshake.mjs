@@ -44,6 +44,21 @@ export async function stopDiagnosticCollector({ signalStop, kill, waitClosed, de
   return exitCode;
 }
 
+export async function prepareAndStopCollector(prepare, stop) {
+  let prepareError, exitCode;
+  try { await prepare(); }
+  catch (error) { prepareError = error; }
+  finally {
+    try { exitCode = await stop(); }
+    catch (stopError) {
+      if (prepareError) throw new AggregateError([prepareError, stopError], 'Diagnostic finalization and cleanup failed');
+      throw stopError;
+    }
+  }
+  if (prepareError) throw prepareError;
+  return exitCode;
+}
+
 // Ownership starts when the process is spawned, not when readiness succeeds.
 export async function ownDiagnosticStartup(start, cleanup) {
   try { return await start(); }

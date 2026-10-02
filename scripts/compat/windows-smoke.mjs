@@ -15,6 +15,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { _electron as electron } from 'playwright';
 import { createRedactor, captureSafePage } from './evidence.mjs';
 
@@ -54,6 +55,7 @@ const report = {
 };
 let app, page, env, installation;
 let appOutput = '';
+const chromiumLogs = [];
 const children = new Set();
 const observedPages = new WeakSet();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -93,9 +95,13 @@ function attachPage(candidate) {
   });
 }
 async function launch() {
+  // Electron documents file logging for Windows child-process diagnostics:
+  // https://www.electronjs.org/docs/latest/api/command-line-switches#--enable-loggingfile
+  const chromiumLog = path.join(installation.runDirectory, `electron-${chromiumLogs.length + 1}.log`);
+  chromiumLogs.push(chromiumLog);
   app = await electron.launch({
     executablePath: installation.executable, cwd: installation.runDirectory,
-    env, args: ['--lang=en-US'], timeout: 120_000,
+    env, args: ['--lang=en-US', '--enable-logging=file', `--log-file=${chromiumLog}`], timeout: 120_000,
   });
   app.process().stdout?.on('data', data => { appOutput += data.toString(); });
   app.process().stderr?.on('data', data => { appOutput += data.toString(); });
@@ -250,6 +256,7 @@ try {
   assert.equal(process.env.RUNNER_ENVIRONMENT, 'github-hosted', 'only a disposable hosted runner is authorized');
   assert.ok(process.env.USERPROFILE && process.env.RUNNER_TEMP);
   assert.ok(artifact.endsWith('.tgz') && fs.statSync(artifact).isFile(), 'supply the same candidate tgz as Web acceptance');
+  report.runner = { osRelease: os.release(), imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion };
   report.artifactSha256 = hash(artifact);
   installation = JSON.parse(fs.readFileSync(path.join(output, 'installer.json'), 'utf8').replace(/^\uFEFF/, ''));
   assert.equal(installation.status, 'passed', 'installer verification must pass before launch');
@@ -354,6 +361,9 @@ try {
   }
   for (const child of children) await stopOwnedProcessTree(child);
   writeSafe('desktop-process.log', appOutput);
+  for (const file of chromiumLogs) {
+    if (fs.existsSync(file)) writeSafe(path.basename(file), fs.readFileSync(file, 'utf8'));
+  }
   const json = JSON.stringify(report, (_key, value) => typeof value === 'string' ? redact(value) : value, 2);
   fs.writeFileSync(resultPath, json);
   console.log(json);

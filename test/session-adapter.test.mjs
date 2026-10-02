@@ -90,6 +90,19 @@ test('old and new skeletons bind explicit session ids and exclude sidebar/compos
   }
 });
 
+test('transitional 0.1.6-alpha.2 content wrapper uses the explicit header session identity', async () => {
+  const h = setup();
+  try {
+    const view = await h.mount('session-a', true);
+    view.panel.querySelector('[data-conversation-content]').removeAttribute('data-conversation-session');
+    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.open(view.anchor); h.search('needle'); await h.advance(251);
+    assert.equal(h.count(), '1/1');
+    assert.deepEqual(h.requested, ['session-a']);
+    assert.equal(h.status(), 'Whole conversation loaded');
+  } finally { await h.finish(); }
+});
+
 test('multiple instances require focus; chosen instance survives focus in the find bar', async () => {
   const h = setup();
   try {

@@ -16,7 +16,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { _electron as electron } from 'playwright';
+import { startDiagnostics } from './windows-diagnostics.mjs';
+let electron;
 import { createRedactor, captureSafePage } from './evidence.mjs';
 
 const [artifactArg, outputArg] = process.argv.slice(2);
@@ -53,7 +54,7 @@ const report = {
   ],
   excludedScope: ['conversation search', 'history paging', 'session switching', 'plugin hot lifecycle', 'other Desktop versions', 'physical OS keyboard input'],
 };
-let app, page, env, installation;
+let app, page, env, installation, diagnostics, playwrightLog;
 let appOutput = '';
 const chromiumLogs = [];
 const children = new Set();
@@ -77,9 +78,13 @@ async function stopOwnedProcessTree(child) {
 async function diagnoseNormalLaunch() {
   const file = path.join(installation.runDirectory, 'electron-normal.log');
   chromiumLogs.push(file);
+  report.launches ??= [];
+  const launchRecord = { mode: 'normal-same-environment-and-profile', startUtc: new Date().toISOString() };
+  report.launches.push(launchRecord);
   const child = spawn(installation.executable, ['--lang=en-US', '--enable-logging=file', `--log-file=${file}`], {
     cwd: installation.runDirectory, env, stdio: ['ignore', 'pipe', 'pipe'],
   });
+  launchRecord.pid = child.pid;
   children.add(child);
   let text = '';
   child.stdout.on('data', data => { text += data.toString(); });
@@ -128,10 +133,21 @@ async function launch() {
   // https://www.electronjs.org/docs/latest/api/command-line-switches#--enable-loggingfile
   const chromiumLog = path.join(installation.runDirectory, `electron-${chromiumLogs.length + 1}.log`);
   chromiumLogs.push(chromiumLog);
+  if (!electron) {
+    // Capture launch output before launch() can throw. Playwright 1.56.1's
+    // lib/server/utils/debugLogger.js routes DEBUG_FILE outside public artifacts.
+    playwrightLog = path.join(installation.runDirectory, 'playwright-early.log');
+    process.env.DEBUG = 'pw:browser';
+    process.env.DEBUG_FILE = playwrightLog;
+    ({ _electron: electron } = await import('playwright'));
+  }
+  report.launches ??= [];
+  report.launches.push({ mode: 'instrumented', startUtc: new Date().toISOString() });
   app = await electron.launch({
     executablePath: installation.executable, cwd: installation.runDirectory,
     env, args: ['--lang=en-US', '--enable-logging=file', `--log-file=${chromiumLog}`], timeout: 120_000,
   });
+  report.launches.at(-1).launcherPid = app.process().pid;
   app.process().stdout?.on('data', data => { appOutput += data.toString(); });
   app.process().stderr?.on('data', data => { appOutput += data.toString(); });
   app.on('window', attachPage);
@@ -318,11 +334,16 @@ try {
     // tests/welcome-flow.e2e.ts uses DISABLED for its temporary-home fixture.
     // This is not a claim that unrelated product analytics are disabled.
     DSH_TELEMETRY_MODE: 'DISABLED',
+    // Official rc2 main.ts writes startup errors here before the fatal dialog.
+    DSH_DESKTOP_DIAGNOSTIC_FILE: path.join(installation.runDirectory, 'official-main-diagnostic.log'),
     npm_config_ignore_scripts: 'true', npm_config_userconfig: path.join(home, '.npmrc'),
     npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(home, 'npm-cache'),
   });
   fs.writeFileSync(path.join(home, '.npmrc'), 'ignore-scripts=true\nregistry=https://registry.npmjs.org/\n');
   report.isolation = 'fresh temporary DSH_HOME; Electron userData in disposable GitHub-hosted runner profile; no inherited model credentials';
+  report.stage = 'prepare-startup-diagnostics';
+  diagnostics = await startDiagnostics(installation, env, redact);
+  report.diagnosticCollector = diagnostics.ready;
   report.stage = 'initialize-desktop-profile';
   await launch();
   await keylessWelcome();
@@ -393,7 +414,12 @@ try {
     await stopOwnedProcessTree(app?.process());
   }
   for (const child of children) await stopOwnedProcessTree(child);
+  if (diagnostics) {
+    try { report.diagnostics = await diagnostics.finish(output, report.appIdentity?.userData); }
+    catch (error) { report.diagnostics = { error: redact(error.message) }; }
+  }
   writeSafe('desktop-process.log', appOutput);
+  if (playwrightLog && fs.existsSync(playwrightLog)) writeSafe('playwright-early.log', fs.readFileSync(playwrightLog, 'utf8'));
   for (const file of chromiumLogs) {
     if (fs.existsSync(file)) writeSafe(path.basename(file), fs.readFileSync(file, 'utf8'));
   }

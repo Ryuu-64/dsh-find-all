@@ -65,6 +65,15 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: Validate diagnostic collectors
+        shell: pwsh
+        run: |
+          node --test scripts/compat/windows-diagnostics.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $parseTokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts/compat/collect-windows-diagnostics.ps1), [ref]$parseTokens, [ref]$parseErrors)
+          if (@($parseErrors).Count -gt 0) { throw ($parseErrors | Out-String) }
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: candidate-web-evidence

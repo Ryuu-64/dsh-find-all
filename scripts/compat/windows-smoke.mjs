@@ -71,6 +71,35 @@ async function stopOwnedProcessTree(child) {
     cleanup.once('close', done);
   });
 }
+// A failed instrumented launch is not proof that the installed application
+// cannot start normally. Collect one bounded, non-interactive baseline only;
+// it does not satisfy any UI acceptance gate and changes no security setting.
+async function diagnoseNormalLaunch() {
+  const file = path.join(installation.runDirectory, 'electron-normal.log');
+  chromiumLogs.push(file);
+  const child = spawn(installation.executable, ['--lang=en-US', '--enable-logging=file', `--log-file=${file}`], {
+    cwd: installation.runDirectory, env, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  children.add(child);
+  let text = '';
+  child.stdout.on('data', data => { text += data.toString(); });
+  child.stderr.on('data', data => { text += data.toString(); });
+  let timer;
+  try {
+    report.normalLaunchDiagnostic = await Promise.race([
+      new Promise(resolve => {
+        child.once('error', error => resolve({ outcome: 'launch-error', error: redact(error.message) }));
+        child.once('exit', (code, signal) => resolve({ outcome: 'exited', code, signal }));
+      }),
+      new Promise(resolve => { timer = setTimeout(() => resolve({ outcome: 'still-running-after-15s', uiAcceptance: 'not-tested' }), 15_000); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    await stopOwnedProcessTree(child);
+    children.delete(child);
+    writeSafe('desktop-normal-launch.log', text);
+  }
+}
 async function until(check, message, timeout = 60_000) {
   const deadline = Date.now() + timeout;
   do {
@@ -347,6 +376,10 @@ try {
 } catch (error) {
   report.status = 'failed';
   report.error = redact(error instanceof Error ? error.message : error);
+  if (report.stage === 'initialize-desktop-profile' && !app && installation && env) {
+    try { await diagnoseNormalLaunch(); }
+    catch (diagnosticError) { report.normalLaunchDiagnostic = { error: redact(diagnosticError.message) }; }
+  }
   if (page && !page.isClosed()) {
     try { report.failureScreenshot = await captureSafePage(page, path.join(output, 'desktop-failure'), secrets, redact); }
     catch { report.failureScreenshot = 'unavailable'; }

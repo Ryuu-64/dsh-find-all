@@ -253,3 +253,36 @@ test('an unsupported focused view never redirects search to another valid view',
     assert.deepEqual(h.requested, ['session-b']);
   } finally { await h.finish(); }
 });
+
+
+test('focused unregistered conversation must not fall back to sole other registered session', async () => {
+  const h = setup();
+  try {
+    const a = await h.mount('session-a', true);
+    h.faces.set('session-a', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
+    const b = h.w.document.createElement('section');
+    b.dataset.phase = 'active';
+    b.innerHTML = '<header></header><div data-conversation-content data-conversation-session="session-b"><div data-conversation-scroll><div data-chat-flow><p>B other text</p></div><textarea></textarea></div></div>';
+    h.w.document.body.append(b);
+    const focus = b.querySelector('textarea');
+    focus.focus();
+    h.open(focus); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0');
+    assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+test('click in a second non-focusable conversation remains selected through polling', async () => {
+  const h = setup();
+  try {
+    const a = await h.mount('session-a', true), b = await h.mount('session-b', true);
+    b.flow.append(h.w.document.createTextNode(' needle'));
+    h.faces.set('session-a', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
+    h.faces.set('session-b', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
+    h.open(a.anchor); h.search('needle'); await h.advance(300);
+    const p = b.flow.querySelector('p');
+    p.dispatchEvent(new h.w.Event('pointerdown', {bubbles:true}));
+    h.w.document.activeElement.blur();
+    await h.advance(1200);
+    assert.equal(h.count(), '1/2');
+  } finally { await h.finish(); }
+});

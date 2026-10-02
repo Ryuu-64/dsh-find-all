@@ -72,7 +72,7 @@ function setup() {
   function count() { return w.document.querySelector('#dsh-find-all-root .count')?.textContent; }
   async function dispose() { for (const view of views.splice(0)) { await act(async () => view.root.unmount()); view.panel.remove(); } for (const cleanup of cleanups.splice(0).reverse()) cleanup?.(); }
   async function finish() { await dispose(); dom.window.close(); }
-  return { w, plugin, ctx, faces, requested, timers, mount, open, search, status, count, advance, dispose, finish };
+  return { w, plugin, ctx, Component, faces, requested, timers, mount, open, search, status, count, advance, dispose, finish };
 }
 
 test('old and new skeletons bind explicit session ids and exclude sidebar/composer', async () => {
@@ -284,5 +284,132 @@ test('click in a second non-focusable conversation remains selected through poll
     h.w.document.activeElement.blur();
     await h.advance(1200);
     assert.equal(h.count(), '1/2');
+  } finally { await h.finish(); }
+});
+
+function addUnregistered(h, id = 'session-b') {
+  const panel = h.w.document.createElement('section');
+  panel.dataset.phase = 'active';
+  panel.innerHTML = `<header></header><div data-conversation-content data-conversation-session="${id}"><div data-conversation-scroll><div data-chat-flow><p>${id} other text</p></div><textarea></textarea></div></div>`;
+  h.w.document.body.append(panel);
+  return panel;
+}
+function clickText(h, el) {
+  el.dispatchEvent(new h.w.Event('pointerdown', {bubbles:true}));
+  h.w.document.activeElement.blur();
+}
+function idleFaces(h, ...ids) { for (const id of ids) h.faces.set(id, {getSnapshot: () => ({hasMore:false}), loadOlder() {}}); }
+function observation(h) {return {count:h.count(), requested:h.requested, status:h.status(), focus:h.w.document.activeElement.tagName};}
+
+test('P1 rejected unregistered message click stays rejected after passive polls', async () => {
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true), b=addUnregistered(h);
+    idleFaces(h,'session-a');
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    h.requested.length=0;
+    clickText(h,b.querySelector('p'));
+    assert.equal(h.count(),'0/0');
+    await h.advance(1200);
+    assert.equal(h.count(),'0/0');assert.deepEqual(h.requested,[]);
+  } finally {await h.finish();}
+});
+
+test('P2 explicit registered message click survives repeated Ctrl+F on body', async () => {
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
+    idleFaces(h,'session-a','session-b');
+    b.flow.append(h.w.document.createTextNode(' needle'));
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    clickText(h,b.flow.querySelector('p'));await h.advance(1200);
+    assert.equal(h.count(),'1/2');
+    h.open(h.w.document.body);await h.advance(1200);
+    assert.equal(h.count(),'1/2');
+  } finally {await h.finish();}
+});
+
+test('P1 detach selected anchor never picks the sole other registered view', async () => {
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
+    idleFaces(h,'session-a','session-b');
+    b.flow.append(h.w.document.createTextNode(' needle'));
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    clickText(h,a.flow.querySelector('p'));
+    h.requested.length=0;
+    await act(async () => a.root.render(null));
+    await h.advance(1200);
+    assert.equal(h.count(),'0/0');assert.deepEqual(h.requested,[]);
+  } finally {await h.finish();}
+});
+
+test('removed selected panel and in-flight request stay cancelled', async () => {
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
+    let finish, calls=0;
+    h.faces.set('session-a',{getSnapshot:()=>({hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
+    idleFaces(h,'session-b');
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    clickText(h,a.flow.querySelector('p'));
+    a.panel.remove();await h.advance(1200);
+    finish();await h.advance(1200);
+    assert.equal(h.count(),'0/0');assert.equal(calls,1);assert.deepEqual(h.requested,['session-a']);
+  } finally {await h.finish();}
+});
+
+test('replaced flow revalidates same explicit view and ignores old pending data',async()=>{
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true),b=await h.mount('session-b',true);
+    idleFaces(h,'session-a','session-b');
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    clickText(h,a.flow.querySelector('p'));
+    const old=a.flow,newFlow=old.cloneNode(true);newFlow.append(h.w.document.createTextNode(' needle'));
+    old.replaceWith(newFlow);a.flow=newFlow;await h.advance(1200);
+    assert.equal(h.count(),'1/2');
+    old.append(h.w.document.createTextNode(' needle needle'));await h.advance(1200);
+    assert.equal(h.count(),'1/2');
+    assert.ok([...h.w.CSS.highlights.get('dsh-find-all-hit')].every(r=>newFlow.contains(r.startContainer)));
+  } finally {await h.finish();}
+});
+
+test('same anchor rebound to a new session does not page the old session again',async()=>{
+  const h=setup();
+  try {
+    const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
+    let finish,calls=0;
+    h.faces.set('session-a',{getSnapshot:()=>({hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
+    idleFaces(h,'session-c','session-b');
+    h.open(a.anchor);h.search('needle');await h.advance(300);
+    a.panel.querySelector('[data-conversation-content]').setAttribute('data-conversation-session','session-c');
+    a.flow.textContent='session-c needle needle';
+    await act(async()=>a.root.render(React.createElement(h.Component,{sessionId:'session-c'})));
+    finish();await h.advance(1200);
+    assert.equal(calls,1);
+    assert.ok(!h.requested.includes('session-b'));
+    assert.equal(h.count(),'0/0');
+    const anchor=a.panel.querySelector('[data-find-all-session]');
+    h.open(anchor);await h.advance(300);assert.equal(h.count(),'1/2');
+    assert.equal(h.requested.at(-1),'session-c');
+  }finally{await h.finish();}
+});
+
+test('closed-bar interactions establish or reject the next shortcut context', async () => {
+  const h = setup();
+  try {
+    await h.mount('session-a', true);
+    const b = await h.mount('session-b', true);
+    idleFaces(h, 'session-a', 'session-b');
+    b.flow.append(h.w.document.createTextNode(' needle'));
+    clickText(h, b.flow.querySelector('p'));
+    h.open(h.w.document.body); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/2'); assert.deepEqual(h.requested, ['session-b']);
+    h.w.document.activeElement.dispatchEvent(new h.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const unsupported = addUnregistered(h, 'session-c');
+    clickText(h, unsupported.querySelector('p'));
+    h.open(h.w.document.body); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, ['session-b']);
   } finally { await h.finish(); }
 });

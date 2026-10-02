@@ -16,7 +16,6 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { verifyDesktopReadinessFixture } from './desktop-readiness-fixture.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
@@ -157,11 +156,7 @@ function attachPage(candidate) {
     report.browserErrors.push(`Unexpected ${dialog.type()} dialog; review required (not accepted)`);
   });
 }
-async function launch() {
-  // Electron documents file logging for Windows child-process diagnostics:
-  // https://www.electronjs.org/docs/latest/api/command-line-switches#--enable-loggingfile
-  const chromiumLog = path.join(installation.runDirectory, `electron-${chromiumLogs.length + 1}.log`);
-  chromiumLogs.push(chromiumLog);
+async function loadPlaywright() {
   if (!electron) {
     // Capture launch output before launch() can throw. Playwright 1.56.1's
     // lib/server/utils/debugLogger.js routes DEBUG_FILE outside public artifacts.
@@ -170,6 +165,13 @@ async function launch() {
     process.env.DEBUG_FILE = playwrightLog;
     ({ _electron: electron } = await import('playwright'));
   }
+}
+async function launch() {
+  // Electron documents file logging for Windows child-process diagnostics:
+  // https://www.electronjs.org/docs/latest/api/command-line-switches#--enable-loggingfile
+  const chromiumLog = path.join(installation.runDirectory, `electron-${chromiumLogs.length + 1}.log`);
+  chromiumLogs.push(chromiumLog);
+  await loadPlaywright();
   report.launches ??= [];
   report.launches.push({ mode: 'instrumented', startUtc: new Date().toISOString(), phase: 'running' });
   app = await electron.launch({
@@ -342,9 +344,6 @@ try {
   assert.equal(process.env.GITHUB_ACTIONS, 'true');
   assert.equal(process.env.RUNNER_ENVIRONMENT, 'github-hosted', 'only a disposable hosted runner is authorized');
   assert.ok(process.env.USERPROFILE && process.env.RUNNER_TEMP);
-  report.stage = 'readiness-dom-regression';
-  report.readinessFixture = await verifyDesktopReadinessFixture();
-  report.stage = 'preflight';
   assert.ok(artifact.endsWith('.tgz') && fs.statSync(artifact).isFile(), 'supply the same candidate tgz as Web acceptance');
   report.runner = { osRelease: os.release(), imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion };
   report.artifactSha256 = hash(artifact);
@@ -387,6 +386,11 @@ try {
   fs.writeFileSync(path.join(home, '.npmrc'), 'ignore-scripts=true\nregistry=https://registry.npmjs.org/\n');
   installation.testUserData = path.join(installation.runDirectory, 'electron-user-data');
   report.isolation = 'real disposable-runner USERPROFILE retained; fresh DSH_HOME and explicit user-data-dir; no inherited model credentials';
+  report.stage = 'readiness-dom-regression';
+  // Preserve DEBUG_FILE initialization before the fixture first loads Playwright.
+  await loadPlaywright();
+  const { verifyDesktopReadinessFixture } = await import('./desktop-readiness-fixture.mjs');
+  report.readinessFixture = await verifyDesktopReadinessFixture();
   report.stage = 'prepare-startup-diagnostics';
   diagnostics = await startDiagnostics(installation, env, redact);
   // Controlled reproduction of the user report: same executable, DSH_HOME,

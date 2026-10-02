@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { classifyDesktopConsole } from './desktop-console.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
 let electron;
 import { createRedactor, captureSafePage } from './evidence.mjs';
@@ -59,6 +60,7 @@ let appOutput = '';
 const chromiumLogs = [];
 const children = new Set();
 const observedPages = new WeakSet();
+let observedPageCount = 0;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function stopOwnedProcessTree(child) {
   if (!child?.pid || child.exitCode !== null) return;
@@ -121,28 +123,32 @@ function writeSafe(name, value) { fs.writeFileSync(path.join(output, name), reda
 function attachPage(candidate) {
   if (observedPages.has(candidate)) return;
   observedPages.add(candidate);
+  const pageId = ++observedPageCount;
   const launchRecord = report.launches.at(-1);
   candidate.setDefaultTimeout(30_000);
   candidate.on('pageerror', error => report.browserErrors.push(redact(error.message)));
   candidate.on('console', message => {
     if (message.type() !== 'error') return;
     const text = redact(message.text());
+    const location = message.location();
     report.consoleErrors.push(text.slice(0, 4000));
     report.consoleEvents.push({ utc: new Date().toISOString(), phase: launchRecord.phase,
-      launchUtc: launchRecord.startUtc, stage: report.stage, text: text.slice(0, 4000), truncated: text.length > 4000 });
+      launchUtc: launchRecord.startUtc, pageId, locationRoute: route(location.url), exactHmrLocation: location.url === 'dsh-app://app/plugins/events', stage: report.stage, text: text.slice(0, 4000), truncated: text.length > 4000 });
   });
   function route(value) {
-    const url = new URL(value);
+    if (!value) return undefined;
+    let url;
+    try { url = new URL(value); } catch { return undefined; }
     return redact(`${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}${url.pathname}`).slice(0, 2000);
   }
   candidate.on('requestfailed', request => {
     if (report.networkFailures.length < 100) report.networkFailures.push({ utc: new Date().toISOString(),
-      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, route: route(request.url()),
-      resourceType: request.resourceType(), error: redact(request.failure()?.errorText || '') });
+      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, pageId, route: route(request.url()),
+      exactHmrUrl: request.url() === 'dsh-app://app/plugins/events', resourceType: request.resourceType(), error: redact(request.failure()?.errorText || '') });
   });
   candidate.on('response', response => {
     if (response.status() >= 400 && report.networkFailures.length < 100) report.networkFailures.push({ utc: new Date().toISOString(),
-      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, route: route(response.url()), status: response.status() });
+      phase: launchRecord.phase, launchUtc: launchRecord.startUtc, pageId, route: route(response.url()), status: response.status() });
   });
   // Do not dismiss/accept unknown dialogs, permissions, or agreements.
   candidate.on('dialog', dialog => {
@@ -275,7 +281,8 @@ async function finishKnownOnboarding({ pluginExpected = true } = {}) {
       await configureLater.waitFor({ state: 'hidden' });
       return false;
     }
-    if (!await page.getByRole('button', { name: 'New Session', exact: true }).isVisible()) return false;
+    // Official ui-sidebar SidebarRoot aria-label uses session.new.label (not visible session.new).
+    if (!await page.getByRole('button', { name: 'New session', exact: true }).isVisible()) return false;
     if (pluginExpected && !await page.locator('style[data-plugin-css="dsh-find-all/bar.css"]').count()) return false;
     // CSS can load before a React first-run dialog mounts. Require a short
     // stable interval and reset it after each recognized prompt.
@@ -434,9 +441,10 @@ try {
   await quit();
   report.cleanShutdown = 'passed';
   assert.deepEqual(report.browserErrors, [], 'unhandled browser errors');
-  // Console errors remain explicit evidence even if a product background network
-  // request is responsible. Do not silently filter them or imply a clean pass.
-  assert.deepEqual(report.consoleErrors, [], 'browser console errors');
+  // Preserve all raw errors; only the documented, exactly correlated intentional
+  // shutdown of the HMR EventSource can be classified as expected teardown.
+  report.consoleClassification = classifyDesktopConsole(report);
+  assert.deepEqual(report.consoleClassification.unexpected, [], 'unexpected browser console errors');
   report.status = 'passed';
   report.stage = 'complete';
 } catch (error) {

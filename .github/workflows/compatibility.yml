@@ -29,33 +29,35 @@ jobs:
           npm pack --ignore-scripts --pack-destination evidence/artifact
           sha256sum evidence/artifact/*.tgz | tee evidence/artifact/SHA256SUMS
       - name: Oldest exact host acceptance
+        id: oldest
         run: node scripts/compat/web-smoke.mjs 0.1.5-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.2
       - name: Current exact host acceptance
+        id: current
         if: ${{ !cancelled() }}
         run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.2
       - name: User runtime 0.1.7-rc.1 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-rc.1
       - name: Previously allowed 0.1.6-alpha.1 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.6-alpha.1
       - name: Previously allowed 0.1.7-alpha.1 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-alpha.1
       - name: Previously allowed 0.1.7-alpha.2 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-alpha.2
       - name: Exact host 0.1.5-rc.3 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.5-rc.3 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.3
       - name: Exact host 0.1.6-alpha.2 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.6-alpha.2
       - name: Exact host 0.1.7-rc.2 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.7-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-rc.2
       - name: Exact host 0.2.0-rc.1 acceptance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.2.0-rc.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.1
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: ${{ !cancelled() }}

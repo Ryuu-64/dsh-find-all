@@ -150,6 +150,52 @@ test('first body shortcut cannot infer A while an unregistered visible B panel a
   } finally { await h.finish(); }
 });
 
+test('initial unbound Hero composer focus does not count as a rejected conversation selection', async () => {
+  const h = setup();
+  try {
+    // Official startup-auto-selection.e2e.ts distinguishes the resident Hero
+    // root from the composer's unrelated data-phase attribute.
+    const hero = h.w.document.createElement('div');
+    hero.dataset.phase = 'hero';
+    hero.innerHTML = '<div data-conversation-scroll><textarea data-phase="idle"></textarea></div>';
+    h.w.document.body.append(hero);
+    hero.querySelector('textarea').focus();
+    hero.remove();
+    await h.mount('session-a');
+    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.open(); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+  } finally { await h.finish(); }
+});
+
+test('composer data-phase is not confused with the enclosing conversation root', async () => {
+  const h = setup();
+  try {
+    const a = await h.mount('session-a');
+    await h.mount('session-b');
+    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    const composer = a.panel.querySelector('textarea');
+    composer.dataset.phase = 'claimed';
+    composer.focus();
+    h.open(composer); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+  } finally { await h.finish(); }
+});
+
+test('a broken nested active panel remains a boundary and cannot resolve to its outer registered conversation', async () => {
+  const h = setup();
+  try {
+    const a = await h.mount('session-a');
+    const b = h.w.document.createElement('section');
+    b.dataset.phase = 'active';
+    b.innerHTML = '<button>unsupported conversation</button>';
+    a.flow.append(b);
+    b.querySelector('button').focus();
+    h.open(b.querySelector('button')); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+  } finally { await h.finish(); }
+});
+
 test('uncertain, replaced, hidden or mismatched DOM fails closed', async () => {
   for (const corrupt of [
     v => v.flow.removeAttribute('data-chat-flow'),

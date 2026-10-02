@@ -155,18 +155,26 @@ async function launch() {
   app.process().stderr?.on('data', data => { appOutput += data.toString(); });
   app.on('window', attachPage);
   for (const candidate of app.windows()) attachPage(candidate);
-  const identity = await app.evaluate(async ({ app }) => {
-    const { readFile } = await import('node:fs/promises');
-    const { join } = await import('node:path');
-    const manifest = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'));
-    // runtime-tree.ts defines this descriptor at the immutable dsh tree root.
-    // Read the release binding rather than infer it from a project manifest.
-    const runtime = JSON.parse(await readFile(join(app.getAppPath(), 'dsh', 'desktop-runtime.json'), 'utf8'));
-    return {
+  const identity = await app.evaluate(({ app }) => ({
       name: app.name, version: app.getVersion(), packaged: app.isPackaged,
       platform: process.platform, arch: process.arch, electron: process.versions.electron,
+      node: process.versions.node,
       executable: process.execPath, userData: app.getPath('userData'),
-      dshHome: process.env.DSH_HOME, packageName: manifest.name,
+      dshHome: process.env.DSH_HOME,
+  }));
+  report.appIdentity = identity;
+  const resources = await app.evaluate(({ app }) => {
+    // A serialized Playwright evaluation has no dynamic-import callback.
+    // Node's documented getBuiltinModule works without import/require scope.
+    // https://nodejs.org/api/process.html#processgetbuiltinmoduleid
+    if (typeof process.getBuiltinModule !== 'function') throw new Error('Installed Electron Node lacks getBuiltinModule; resource identity remains unverified');
+    const { readFileSync } = process.getBuiltinModule('fs');
+    const { join } = process.getBuiltinModule('path');
+    const manifest = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8'));
+    // runtime-tree.ts defines this descriptor at the immutable dsh tree root.
+    const runtime = JSON.parse(readFileSync(join(app.getAppPath(), 'dsh', 'desktop-runtime.json'), 'utf8'));
+    return {
+      packageName: manifest.name,
       runtimeDescriptor: {
         schemaVersion: runtime.schemaVersion, version: runtime.release.version,
         platform: runtime.platform, arch: runtime.arch,
@@ -174,6 +182,7 @@ async function launch() {
       },
     };
   });
+  Object.assign(identity, resources);
   assert.equal(identity.version, version);
   assert.equal(identity.packaged, true, 'must test the installed release, not a development Electron wrapper');
   assert.equal(identity.platform, 'win32');

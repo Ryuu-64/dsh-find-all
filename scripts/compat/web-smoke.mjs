@@ -155,6 +155,24 @@ try {
   assert.ok(ready, 'host did not become HTTP-ready');
   browser = await chromium.launch({ headless: true });
   page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US' });
+  // Keep only structural evidence of the first shortcut routing, never input
+  // values, text, URLs or session contents. This distinguishes host auto-focus
+  // and nested composer phases from an explicit conversation selection.
+  await page.addInitScript(() => {
+    const trace = [];
+    window.__findAllFocusEvidence = trace;
+    let done = false;
+    for (const type of ['focusin', 'pointerdown', 'keydown']) window.addEventListener(type, event => {
+      if (done || (type === 'keydown' && !((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f'))) return;
+      const target = event.target;
+      const phase = target?.closest?.('[data-phase]');
+      const anchors = document.querySelectorAll('[data-find-all-session]').length;
+      trace.push({ type, tag: target?.tagName || null, phase: phase?.getAttribute('data-phase') || null,
+        phaseTag: phase?.tagName || null, anchors, bodyFocus: document.activeElement === document.body });
+      if (trace.length > 40) trace.shift();
+      if (type === 'keydown' && anchors > 0) done = true;
+    }, true);
+  });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url, { waitUntil: 'load' });
@@ -209,6 +227,10 @@ try {
   }
   throw new Error(report.error);
 } finally {
+  if (page) {
+    try { report.firstShortcutFocusEvidence = await page.evaluate(() => window.__findAllFocusEvidence || []); }
+    catch {}
+  }
   await browser?.close();
   server.kill('SIGTERM');
   await new Promise(resolve => setTimeout(resolve, 500));

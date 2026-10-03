@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.6
+
+Fix text matching, history feedback and search state after the 0.1.5 compatibility release.
+
+- Match phrases across inline text and syntax-highlighting spans within one text block, while keeping separate messages, block elements, `<br>` elements and excluded content apart.
+- Preserve original UTF-16 offsets during case-insensitive Unicode matching, so characters such as `İ` no longer shift later highlights. Matching remains literal, without locale-specific folding or normalization.
+- Report “已搜索当前可用历史” when the host stops offering earlier pages. Recheck readiness and the final results before showing that status; it does not guarantee that the host's history is complete.
+- Keep the last query in the active plugin instance so reopening the bar can restore it. A valid new text selection takes priority; disabling the plugin, refreshing or restarting clears the query.
+- Preserve a verifiable current match when history is prepended or the page rescans, without scrolling automatically. Restore it across replaced text nodes only when the original block text is unchanged; otherwise clamp the previous result index. A new query or conversation selects the first result.
+- Add regression coverage for observer cleanup, conversation and embedded-panel isolation, cross-node text matching, history feedback, query retention and stable selection.
+
+The supported host-version list is unchanged. This patch does not add new Web or Desktop host-matrix acceptance evidence; the 0.1.5 compatibility notes and their documented limits still apply.
+
 ## 0.1.5
 
 Fix compatibility with newer DSH hosts while preserving the existing find controls and matching behavior.

@@ -25,6 +25,7 @@ function setup() {
   globalThis.document = w.document;
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const scans = [], scrolls = [], views = [], cleanups = [], bound = [];
+  const faces = new Map();
   let rangeBuilds = 0;
   const createRange = w.document.createRange.bind(w.document);
   w.document.createRange = () => { rangeBuilds++; return createRange(); };
@@ -53,10 +54,11 @@ function setup() {
       list: { getSnapshot() { assert.fail('must not read global session selection'); } },
       binding(id) {
         bound.push(id);
-        return { session: {
-          getSnapshot: () => ({ hasMore: false }),
+        if (!faces.has(id)) faces.set(id, {
+          getSnapshot: () => ({ openState: 'open', openError: null, loadingOlder: false, hasMore: false }),
           loadOlder() { assert.fail('the fixture has no older pages'); },
-        } };
+        });
+        return { session: faces.get(id) };
       },
     },
     slots: {
@@ -170,7 +172,10 @@ for (const scope of ['whole', 'page']) {
       assert.equal(h.count(), '0/0'); h.assertHits(view.flow, 0);
       assert.equal(h.w.CSS.highlights.size, 0);
       assert.equal(h.scrolls.length, 0);
-      assert.deepEqual(h.bound, scope === 'whole' ? ['session-a'] : []);
+      if (scope === 'whole') {
+        assert.ok(h.bound.length > 0);
+        assert.ok(h.bound.every(id => id === 'session-a'));
+      } else assert.deepEqual(h.bound, []);
 
       // Additional distractors outside the selected body must also stay excluded.
       const other = await h.mount('session-b', '<p>needle</p>');
@@ -196,6 +201,7 @@ for (const scope of ['whole', 'page']) {
       assert.equal(h.count(), '2/2'); h.assertHits(view.flow, 2);
       h.bar('[aria-label="Next match"]').click(); h.assertCurrent(view.flow, 0);
       assert.ok(h.scans.every(root => root === view.flow));
+      assert.ok(h.bound.length > 0);
       assert.ok(h.bound.every(id => id === 'session-a'));
       assert.ok(!h.hits().some(range => other.flow.contains(range.startContainer)));
     } finally { await h.finish(); }
@@ -215,9 +221,13 @@ test('switching session and replacing its body detach old observers and fail clo
     assert.equal(h.count(), '1/2'); h.assertHits(b.flow, 2);
     const switchedWork = h.work();
     a.flow.append(h.w.document.createTextNode(' needle'));
+    await waitFor(() => h.bar('.status').textContent.startsWith('Searched currently available history;'), 'B must finish its one required terminal rescan');
+    assert.deepEqual(h.work(), { ...switchedWork, rangeBuilds: switchedWork.rangeBuilds + 2 }, 'only B terminal rescan may run; queued/new A mutations must not add work');
+    assert.equal(h.count(), '1/2'); h.assertHits(b.flow, 2);
+    const settledSwitchWork = h.work();
+    a.flow.append(h.w.document.createTextNode(' needle'));
     await delay(350);
-    assert.deepEqual(h.work(), switchedWork, 'neither pending nor new A mutations may rescan B');
-    h.assertHits(b.flow, 2);
+    assert.deepEqual(h.work(), settledSwitchWork, 'old A mutations must not rescan settled B');
 
     const old = b.flow;
     const replacement = h.w.document.createElement('div');
@@ -228,8 +238,13 @@ test('switching session and replacing its body detach old observers and fail clo
     h.assertHits(replacement, 1);
     const replacedWork = h.work();
     old.append(h.w.document.createTextNode(' needle needle'));
+    await waitFor(() => h.bar('.status').textContent.startsWith('Searched currently available history;'), 'the replacement body must finish its one terminal rescan');
+    assert.deepEqual(h.work(), { ...replacedWork, rangeBuilds: replacedWork.rangeBuilds + 1 }, 'only the replacement terminal rescan may run');
+    assert.equal(h.count(), '1/1'); h.assertHits(replacement, 1);
+    const settledReplacementWork = h.work();
+    old.append(h.w.document.createTextNode(' needle needle'));
     await delay(350);
-    assert.deepEqual(h.work(), replacedWork, 'detached body mutations must not schedule scans');
+    assert.deepEqual(h.work(), settledReplacementWork, 'detached body mutations must not schedule scans');
     replacement.append(h.w.document.createTextNode(' needle'));
     await waitFor(() => h.count() === '1/2', 'the replacement body must still be observed');
     h.assertHits(replacement, 2);

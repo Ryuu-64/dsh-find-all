@@ -142,7 +142,7 @@ function pagerDeps(overrides) {
 	const base = {
 		maxPages: 10,
 		isCancelled: () => false,
-		hasMore: () => true,
+		waitReady: async () => ({ hasMore: true }),
 		loadOlder: async () => { calls.loads++; },
 		signature: () => calls.loads,
 		waitChange: async () => { calls.waits++; return true; },
@@ -152,16 +152,16 @@ function pagerDeps(overrides) {
 }
 
 test("a host that reports no older history loads nothing", async () => {
-	const { calls, deps } = pagerDeps({ hasMore: () => false });
+	const { calls, deps } = pagerDeps({ waitReady: async () => ({ hasMore: false }) });
 	const result = await mod.runPageIn(deps);
 	assert.deepEqual(result, { pages: 0, reason: "done" });
 	assert.equal(calls.loads, 0);
 });
 
-test("it keeps paging until the host says the history is complete", async () => {
+test("it keeps paging until the host offers no earlier pages", async () => {
 	let available = 3;
 	const { calls, deps } = pagerDeps({
-		hasMore: () => available > 0,
+		waitReady: async () => ({ hasMore: available > 0 }),
 		loadOlder: async () => { calls.loads++; available--; }
 	});
 	const result = await mod.runPageIn(deps);
@@ -172,7 +172,8 @@ test("it keeps paging until the host says the history is complete", async () => 
 test("an unknown hasMore keeps going and stops when a page changes nothing", async () => {
 	let attempt = 0;
 	const { deps } = pagerDeps({
-		hasMore: () => null,
+		waitReady: async () => ({ hasMore: null }),
+		signature: () => Math.min(attempt, 2),
 		waitChange: async () => { attempt++; return attempt <= 2; }
 	});
 	const result = await mod.runPageIn(deps);

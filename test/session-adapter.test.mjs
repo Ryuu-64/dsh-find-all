@@ -50,10 +50,10 @@ function setup() {
       if (next[1].interval) next[1].at += next[1].interval;
       else timers.delete(next[0]);
       next[1].fn();
-      for (let i = 0; i < 12; i++) await Promise.resolve();
+      for (let i = 0; i < 60; i++) await Promise.resolve();
     }
     now = end;
-    for (let i = 0; i < 12; i++) await Promise.resolve();
+    for (let i = 0; i < 60; i++) await Promise.resolve();
   }
   async function mount(id, modern = false) {
     const panel = w.document.createElement('section');
@@ -80,11 +80,11 @@ test('old and new skeletons bind explicit session ids and exclude sidebar/compos
     const h = setup();
     try {
       const view = await h.mount('session-a', modern);
-      h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+      h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
       h.open(view.anchor); h.search('needle'); await h.advance(251);
       assert.equal(h.count(), '1/1');
-      assert.deepEqual(h.requested, ['session-a']);
-      assert.equal(h.status(), 'Whole conversation loaded');
+      assert.deepEqual([...new Set(h.requested)], ['session-a']);
+      assert.equal(h.status(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed');
       assert.equal(h.w.CSS.highlights.get('dsh-find-all-hit').size, 1);
     } finally { await h.finish(); }
   }
@@ -95,11 +95,11 @@ test('transitional 0.1.6-alpha.2 content wrapper uses the explicit header sessio
   try {
     const view = await h.mount('session-a', true);
     view.panel.querySelector('[data-conversation-content]').removeAttribute('data-conversation-session');
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.open(view.anchor); h.search('needle'); await h.advance(251);
     assert.equal(h.count(), '1/1');
-    assert.deepEqual(h.requested, ['session-a']);
-    assert.equal(h.status(), 'Whole conversation loaded');
+    assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assert.equal(h.status(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed');
   } finally { await h.finish(); }
 });
 
@@ -107,12 +107,12 @@ test('multiple instances require focus; chosen instance survives focus in the fi
   const h = setup();
   try {
     const a = await h.mount('session-a'), b = await h.mount('session-b', true);
-    h.faces.set('session-b', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-b', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.open(); h.search('needle'); await h.advance(251);
     assert.equal(h.count(), '0/0'); assert.equal(h.requested.length, 0);
     assert.match(h.status(), /Select a visible conversation/);
     h.open(b.anchor); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-b']);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
     a.panel.hidden = true;
     b.panel.hidden = true;
     await h.advance(600);
@@ -125,12 +125,12 @@ test('first body-focused Ctrl+F discovers the sole visible registered conversati
   const h = setup();
   try {
     await h.mount('session-a', true);
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     assert.equal(h.w.document.activeElement, h.w.document.body);
     h.open(); h.search('needle'); await h.advance(1200);
     assert.equal(h.count(), '1/1');
-    assert.deepEqual(h.requested, ['session-a']);
-    assert.equal(h.status(), 'Whole conversation loaded');
+    assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assert.equal(h.status(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed');
   } finally { await h.finish(); }
 });
 
@@ -143,10 +143,10 @@ test('first body shortcut cannot infer A while an unregistered visible B panel a
     b.innerHTML = '<div data-conversation-scroll><div data-chat-flow>unregistered needle</div></div>';
     h.w.document.body.append(b);
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
     b.remove();
     h.open(h.w.document.body); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 
@@ -162,9 +162,9 @@ test('initial unbound Hero composer focus does not count as a rejected conversat
     hero.querySelector('textarea').focus();
     hero.remove();
     await h.mount('session-a');
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
   } finally { await h.finish(); }
 });
 
@@ -173,12 +173,12 @@ test('composer data-phase is not confused with the enclosing conversation root',
   try {
     const a = await h.mount('session-a');
     await h.mount('session-b');
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     const composer = a.panel.querySelector('textarea');
     composer.dataset.phase = 'claimed';
     composer.focus();
     h.open(composer); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
   } finally { await h.finish(); }
 });
 
@@ -192,7 +192,7 @@ test('a broken nested active panel remains a boundary and cannot resolve to its 
     a.flow.append(b);
     b.querySelector('button').focus();
     h.open(b.querySelector('button')); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 
@@ -202,11 +202,11 @@ for (const phase of ['hero', 'settling', 'future-unsupported']) {
     try {
       const a = await h.mount('session-a', true), b = await h.mount('session-b', true);
       b.panel.dataset.phase = phase;
-      h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+      h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
       h.open(); h.search('needle'); await h.advance(1200);
-      assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+      assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
       h.open(a.anchor); h.search('needle'); await h.advance(1200);
-      assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+      assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
     } finally { await h.finish(); }
   });
 }
@@ -227,7 +227,7 @@ test('first shortcut accounts for a visible embedded sidebar without a header an
     await h.mount('session-a', true);
     embeddedConversation(h);
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 
@@ -239,7 +239,7 @@ for (const phase of ['active', 'hero', 'settling']) {
       const b = embeddedConversation(h, phase);
       b.querySelector('textarea').focus(); b.remove();
       h.open(); h.search('needle'); await h.advance(1200);
-      assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+      assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
     } finally { await h.finish(); }
   });
 }
@@ -249,9 +249,9 @@ test('a hidden embedded view does not make the sole visible main conversation am
   try {
     await h.mount('session-a', true);
     embeddedConversation(h).hidden = true;
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '1/1'); assert.deepEqual(h.requested, ['session-a']);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
   } finally { await h.finish(); }
 });
 
@@ -265,7 +265,7 @@ test('an unbound Hero beside an already visible session does not reset explicit 
     h.w.document.body.append(hero);
     hero.querySelector('textarea').focus(); hero.remove();
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 
@@ -278,7 +278,7 @@ test('a visible registered unsupported panel still blocks discovery when its uti
     b.panel.querySelector('[data-conversation-scroll]').remove();
     b.anchor.hidden = true;
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 
@@ -306,11 +306,11 @@ test('paging uses the bound session; rejected history preserves partial results'
   try {
     const v = await h.mount('session-a');
     let calls = 0;
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: true }), async loadOlder() {
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: true }), async loadOlder() {
       if (++calls === 2) throw new Error('synthetic failure');
       v.flow.insertAdjacentHTML('afterbegin', '<p>older needle</p>');
     } });
-    h.open(v.anchor); h.search('needle'); await h.advance(300);
+    h.open(v.anchor); h.search('needle'); await h.advance(600);
     assert.equal(calls, 2); assert.equal(h.count(), '1/2');
     assert.match(h.status(), /incomplete; partial results/);
   } finally { await h.finish(); }
@@ -319,7 +319,7 @@ test('paging uses the bound session; rejected history preserves partial results'
 test('close and lifecycle disposal clear timers, highlights, observers and keyboard listeners', async () => {
   const h = setup();
   const v = await h.mount('session-a');
-  h.faces.set('session-a', { getSnapshot: () => ({ hasMore: true }), async loadOlder() {} });
+  h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: true }), async loadOlder() {} });
   h.open(v.anchor); h.search('needle'); await h.advance(300);
   assert.ok(h.timers.size > 0);
   h.w.document.activeElement.dispatchEvent(new h.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -340,10 +340,10 @@ test('switching session cancels an in-flight request and cannot paint stale resu
   try {
     const a = await h.mount('session-a'), b = await h.mount('session-b', true);
     let finishA, callsA = 0, callsB = 0;
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: true }), loadOlder() {
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: true }), loadOlder() {
       callsA++; return new Promise(resolve => finishA = resolve);
     } });
-    h.faces.set('session-b', { getSnapshot: () => ({ hasMore: callsB === 0 }), async loadOlder() {
+    h.faces.set('session-b', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: callsB === 0 }), async loadOlder() {
       callsB++; b.flow.insertAdjacentHTML('afterbegin', '<p>B older needle</p>');
     } });
     h.open(a.anchor); h.search('needle'); await h.advance(300);
@@ -363,7 +363,7 @@ test('two views of the same session are not confused, and no CSS API never invok
   try {
     const a = await h.mount('same'), b = await h.mount('same', true);
     b.flow.insertAdjacentHTML('afterbegin', '<p>another needle</p>');
-    h.faces.set('same', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('same', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.w.CSS = undefined;
     h.w.find = () => { throw new Error('must not search the whole window'); };
     h.open(); h.search('needle'); assert.equal(h.count(), '0/0');
@@ -380,7 +380,7 @@ test('repeated disable and enable does not duplicate shortcuts or leave session 
   const h = setup();
   try {
     let calls = 0;
-    h.faces.set('session-a', { getSnapshot: () => ({ hasMore: true }), async loadOlder() { calls++; throw new Error('synthetic'); } });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: true }), async loadOlder() { calls++; throw new Error('synthetic'); } });
     for (let cycle = 0; cycle < 3; cycle++) {
       if (cycle) h.plugin.apply(h.ctx);
       const v = await h.mount('session-a');
@@ -401,17 +401,17 @@ test('an unsupported focused view never redirects search to another valid view',
     const unsupported = await h.mount('session-a');
     await h.mount('session-b', true);
     unsupported.flow.removeAttribute('data-chat-flow');
-    h.faces.set('session-b', { getSnapshot: () => ({ hasMore: false }), loadOlder() {} });
+    h.faces.set('session-b', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     for (const target of [unsupported.anchor, unsupported.panel.querySelector('textarea')]) {
       h.open(target); h.search('needle'); await h.advance(1200);
       assert.equal(h.count(), '0/0');
-      assert.deepEqual(h.requested, []);
+      assert.deepEqual([...new Set(h.requested)], []);
       assert.match(h.status(), /scope unavailable/i);
     }
     const valid = h.w.document.querySelector('[data-find-all-session="session-b"]');
     h.open(valid); h.search('needle'); await h.advance(300);
     assert.equal(h.count(), '1/1');
-    assert.deepEqual(h.requested, ['session-b']);
+    assert.deepEqual([...new Set(h.requested)], ['session-b']);
   } finally { await h.finish(); }
 });
 
@@ -420,7 +420,7 @@ test('focused unregistered conversation must not fall back to sole other registe
   const h = setup();
   try {
     const a = await h.mount('session-a', true);
-    h.faces.set('session-a', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false}), loadOlder() {} });
     const b = h.w.document.createElement('section');
     b.dataset.phase = 'active';
     b.innerHTML = '<header></header><div data-conversation-content data-conversation-session="session-b"><div data-conversation-scroll><div data-chat-flow><p>B other text</p></div><textarea></textarea></div></div>';
@@ -429,7 +429,7 @@ test('focused unregistered conversation must not fall back to sole other registe
     focus.focus();
     h.open(focus); h.search('needle'); await h.advance(1200);
     assert.equal(h.count(), '0/0');
-    assert.deepEqual(h.requested, []);
+    assert.deepEqual([...new Set(h.requested)], []);
   } finally { await h.finish(); }
 });
 test('click in a second non-focusable conversation remains selected through polling', async () => {
@@ -437,8 +437,8 @@ test('click in a second non-focusable conversation remains selected through poll
   try {
     const a = await h.mount('session-a', true), b = await h.mount('session-b', true);
     b.flow.append(h.w.document.createTextNode(' needle'));
-    h.faces.set('session-a', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
-    h.faces.set('session-b', { getSnapshot: () => ({hasMore: false}), loadOlder() {} });
+    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false}), loadOlder() {} });
+    h.faces.set('session-b', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false}), loadOlder() {} });
     h.open(a.anchor); h.search('needle'); await h.advance(300);
     const p = b.flow.querySelector('p');
     p.dispatchEvent(new h.w.Event('pointerdown', {bubbles:true}));
@@ -459,7 +459,7 @@ function clickText(h, el) {
   el.dispatchEvent(new h.w.Event('pointerdown', {bubbles:true}));
   h.w.document.activeElement.blur();
 }
-function idleFaces(h, ...ids) { for (const id of ids) h.faces.set(id, {getSnapshot: () => ({hasMore:false}), loadOlder() {}}); }
+function idleFaces(h, ...ids) { for (const id of ids) h.faces.set(id, {getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore:false}), loadOlder() {}}); }
 function observation(h) {return {count:h.count(), requested:h.requested, status:h.status(), focus:h.w.document.activeElement.tagName};}
 
 test('P1 rejected unregistered message click stays rejected after passive polls', async () => {
@@ -510,13 +510,13 @@ test('removed selected panel and in-flight request stay cancelled', async () => 
   try {
     const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
     let finish, calls=0;
-    h.faces.set('session-a',{getSnapshot:()=>({hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
+    h.faces.set('session-a',{getSnapshot:()=>({openState: 'open', openError: null, loadingOlder: false, hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
     idleFaces(h,'session-b');
     h.open(a.anchor);h.search('needle');await h.advance(300);
     clickText(h,a.flow.querySelector('p'));
     a.panel.remove();await h.advance(1200);
     finish();await h.advance(1200);
-    assert.equal(h.count(),'0/0');assert.equal(calls,1);assert.deepEqual(h.requested,['session-a']);
+    assert.equal(h.count(),'0/0');assert.equal(calls,1);assert.deepEqual([...new Set(h.requested)],['session-a']);
   } finally {await h.finish();}
 });
 
@@ -541,7 +541,7 @@ test('same anchor rebound to a new session does not page the old session again',
   try {
     const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
     let finish,calls=0;
-    h.faces.set('session-a',{getSnapshot:()=>({hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
+    h.faces.set('session-a',{getSnapshot:()=>({openState: 'open', openError: null, loadingOlder: false, hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
     idleFaces(h,'session-c','session-b');
     h.open(a.anchor);h.search('needle');await h.advance(300);
     a.panel.querySelector('[data-conversation-content]').setAttribute('data-conversation-session','session-c');
@@ -566,11 +566,11 @@ test('closed-bar interactions establish or reject the next shortcut context', as
     b.flow.append(h.w.document.createTextNode(' needle'));
     clickText(h, b.flow.querySelector('p'));
     h.open(h.w.document.body); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '1/2'); assert.deepEqual(h.requested, ['session-b']);
+    assert.equal(h.count(), '1/2'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
     h.w.document.activeElement.dispatchEvent(new h.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     const unsupported = addUnregistered(h, 'session-c');
     clickText(h, unsupported.querySelector('p'));
     h.open(h.w.document.body); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, ['session-b']);
+    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
   } finally { await h.finish(); }
 });

@@ -42,13 +42,13 @@ test('prepend keeps selected B rather than another identical word in A or C', as
   } finally { await h.finish(); }
 });
 
-test('immutable endpoints survive characterData mutation that collapses a live Range', async () => {
+test('characterData edits fall back instead of inferring identity from old live Range endpoints', async () => {
   const h = setup();
   try {
     const v = await h.mount('a'); v.flow.innerHTML = '<p>needle</p><p>before needle after</p>'; page(h, v); key(h, 'Enter');
     const b = current(h).startContainer; b.data += ' appended';
     v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); h.scrolls.length = 0; await rescan(h);
-    assert.equal(h.count(), '3/3'); assert.equal(current(h).startContainer, b); assert.equal(current(h).startOffset, 7); assert.equal(h.scrolls.length, 0);
+    assert.equal(h.count(), '2/3'); assert.notEqual(current(h).startContainer, b); assert.equal(current(h).toString(), 'needle'); assert.equal(h.scrolls.length, 0);
   } finally { await h.finish(); }
 });
 
@@ -124,5 +124,39 @@ test('unchanged same-paragraph runs separated by br retain the exact original ru
     const p = v.flow.firstChild; p.innerHTML = '<span>needle</span><br><em>needle</em>';
     v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); await rescan(h);
     assert.equal(h.count(), '3/3'); assert.equal(current(h).startContainer.parentElement.tagName, 'EM');
+  } finally { await h.finish(); }
+});
+
+test('changed original Text data invalidates endpoint identity before ordinal fallback', async () => {
+  const h = setup();
+  try {
+    const v = await h.mount('a'); v.flow.innerHTML = '<p id="A">needle</p><p id="B">needle</p>';
+    page(h, v); key(h, 'Enter'); assert.equal(h.count(), '2/2');
+    const selected = current(h).startContainer, a = v.flow.firstChild;
+    selected.data = 'needle needle'; v.flow.insertAdjacentHTML('afterbegin', '<p id="C">needle</p>');
+    h.scrolls.length = 0; await rescan(h);
+    assert.equal(h.count(), '2/4'); assert.ok(a.contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
+  } finally { await h.finish(); }
+});
+
+test('unchanged matched Text still retains identity when a sibling appends new content', async () => {
+  const h = setup();
+  try {
+    const v = await h.mount('a'); v.flow.innerHTML = '<p>needle</p><p id="B"><strong>needle</strong></p>';
+    page(h, v); key(h, 'Enter'); const selected = current(h).startContainer;
+    v.flow.lastChild.append(h.w.document.createTextNode(' appended'));
+    v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); h.scrolls.length = 0; await rescan(h);
+    assert.equal(h.count(), '3/3'); assert.equal(current(h).startContainer, selected); assert.equal(h.scrolls.length, 0);
+  } finally { await h.finish(); }
+});
+
+test('cross-node identity checks immutable intermediate text as well as both endpoints', async () => {
+  const h = setup();
+  try {
+    const v = await h.mount('a'); v.flow.innerHTML = '<p id="A">Hello world</p><p id="B"><span>Hel</span><em>lo </em><strong>world</strong></p>';
+    page(h, v, 'Hello world'); key(h, 'Enter'); const a = v.flow.firstChild;
+    v.flow.querySelector('em').firstChild.data = 'LO ';
+    v.flow.insertAdjacentHTML('afterbegin', '<p>Hello world</p>'); h.scrolls.length = 0; await rescan(h);
+    assert.equal(h.count(), '2/3'); assert.ok(a.contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
   } finally { await h.finish(); }
 });

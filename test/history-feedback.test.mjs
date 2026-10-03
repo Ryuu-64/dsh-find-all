@@ -162,3 +162,17 @@ test('a hanging request times out logically without allowing a duplicate on manu
     assert.equal(h.timers.size, 0); assert.equal(h.w.CSS.highlights.size, 0);
   } finally { await h.finish(); }
 });
+
+test('readiness is rechecked immediately before publishing a terminal status', async () => {
+  const h = setup();
+  try {
+    const v = await h.mount('a'); const state = snapshot({hasMore: false}); let first = true;
+    h.faces.set('a', {getSnapshot() {
+      const current = {...state};
+      if (first) {first = false; queueMicrotask(() => state.loadingOlder = true);}
+      return current;
+    }, loadOlder() {assert.fail('no page while the host starts rebuilding');}});
+    h.open(v.anchor); h.search('needle'); await h.advance(600);
+    assert.match(h.status(), incomplete); assert.equal(h.count(), '1/1');
+  } finally { await h.finish(); }
+});

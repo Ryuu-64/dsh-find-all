@@ -160,3 +160,46 @@ test('cross-node identity checks immutable intermediate text as well as both end
     assert.equal(h.count(), '2/3'); assert.ok(a.contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
   } finally { await h.finish(); }
 });
+
+for (const replacement of ['ed', 'ED']) {
+  test(`moved middle node cannot authenticate a new ${replacement} participant at the same endpoints`, async () => {
+    const h = setup();
+    try {
+      const v = await h.mount('a'); v.flow.innerHTML = '<p id="A">needle</p><p id="B"><span>ne</span><em>ed</em><strong>le</strong></p>';
+      page(h, v); key(h, 'Enter'); const a = v.flow.firstChild, b = v.flow.lastChild;
+      const oldMiddle = b.querySelector('em'); b.append(oldMiddle);
+      b.insertBefore(h.w.document.createTextNode(replacement), b.querySelector('strong'));
+      v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); h.scrolls.length = 0; await rescan(h);
+      assert.equal(oldMiddle.firstChild.isConnected, true); assert.equal(oldMiddle.textContent, 'ed');
+      assert.equal(h.count(), '2/3'); assert.ok(a.contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
+    } finally { await h.finish(); }
+  });
+}
+
+test('middle node moved outside its original block cannot authenticate its same-value replacement', async () => {
+  const h = setup();
+  try {
+    const v = await h.mount('a'); v.flow.innerHTML = '<p id="A">needle</p><p id="B"><span>ne</span><em>ed</em><strong>le</strong></p><p id="elsewhere">other</p>';
+    page(h, v); key(h, 'Enter'); const a = v.flow.firstChild, b = v.flow.querySelector('#B');
+    v.flow.querySelector('#elsewhere').append(b.querySelector('em'));
+    b.insertBefore(h.w.document.createTextNode('ed'), b.querySelector('strong'));
+    b.append(h.w.document.createTextNode(' changed'));
+    v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); h.scrolls.length = 0; await rescan(h);
+    assert.equal(h.count(), '2/3'); assert.ok(a.contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
+  } finally { await h.finish(); }
+});
+
+for (const changedBlock of [true, false]) {
+  test(`equal middle nodes reordered ${changedBlock ? 'with changed block text fall back' : 'within unchanged block text retain via block recovery'}`, async () => {
+    const h = setup();
+    try {
+      const v = await h.mount('a'); v.flow.innerHTML = '<p id="A">needle</p><p id="B"><span>n</span><em>e</em><i>e</i><strong>dle</strong></p>';
+      page(h, v); key(h, 'Enter'); const a = v.flow.firstChild, b = v.flow.lastChild;
+      b.insertBefore(b.querySelector('i'), b.querySelector('em'));
+      if (changedBlock) b.append(h.w.document.createTextNode(' changed'));
+      v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p>'); h.scrolls.length = 0; await rescan(h);
+      assert.equal(h.count(), changedBlock ? '2/3' : '3/3');
+      assert.ok((changedBlock ? a : b).contains(current(h).startContainer)); assert.equal(h.scrolls.length, 0);
+    } finally { await h.finish(); }
+  });
+}

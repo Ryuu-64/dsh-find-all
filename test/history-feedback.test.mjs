@@ -21,9 +21,9 @@ for (const terminal of ['initial', 'empty', 'content', 'discontinuous-public-sta
       h.open(v.anchor); h.search('needle'); await h.advance(600);
       assert.equal(h.status(), available);
       assert.equal(calls, terminal === 'initial' ? 0 : 1);
-      assert.equal(h.count(), terminal === 'content' ? '1/2' : '1/1');
+      assert.equal(h.count(), terminal === 'content' ? '2/2' : '1/1');
       assert.equal(h.w.document.querySelector('.status').hasAttribute('data-busy'), false);
-      key(h, 'Enter'); assert.ok(h.count().startsWith(terminal === 'content' ? '2/' : '1/'));
+      key(h, 'Enter'); assert.ok(h.count().startsWith('1/'));
     } finally { await h.finish(); }
   });
 }

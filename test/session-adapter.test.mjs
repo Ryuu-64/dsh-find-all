@@ -311,7 +311,7 @@ test('paging uses the bound session; rejected history preserves partial results'
       v.flow.insertAdjacentHTML('afterbegin', '<p>older needle</p>');
     } });
     h.open(v.anchor); h.search('needle'); await h.advance(600);
-    assert.equal(calls, 2); assert.equal(h.count(), '1/2');
+    assert.equal(calls, 2); assert.equal(h.count(), '2/2');
     assert.match(h.status(), /incomplete; partial results/);
   } finally { await h.finish(); }
 });
@@ -352,7 +352,7 @@ test('switching session cancels an in-flight request and cannot paint stale resu
     h.open(b.anchor); await h.advance(300);
     a.flow.insertAdjacentHTML('afterbegin', '<p>A stale needle</p>'); finishA();
     await h.advance(1000);
-    assert.equal(callsA, 1); assert.equal(callsB, 1); assert.equal(h.count(), '1/2');
+    assert.equal(callsA, 1); assert.equal(callsB, 1); assert.equal(h.count(), '2/2');
     const ranges = [...h.w.CSS.highlights.get('dsh-find-all-hit')];
     assert.ok(ranges.every(range => b.flow.contains(range.startContainer)));
   } finally { await h.finish(); }

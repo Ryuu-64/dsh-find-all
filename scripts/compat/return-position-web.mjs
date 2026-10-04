@@ -156,6 +156,20 @@ try {
     window.__returnInputEvidence = [];
     window.__hostTurnInputEvidence = [];
     window.__untrustedReadingEvents = [];
+    window.__returnSelectionEvidence = [];
+    window.__recordReturnSelection = (type, target) => {
+      const describe = node => node instanceof Element ? { tag: node.tagName, role: node.getAttribute('role'),
+        label: node.getAttribute('aria-label'), phase: node.getAttribute('data-phase'),
+        session: node.closest('[data-conversation-session]')?.getAttribute('data-conversation-session') ?? null,
+        header: node.getAttribute('data-find-all-session'), inFind: !!node.closest('#dsh-find-all-root') } : null;
+      const visible = node => node.getClientRects().length && !Array.from((function* () { for (let n = node; n; n = n.parentElement) yield n; })())
+        .some(n => n.hidden || n.getAttribute('aria-hidden') === 'true' || ['none'].includes(getComputedStyle(n).display) || ['hidden', 'collapse'].includes(getComputedStyle(n).visibility) || getComputedStyle(n).opacity === '0');
+      const groups = Object.fromEntries(Object.entries({ headers: '[data-find-all-session]', panels: '[data-phase]', flows: '[data-chat-flow]' })
+        .map(([name, selector]) => { const nodes = [...document.querySelectorAll(selector)].filter(visible); return [name, { count: nodes.length, identities: nodes.map(describe) }]; }));
+      window.__returnSelectionEvidence.push({ type, target: describe(target), activeElement: describe(document.activeElement), ...groups });
+      if (window.__returnSelectionEvidence.length > 80) window.__returnSelectionEvidence.shift();
+    };
+    for (const type of ['focusin', 'pointerdown']) document.addEventListener(type, event => window.__recordReturnSelection(type, event.target), true);
     for (const type of ['wheel', 'pointerdown', 'beforematch', 'touchstart', 'keydown']) document.addEventListener(type, event => {
       if (!event.isTrusted) window.__untrustedReadingEvents.push({ type, key: event.key ?? null });
     }, true);

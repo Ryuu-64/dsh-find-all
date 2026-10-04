@@ -176,6 +176,7 @@ async function witnessForMarker(page, marker) {
 }
 
 async function startSearch(page, label, whole, origin) {
+  if (label === 'MULTIWINDOW') await page.evaluate(() => window.__recordReturnSelection('before-find', document.activeElement));
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible' });
@@ -526,5 +527,10 @@ async function exerciseWindowIsolation(page, capture, reports) {
     record.result = 'failed'; record.error = String(error);
     try { await capture('multiwindow-first-failure', page); } catch {}
     if (other) try { await capture('multiwindow-second-failure', other); } catch {}
-  } finally { await other?.close(); }
+  } finally {
+    for (const [name, target] of [['firstSelectionEvidence', page], ['secondSelectionEvidence', other]]) {
+      if (target) try { record[name] = await target.evaluate(() => { window.__recordReturnSelection('case-end', document.activeElement); return window.__returnSelectionEvidence; }); } catch {}
+    }
+    await other?.close();
+  }
 }

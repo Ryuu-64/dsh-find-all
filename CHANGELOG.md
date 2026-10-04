@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a draft return-to-reading-position feature for Issue #15. Capture one semantic content/text position per find opening, preserve the query, verify actual visible landings, and bound/cancel recovery work. This feature remains pending real Web and Desktop acceptance; no release version or support declaration is changed.
+
 ## 0.1.6
 
 Fix text matching, history feedback and search state after the 0.1.5 compatibility release.

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { captureInitialSelection, assertRetainedSelection, assertCompleteFixtureRanges, assertSelectedFixtureToken } from './selection-proof.mjs';
 
 export async function seedHistory(runtimeRequire, home, workspace, { sidebarChild = false } = {}) {
   const load = name => import(pathToFileURL(runtimeRequire.resolve(name)).href);
@@ -179,10 +180,51 @@ export async function exerciseHistory(page, home, queryPath, capture, version, p
     await anchor.waitFor({ state: 'visible' });
     return anchor;
   }
+  const availableStatus = 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed';
+  const selectionEvidence = [];
+  async function verifyWholeHistory(label, bar, { firstMatchFromZero = false } = {}) {
+    if (await bar.locator('.scope').innerText() !== 'Page') await bar.locator('.scope').click();
+    if (firstMatchFromZero) {
+      const query = `FIND_ALL_${label}_USER_001`;
+      assert.equal((await page.locator('[data-chat-flow]').innerText()).includes(query), false, 'oldest unique match must initially be unloaded');
+      await bar.locator('input').fill(query);
+      await eventually(() => bar.locator('.count').innerText(), '0/0', 'unloaded-only query starts with zero matches');
+      assert.equal(await page.evaluate(() => [...(CSS.highlights.get('dsh-find-all-cur') || [])].length), 0);
+      await bar.locator('.scope').click();
+      await eventually(() => bar.locator('.status').innerText(), availableStatus, 'first-match paging completes explicitly', 60_000);
+      await eventually(() => bar.locator('.count').innerText(), '1/1', 'first newly loaded match is selected', 60_000);
+      await page.evaluate(assertSelectedFixtureToken, { label, query, marker: 1, total: 1 });
+      selectionEvidence.push({ label, transition: 'zero-to-first-loaded-match', marker: 1, count: '1/1' });
+      await bar.locator('.scope').click();
+    }
+    const query = `FIND_ALL_${label}_USER_`;
+    const initial = (await page.locator('[data-chat-flow]').innerText()).split(query).length - 1;
+    assert.ok(initial > 0 && initial <= 80, 'known fixture history must be visible');
+    await bar.locator('input').fill(query);
+    await eventually(() => bar.locator('.count').innerText(), `1/${initial}`, 'Page search initially selects the first rendered hit');
+    const saved = await page.evaluateHandle(captureInitialSelection, { label, query });
+    try {
+      const marker = await saved.evaluate(value => value.marker);
+      await bar.locator('.scope').click();
+      await eventually(() => bar.locator('.status').innerText(), availableStatus, 'successful completion must be explicit', 60_000);
+      await eventually(() => bar.locator('.count').innerText(), `${marker}/80`, 'paging preserves the exact original match after prepend', 60_000);
+      assert.equal(await page.evaluate(assertCompleteFixtureRanges, { label, query }), 80);
+      assert.equal(await page.evaluate(assertRetainedSelection, saved), marker);
+      const next = marker % 80 + 1;
+      await page.keyboard.press('F3');
+      assert.equal(await bar.locator('.count').innerText(), `${next}/80`);
+      await page.evaluate(assertSelectedFixtureToken, { label, query, marker: next, total: 80 });
+      await page.keyboard.press('Shift+F3');
+      assert.equal(await bar.locator('.count').innerText(), `${marker}/80`);
+      assert.equal(await page.evaluate(assertRetainedSelection, saved), marker);
+      selectionEvidence.push({ label, transition: 'preserved-current-match', initialTotal: initial, marker, count: `${marker}/80`, exactTextIdentity: 'passed', navigation: 'passed' });
+    } finally { await saved.dispose(); }
+  }
   const visited = new Set();
   for (const label of ['A', 'B', 'A']) {
     const anchor = await openSession(label);
-    if (!visited.has(label)) {
+    const firstVisit = !visited.has(label);
+    if (firstVisit) {
       const rendered = await page.locator('[data-chat-flow]').innerText();
       const initial = rendered.split(`FIND_ALL_${label}_USER_`).length - 1;
       assert.ok(initial > 0 && initial < 80, 'fixture must start partially loaded to test actual paging');
@@ -196,18 +238,11 @@ export async function exerciseHistory(page, home, queryPath, capture, version, p
       await page.keyboard.press('Control+f');
     } else await anchor.click();
     const bar = page.locator('#dsh-find-all-root');
-    await bar.locator('input').fill(`FIND_ALL_${label}_USER_`);
-    if (await bar.locator('.scope').innerText() === 'Page') await bar.locator('.scope').click();
-    await eventually(() => bar.locator('.count').innerText(), '1/80', 'whole history must be scoped and completely paged', 60_000);
-    await eventually(() => bar.locator('.status').innerText(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed', 'successful completion must be explicit', 60_000);
-    const ranges = await page.evaluate(() => [...(CSS.highlights.get('dsh-find-all-hit') || [])].map(range => range.toString()));
-    assert.equal(ranges.length, 80);
-    assert.ok(ranges.every(text => text === `FIND_ALL_${label}_USER_`));
-    await page.keyboard.press('F3');
-    assert.equal(await bar.locator('.count').innerText(), '2/80');
-    await page.keyboard.press('Shift+F3');
-    assert.equal(await bar.locator('.count').innerText(), '1/80');
+    await verifyWholeHistory(label, bar, { firstMatchFromZero: label === 'B' && firstVisit });
     await capture(`history-${label}`);
+    // Do not let reopening the retained query pre-load the next session before
+    // its explicit Page-scope selection snapshot has been taken.
+    await bar.locator('.scope').click();
     await page.keyboard.press('Escape');
   }
   // Old official HMR clients deliberately ignore graph frames. A fresh SSE
@@ -257,11 +292,12 @@ export async function exerciseHistory(page, home, queryPath, capture, version, p
       assert.equal(await page.locator('[data-find-all-session]').count(), 1);
       await page.locator('[data-find-all-session]').click();
       assert.equal(await page.locator('#dsh-find-all-root').count(), 1);
-      await page.locator('#dsh-find-all-root input').fill('FIND_ALL_A_USER_');
-      await eventually(() => page.locator('#dsh-find-all-root .count').innerText(), '1/80', 'find works once after re-enable');
+      const bar = page.locator('#dsh-find-all-root');
+      await verifyWholeHistory('A', bar);
+      await bar.locator('.scope').click();
       await page.keyboard.press('Escape');
     }
     assert.equal(navigations, refreshRequired ? 4 : 0, 'only legacy lifecycle may require explicit page reloads');
   } finally { page.off('framenavigated', navigation); }
-  return { histories: ['A', 'B', 'A'], firstBodyShortcutWithoutAnchorClick: 'passed', turnsPerSession: 80, nativeHotUnload: refreshRequired ? 'unsupported-by-host' : 'passed', hotCycles: refreshRequired ? 0 : 2, refreshCycles: refreshRequired ? 2 : 0 };
+  return { histories: ['A', 'B', 'A'], firstBodyShortcutWithoutAnchorClick: 'passed', turnsPerSession: 80, selectionEvidence, nativeHotUnload: refreshRequired ? 'unsupported-by-host' : 'passed', hotCycles: refreshRequired ? 0 : 2, refreshCycles: refreshRequired ? 2 : 0 };
 }

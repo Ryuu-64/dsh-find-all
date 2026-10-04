@@ -126,7 +126,7 @@ const server = spawn(process.execPath, [bin, '--profile', 'web', '--patch', over
 server.stdout.on('data', data => serverLog += data);
 server.stderr.on('data', data => serverLog += data);
 const report = { version, artifactSha256, seeds, bootstrap: 'pending', returnPosition: 'not-run', desktop: 'not-run' };
-let browser, page;
+let browser, context, page;
 try {
   let url;
   for (let second = 0; second < 180; second++) {
@@ -147,7 +147,8 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   browser = await chromium.launch({ headless: true, ...(process.env.FIND_ALL_CHROMIUM ? { executablePath: process.env.FIND_ALL_CHROMIUM } : {}) });
-  page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
+  context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
+  page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.context().on('page', opened => opened.on('pageerror', error => errors.push(error.message)));
@@ -210,6 +211,7 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  await context?.close();
   await browser?.close();
   server.kill('SIGTERM');
   await new Promise(resolve => setTimeout(resolve, 500));

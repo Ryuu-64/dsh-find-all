@@ -169,6 +169,7 @@ try {
     await configureLater.click();
     await configureLater.waitFor({ state: 'hidden' });
   }
+  await page.addLocatorHandler(configureLater, async () => { await configureLater.click(); });
   report.bootstrap = 'passed';
   const capture = name => captureSafePage(page, path.join(output, name), secrets, redact);
   report.cases = await exerciseReturnPosition(page, capture);

@@ -20,11 +20,13 @@ import { fileURLToPath } from 'node:url';
 import { setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { disableFixtureInstallScripts, installThroughDesktopUi } from './desktop-plugin-install.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
+import { observeDesktopCatalog } from './desktop-catalog-readiness.mjs';
+import { prepareElectronInstrumentation } from './electron-instrumentation.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { runOwnedCommand } from './owned-command.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
 import { resolveReleaseArtifact } from './release-artifact.mjs';
-let electron;
+let electron, qaChromium;
 import { createRedactor, captureSafePage } from './evidence.mjs';
 
 const [artifactArg, outputArg, requestedVersion] = process.argv.slice(2);
@@ -79,6 +81,7 @@ let appOutput = '';
 const chromiumLogs = [];
 const children = new Set();
 const observedPages = new WeakSet();
+const observedCatalogs = new WeakMap();
 let observedPageCount = 0;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function stopOwnedProcessTree(child) {
@@ -144,6 +147,10 @@ function attachPage(candidate) {
   observedPages.add(candidate);
   const pageId = ++observedPageCount;
   const launchRecord = report.launches.at(-1);
+  const catalog = observeDesktopCatalog(candidate);
+  observedCatalogs.set(candidate, catalog);
+  report.catalogReadiness ??= [];
+  report.catalogReadiness.push({ launchUtc: launchRecord.startUtc, pageId, requests: catalog.evidence });
   candidate.setDefaultTimeout(30_000);
   candidate.on('pageerror', error => report.browserErrors.push(redact(error.message)));
   candidate.on('console', message => {
@@ -181,7 +188,10 @@ async function loadPlaywright() {
     playwrightLog = path.join(installation.runDirectory, 'playwright-early.log');
     process.env.DEBUG = 'pw:browser';
     process.env.DEBUG_FILE = playwrightLog;
-    ({ _electron: electron } = await import('playwright'));
+    const instrumentation = await prepareElectronInstrumentation(path.join(installation.runDirectory, 'playwright-electron-qa'));
+    electron = instrumentation._electron;
+    qaChromium = instrumentation.chromium;
+    report.electronInstrumentation = instrumentation.evidence;
   }
 }
 async function launch() {
@@ -313,9 +323,19 @@ async function finishKnownOnboarding({ pluginExpected = true } = {}) {
     readySince ??= Date.now();
     return Date.now() - readySince >= 2000;
   }, 'Workspace onboarding or plugin loading did not finish; no unknown prompts were accepted');
+  await waitForNativeCatalog();
 }
-async function quit() {
+async function waitForNativeCatalog() {
+  assert.ok(page && !page.isClosed(), 'native catalog readiness requires the actual workspace Page');
+  const catalog = observedCatalogs.get(page);
+  assert.ok(catalog, 'workspace catalog request observer was not installed');
+  await until(() => catalog.ready(), 'Original native application catalog did not complete; no synthetic probe or fixed-delay readiness fallback');
+}
+async function quit({ requireCatalog = true } = {}) {
   if (!app) return;
+  // Wait for the host's finite startup request before a planned native quit.
+  // app.quit, renderer transports, raw errors and strict gates remain unchanged.
+  if (requireCatalog && page?.url().startsWith('dsh-app://app/')) await waitForNativeCatalog();
   const closing = app;
   const launchRecord = report.launches.at(-1);
   launchRecord.phase = 'closing';
@@ -411,7 +431,7 @@ try {
   // Preserve DEBUG_FILE initialization before the fixture first loads Playwright.
   await loadPlaywright();
   const { verifyDesktopReadinessFixture } = await import('./desktop-readiness-fixture.mjs');
-  report.readinessFixture = await verifyDesktopReadinessFixture();
+  report.readinessFixture = await verifyDesktopReadinessFixture(qaChromium);
   setStage('prepare-startup-diagnostics');
   diagnostics = await startDiagnostics(installation, env, redact);
   // Controlled reproduction of the user report: same executable, DSH_HOME,
@@ -551,7 +571,7 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  try { await quit(); }
+  try { await quit({ requireCatalog: false }); }
   catch (error) {
     report.status = 'failed'; report.shutdownError = redact(error.message); process.exitCode = 1;
     // Stop only this test's owned process, never any unrelated installed app.

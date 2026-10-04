@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
 import { verifyDesktopPluginInstallFixture } from './desktop-plugin-install-fixture.mjs';
 import { workspaceControlsVisible } from './desktop-readiness.mjs';
 
@@ -7,7 +6,10 @@ import { workspaceControlsVisible } from './desktop-readiness.mjs';
 // No private CSS names: only its actual roles, aria labels, shortcut and text.
 const brand = '<div data-window-drag><button type="button" aria-label="New session" aria-keyshortcuts="Control+N"><span aria-hidden="true">DeepSeek</span></button></div>';
 const ordinary = '<button type="button" aria-label="New session" aria-keyshortcuts="Control+N"><span>New Session</span><span aria-hidden="true">Ctrl+N</span></button>';
-export async function verifyDesktopReadinessFixture() {
+export async function verifyDesktopReadinessFixture(chromium) {
+  // Use the caller's runtime so a second Playwright debug logger cannot open
+  // and truncate the same early-launch evidence file.
+  assert.equal(typeof chromium?.launch, 'function', 'supply the same QA runtime used by the Electron smoke');
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();

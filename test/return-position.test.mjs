@@ -268,3 +268,17 @@ test('inline token replacement preserves whitespace and the same semantic text p
     assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
   } finally {await h.finish();}
 });
+
+test('an explicitly removed host session invalidates the return point without closing find', async () => {
+  const h = await reader();
+  try {
+    const state = snapshot({hasMore: false, removed: false});
+    h.faces.set('a', {getSnapshot: () => state, loadOlder() {assert.fail('removed session must not load');}});
+    h.openReader(); h.search('needle'); await h.advance(200); state.removed = true;
+    h.button().click(); await h.advance(0); await h.advance(1000);
+    assert.match(h.status(), /original content is no longer available/);
+    assert.equal(h.button().disabled, true);
+    assert.notEqual(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
+    assert.equal(h.scroll.scrollTop, 1320);
+  } finally {await h.finish();}
+});

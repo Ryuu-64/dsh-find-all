@@ -168,6 +168,7 @@ async function witnessForMarker(page, marker) {
       return { anchorKey: row.dataset.chatAnchorKey, nodeKey: row.dataset.chatNodeKey,
         offset: offset + local, marker: needle, top: rect.top - scroll.getBoundingClientRect().top,
         scrollTop: scroll.scrollTop, distanceFromBottom: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
+        paragraphHeight: text.parentElement.closest('p')?.getBoundingClientRect().height ?? null,
         paragraph: text.parentElement.closest('p')?.textContent ?? text.data };
     }
     throw new Error(`Marker not mounted: ${needle}`);
@@ -236,9 +237,11 @@ export async function exerciseReturnPosition(page, capture) {
         record.nativePage = { beforeRows, afterRows: await page.locator('[data-chat-node-key]').count(),
           completedBeforeReturn: true };
       } else if (mode === 'Enter') {
-        await page.setViewportSize({ width: 1120, height: 900 });
+        await page.setViewportSize({ width: 900, height: 900 });
         await page.waitForTimeout(250);
-        record.reflow = { beforeWidth: 1400, afterWidth: 1120 };
+        const wrapped = await witnessForMarker(page, record.before.marker);
+        record.reflow = { beforeWidth: 1400, afterWidth: 900, beforeHeight: record.before.paragraphHeight, afterHeight: wrapped.paragraphHeight };
+        assert.ok(wrapped.paragraphHeight > record.before.paragraphHeight, 'narrowing must actually reflow the origin paragraph');
       }
       await capture(`${label.toLowerCase()}-before-return`);
       const inputStart = await page.evaluate(() => window.__returnInputEvidence.length);
@@ -271,15 +274,16 @@ export async function exerciseReturnPosition(page, capture) {
     // Open find directly while the host owns bottom following. Choose a real
     // visible live paragraph as an independent Range witness; do not wheel or
     // click the transcript first, since that would already cancel tail intent.
-    const liveMarker = await page.locator('[data-chat-flow]').first().evaluate(flow => {
+    const liveMarker = await eventually(() => page.locator('[data-chat-flow]').first().evaluate(flow => {
       const top = flow.closest('[data-conversation-scroll]').getBoundingClientRect().top;
       for (const paragraph of flow.querySelectorAll('p')) {
         const marker = paragraph.textContent.match(/RETURN_LIVE_\d{3}/)?.[0];
         const rect = paragraph.getBoundingClientRect();
-        if (marker && rect.top >= top && rect.top < top + 200) return marker;
+        const row = paragraph.closest('[data-chat-node-key]');
+        if (marker && row?.getBoundingClientRect().top <= top && rect.top >= top && rect.top < top + 48) return marker;
       }
       return null;
-    });
+    }), marker => marker !== null, 'live output must fill the reading line', 10_000);
     assert.ok(liveMarker, 'live stream must have a stable visible paragraph witness');
     stream.before = await witnessForMarker(page, liveMarker);
     await page.keyboard.press('Control+f');
@@ -299,7 +303,7 @@ export async function exerciseReturnPosition(page, capture) {
         && ranges.some(range => [...range.getClientRects()].some(rect => rect.bottom > viewport.top && rect.top < viewport.bottom));
     });
     assert.ok(stream.searchHeldAwayFromTail, 'search navigation must cancel existing bottom-follow intent');
-    await page.setViewportSize({ width: 1120, height: 900 });
+    await page.setViewportSize({ width: 900, height: 900 });
     await activateReturn(page, bar, 'pointer');
     stream.return = await settledResult(page, bar, stream.before);
     const firstReturn = stream.return.after;

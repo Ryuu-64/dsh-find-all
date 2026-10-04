@@ -257,3 +257,14 @@ test('host busy state is awaited without a concurrent history request', async ()
     assert.equal(h.button().disabled, false);
   } finally {await h.finish();}
 });
+
+test('inline token replacement preserves whitespace and the same semantic text position', async () => {
+  const h = await reader();
+  try {
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.v.flow.firstChild.children[1].innerHTML = '<span>original</span> <em>reading</em> <strong>paragraph</strong>';
+    h.button().click(); await h.advance(0); await h.advance(1200);
+    assert.equal(h.scroll.scrollTop, 440);
+    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
+  } finally {await h.finish();}
+});

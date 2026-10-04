@@ -199,7 +199,7 @@ export async function exerciseHistory(page, home, queryPath, capture, version, p
     await bar.locator('input').fill(`FIND_ALL_${label}_USER_`);
     if (await bar.locator('.scope').innerText() === 'Page') await bar.locator('.scope').click();
     await eventually(() => bar.locator('.count').innerText(), '1/80', 'whole history must be scoped and completely paged', 60_000);
-    await eventually(() => bar.locator('.status').innerText(), 'Whole conversation loaded', 'successful completion must be explicit', 60_000);
+    await eventually(() => bar.locator('.status').innerText(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed', 'successful completion must be explicit', 60_000);
     const ranges = await page.evaluate(() => [...(CSS.highlights.get('dsh-find-all-hit') || [])].map(range => range.toString()));
     assert.equal(ranges.length, 80);
     assert.ok(ranges.every(text => text === `FIND_ALL_${label}_USER_`));

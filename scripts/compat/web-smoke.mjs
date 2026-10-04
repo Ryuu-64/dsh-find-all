@@ -10,15 +10,19 @@ import { chromium } from 'playwright';
 import { seedHistory, setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { createRedactor, captureSafePage } from './evidence.mjs';
 import { npmCommand } from './npm-command.mjs';
+import { resolveReleaseArtifact } from './release-artifact.mjs';
 const secrets = new Set();
 const redact = createRedactor(secrets);
 
 const [version, artifactArg, outputArg] = process.argv.slice(2);
 const versions = Object.keys(JSON.parse(fs.readFileSync(new URL('./vendor-versions.json', import.meta.url))));
 assert.ok(versions.includes(version), 'use an explicit acceptance target');
-const artifact = path.resolve(artifactArg);
+const candidateArtifact = resolveReleaseArtifact(artifactArg);
+const artifact = candidateArtifact.path;
+console.log('Verified release candidate:', JSON.stringify(candidateArtifact));
 const output = path.resolve(outputArg);
 fs.mkdirSync(output, { recursive: true });
+fs.writeFileSync(path.join(output, 'candidate-artifact.json'), JSON.stringify(candidateArtifact, null, 2));
 const hash = () => createHash('sha256').update(fs.readFileSync(artifact)).digest('hex');
 const artifactSha256 = hash();
 const run = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || '/tmp', 'find-all-web-'));
@@ -130,7 +134,7 @@ const server = spawn(process.execPath, [bin, '--profile', 'web', '--no-open', '-
 server.stdout.on('data', data => serverLog += data);
 server.stderr.on('data', data => serverLog += data);
 let browser, page;
-const report = { version, artifactSha256, bootstrap: 'pending', syntheticHistory: 'not-run', desktop: 'not-run' };
+const report = { version, artifactSha256, candidateArtifact, bootstrap: 'pending', syntheticHistory: 'not-run', desktop: 'not-run' };
 try {
   let url;
   for (let elapsed = 0; elapsed < 180; elapsed++) {

@@ -23,12 +23,15 @@ import { workspaceControlsVisible } from './desktop-readiness.mjs';
 import { classifyDesktopConsole } from './desktop-console.mjs';
 import { runOwnedCommand } from './owned-command.mjs';
 import { startDiagnostics } from './windows-diagnostics.mjs';
+import { resolveReleaseArtifact } from './release-artifact.mjs';
 let electron;
 import { createRedactor, captureSafePage } from './evidence.mjs';
 
 const [artifactArg, outputArg, requestedVersion] = process.argv.slice(2);
 assert.ok(artifactArg && outputArg, 'usage: windows-smoke.mjs <candidate.tgz> <evidence-directory>');
-const artifact = path.resolve(artifactArg);
+const candidateArtifact = resolveReleaseArtifact(artifactArg);
+const artifact = candidateArtifact.path;
+console.log('Verified release candidate:', JSON.stringify(candidateArtifact));
 const output = path.resolve(outputArg);
 fs.mkdirSync(output, { recursive: true });
 const resultPath = path.join(output, 'desktop-result.json');
@@ -48,7 +51,7 @@ function redact(value) {
 }
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const report = {
-  schemaVersion: 1, target: 'windows-x64-installed-electron', version,
+  schemaVersion: 1, target: 'windows-x64-installed-electron', version, candidateArtifact,
   sourceTag: `dsh-v${version}`, status: 'pending', stage: 'preflight',
   bootstrap: 'not-run', emptySessionFind: 'not-run', syntheticHistory: 'not-run',
   desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [], consoleEvents: [], networkFailures: [],
@@ -458,6 +461,7 @@ try {
   const profile = path.join(env.DSH_HOME, 'profiles', 'desktop');
   const plugin = JSON.parse(fs.readFileSync(path.join(profile, 'node_modules', '@ryuu-64', 'dsh-find-all', 'package.json'), 'utf8'));
   assert.equal(plugin.name, packageName);
+  assert.equal(plugin.version, candidateArtifact.version);
   report.installedPlugin = { name: plugin.name, version: plugin.version };
   report.testedScope.push(`same candidate tgz installed through ${report.pluginInstallation.method}; scripts disabled, no version exemptions`);
   setStage('reopen-installed-plugin');

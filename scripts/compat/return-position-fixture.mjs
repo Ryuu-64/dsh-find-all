@@ -24,7 +24,7 @@ export async function seedReturnHistory(runtimeRequire, home, workspace) {
   const summaries = [];
   try {
     await ctx.plugin(Jsonl, { root: path.join(home, '.dsh', 'sessions') });
-    for (const label of [...CASES.map(item => item[0]), 'STREAM']) {
+    for (const label of [...CASES.map(item => item[0]), 'STREAM', 'REPEATED', 'CANCEL_WHEEL', 'CANCEL_QUERY', 'CANCEL_ESCAPE', 'MULTIWINDOW']) {
       const id = SessionId(sessionId(label));
       const session = Session.create(id);
       for (let turn = 1; turn <= 80; turn++) {
@@ -256,9 +256,13 @@ export async function exerciseReturnPosition(page, capture) {
       }
       await capture(`${label.toLowerCase()}-before-return`);
       const inputStart = await page.evaluate(() => window.__returnInputEvidence.length);
+      const hostInputStart = await page.evaluate(() => window.__hostTurnInputEvidence.length);
       await activateReturn(page, bar, mode);
       record.return = await settledResult(page, bar, record.before);
       record.inputEvents = await page.evaluate(start => window.__returnInputEvidence.slice(start), inputStart);
+      record.hostTurnEvents = await page.evaluate(start => window.__hostTurnInputEvidence.slice(start), hostInputStart);
+      if (nativePaging && record.return.hidden) assert.ok(record.hostTurnEvents.some(event => !event.trusted),
+        'plugin should normally click the host Turn control; this is programmatic, not a trusted reading event');
       assert.ok(record.inputEvents.some(event => event.type === 'click' && event.trusted), 'return must receive a trusted browser click');
       assert.ok(record.inputEvents.every(event => !event.insideScrollport), 'fixture return control must be outside the host scrollport');
       await capture(`${label.toLowerCase()}-after-return`);
@@ -346,5 +350,181 @@ export async function exerciseReturnPosition(page, capture) {
     stream.result = 'failed'; stream.error = String(error);
     try { await capture('stream-failure'); } catch {}
   }
+  await exerciseRepeatedReturn(page, capture, reports);
+  for (const mode of ['WHEEL', 'QUERY', 'ESCAPE']) await exerciseReturnCancellation(page, capture, reports, mode);
+  await exerciseWindowIsolation(page, capture, reports);
   return reports;
+}
+
+function assertReturned(result) {
+  assert.ok(result.hidden, `return finishes visibly: ${result.status}`);
+  assert.ok(result.sameAnchor && result.sameParagraph, 'return retains semantic node, paragraph, and offset');
+  assert.ok(Math.abs(result.geometryDelta) <= 4, `return geometry delta ${result.geometryDelta}`);
+}
+
+async function nativePage(page) {
+  const beforeRows = await page.locator('[data-chat-node-key]').count();
+  await page.getByRole('button', { name: 'Load earlier', exact: true }).click();
+  await eventually(() => page.locator('[data-chat-node-key]').count(), n => n > beforeRows, 'native page grows Chat');
+  await page.waitForTimeout(700);
+  return { beforeRows, afterRows: await page.locator('[data-chat-node-key]').count() };
+}
+
+async function exerciseRepeatedReturn(page, capture, reports) {
+  const record = { case: 'REPEATED', result: 'pending', cycles: [] };
+  reports.push(record);
+  try {
+    await openSession(page, 'REPEATED');
+    for (const paragraph of [16, 27]) {
+      const before = await positionParagraph(page, paragraphMarker('REPEATED', paragraph));
+      const bar = await startSearch(page, 'REPEATED', false, before);
+      const native = await nativePage(page);
+      const eventStart = await page.evaluate(() => window.__hostTurnInputEvidence.length);
+      await activateReturn(page, bar, 'pointer');
+      const result = await settledResult(page, bar, before);
+      const hostTurnEvents = await page.evaluate(start => window.__hostTurnInputEvidence.slice(start), eventStart);
+      record.cycles.push({ before, native, return: result, hostTurnEvents });
+      assertReturned(result);
+      assert.ok(hostTurnEvents.some(event => !event.trusted && event.owningSessionId === sessionId('REPEATED')), 'programmatic Turn click belongs to this session view');
+    }
+    await capture('repeated-return');
+    record.result = 'passed';
+  } catch (error) {
+    record.result = 'failed'; record.error = String(error);
+    try { await capture('repeated-failure'); } catch {}
+  }
+}
+
+// Delay the real older-page RPC only; no response data or Chat objects are
+// substituted. This is the official upstream browser fixture's gate:
+// https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/apps/web/tests/chat-scroll-contract.e2e.ts#L606-L625
+async function holdOlderPage(page) {
+  let held = false, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const handler = async route => {
+    const request = route.request().postDataJSON();
+    if (!held && request?.method === 'session/page' && request.payload?.args?.request?.beforeSeq !== undefined) {
+      held = true;
+      await gate;
+    }
+    await route.continue();
+  };
+  await page.route('**/api/session/page', handler);
+  return { get held() { return held; }, release, close: async () => { release(); await page.unroute('**/api/session/page', handler); } };
+}
+
+async function visibleFixtureWitness(page) {
+  const marker = await page.locator('[data-chat-flow]').first().evaluate(flow => {
+    const scroll = flow.closest('[data-conversation-scroll]');
+    const viewport = scroll.getBoundingClientRect();
+    const bottom = scroll.querySelector('[data-composer-seat]')?.getBoundingClientRect().top ?? viewport.bottom;
+    const walker = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
+    let text, best = null;
+    while ((text = walker.nextNode())) {
+      const match = /RETURN_[A-Z_]+_(?:USER_\d{3}|REPLY_\d{3}|PARAGRAPH_\d{2})/.exec(text.data);
+      if (!match || !text.parentElement.closest('[data-chat-node-key]')) continue;
+      const range = document.createRange(); range.setStart(text, match.index); range.setEnd(text, match.index + 1);
+      const rect = range.getBoundingClientRect();
+      if (rect.bottom <= viewport.top + 1 || rect.top >= bottom || rect.width <= 0) continue;
+      const distance = Math.abs(rect.top - viewport.top);
+      if (!best || distance < best.distance) best = { marker: match[0], distance };
+    }
+    return best?.marker ?? null;
+  });
+  assert.ok(marker, 'cancellation leaves a real identifiable visible passage');
+  return witnessForMarker(page, marker);
+}
+
+async function exerciseReturnCancellation(page, capture, reports, mode) {
+  const label = `CANCEL_${mode}`;
+  const record = { case: label, result: 'pending' };
+  reports.push(record);
+  let gate;
+  try {
+    await openSession(page, label);
+    record.origin = await positionParagraph(page, paragraphMarker(label, 20));
+    const bar = await startSearch(page, label, false, record.origin);
+    const beforeRows = await page.locator('[data-chat-node-key]').count();
+    gate = await holdOlderPage(page);
+    await page.getByRole('button', { name: 'Load earlier', exact: true }).click();
+    await eventually(() => gate.held, yes => yes, 'real older RPC held');
+    await activateReturn(page, bar, 'pointer');
+    await eventually(() => bar.locator('.status').innerText(), text => text === 'Returning…', 'return actually entered waiting state', 5000);
+    assert.equal(await bar.locator('[data-find-all-return]').isEnabled(), false, 'return is pending');
+    record.cancelledWhile = 'Returning… with real session/page RPC pending';
+    if (mode === 'WHEEL') {
+      const box = await page.locator('[data-conversation-scroll]').boundingBox();
+      await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.35);
+      await page.mouse.wheel(0, 180);
+      await eventually(() => bar.locator('.status').innerText(), text => text === 'Return cancelled', 'wheel cancels return');
+    } else if (mode === 'QUERY') await bar.locator('input').fill(userMarker(label, 78));
+    else await page.keyboard.press('Escape');
+    await page.waitForTimeout(700);
+    record.atCancel = await visibleFixtureWitness(page);
+    const clicksAfterCancel = await page.evaluate(() => window.__hostTurnInputEvidence.length);
+    gate.release();
+    await eventually(() => page.locator('[data-chat-node-key]').count(), n => n > beforeRows, 'cancelled return does not block shared host paging');
+    await page.waitForTimeout(1200);
+    record.afterLatePage = await witnessForMarker(page, record.atCancel.marker);
+    record.lateTurnEvents = await page.evaluate(start => window.__hostTurnInputEvidence.slice(start), clicksAfterCancel);
+    record.barVisible = await bar.isVisible();
+    record.query = await bar.locator('input').inputValue();
+    record.session = await page.locator('[data-conversation-content][data-content-phase="active"]').getAttribute('data-conversation-session');
+    record.geometryDelta = record.afterLatePage.top - record.atCancel.top;
+    assert.equal(record.session, sessionId(label), 'late completion retains current session');
+    assert.deepEqual(record.lateTurnEvents, [], 'cancelled return cannot late-activate the host Turn control');
+    assert.equal(record.barVisible, mode !== 'ESCAPE', 'cancelled return cannot later close or reopen the bar');
+    if (mode === 'QUERY') assert.equal(record.query, userMarker(label, 78), 'new query survives late history');
+    assert.equal(record.afterLatePage.nodeKey, record.atCancel.nodeKey, 'late prepend preserves the current semantic message');
+    assert.equal(record.afterLatePage.offset, record.atCancel.offset, 'late prepend preserves the current paragraph offset');
+    assert.ok(Math.abs(record.geometryDelta) <= 4, `late history must preserve current visible passage: ${record.geometryDelta}`);
+    await capture(`${label.toLowerCase()}-after-late-page`);
+    record.result = 'passed';
+  } catch (error) {
+    record.result = 'failed'; record.error = String(error);
+    try { await capture(`${label.toLowerCase()}-failure`); } catch {}
+  } finally { await gate?.close(); }
+}
+
+async function exerciseWindowIsolation(page, capture, reports) {
+  const record = { case: 'MULTIWINDOW', result: 'pending', sameBrowserContext: true, sameSession: sessionId('MULTIWINDOW') };
+  reports.push(record);
+  let other;
+  try {
+    await openSession(page, 'MULTIWINDOW');
+    record.firstOrigin = await positionParagraph(page, paragraphMarker('MULTIWINDOW', 12));
+    const firstBar = await startSearch(page, 'MULTIWINDOW', false, record.firstOrigin);
+    other = await page.context().newPage();
+    await other.setViewportSize({ width: 1400, height: 900 });
+    await other.goto(new URL('/', page.url()).href, { waitUntil: 'load' });
+    await other.locator('style[data-plugin-css="dsh-find-all/bar.css"]').waitFor({ state: 'attached', timeout: 30_000 });
+    await openSession(other, 'MULTIWINDOW');
+    record.secondOrigin = await positionParagraph(other, paragraphMarker('MULTIWINDOW', 28));
+    const secondBar = await startSearch(other, 'MULTIWINDOW', false, record.secondOrigin);
+    const firstWhileSecondSearches = await witnessForMarker(page, record.firstOrigin.marker);
+    await activateReturn(other, secondBar, 'Space');
+    record.secondReturn = await settledResult(other, secondBar, record.secondOrigin);
+    assertReturned(record.secondReturn);
+    const firstAfterOtherReturn = await witnessForMarker(page, record.firstOrigin.marker);
+    record.firstWindowCrossDelta = firstAfterOtherReturn.top - firstWhileSecondSearches.top;
+    assert.ok(Math.abs(record.firstWindowCrossDelta) <= 4, 'second window return cannot scroll first window');
+    assert.equal(await firstBar.isVisible(), true, 'second window cannot close first window find');
+    await activateReturn(page, firstBar, 'Enter');
+    record.firstReturn = await settledResult(page, firstBar, record.firstOrigin);
+    assertReturned(record.firstReturn);
+    const secondAfterFirstReturn = await witnessForMarker(other, record.secondOrigin.marker);
+    record.secondWindowCrossDelta = secondAfterFirstReturn.top - record.secondReturn.after.top;
+    assert.ok(Math.abs(record.secondWindowCrossDelta) <= 4, 'first window return cannot scroll second window');
+    assert.notEqual(record.firstOrigin.offset, record.secondOrigin.offset, 'two windows retain different paragraphs in the same semantic node');
+    record.secondHostTurnEvents = await other.evaluate(() => window.__hostTurnInputEvidence);
+    record.secondUntrustedReadingEvents = await other.evaluate(() => window.__untrustedReadingEvents);
+    assert.deepEqual(record.secondUntrustedReadingEvents, [], 'second window receives no fabricated reading events');
+    await capture('multiwindow-first-return', page);
+    await capture('multiwindow-second-return', other);
+    record.result = 'passed';
+  } catch (error) {
+    record.result = 'failed'; record.error = String(error);
+    try { await capture('multiwindow-first-failure', page); } catch {}
+    if (other) try { await capture('multiwindow-second-failure', other); } catch {}
+  } finally { await other?.close(); }
 }

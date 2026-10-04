@@ -150,8 +150,27 @@ try {
   page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.addInitScript(() => {
+  page.context().on('page', opened => opened.on('pageerror', error => errors.push(error.message)));
+  await page.context().addInitScript(() => {
     window.__returnInputEvidence = [];
+    window.__hostTurnInputEvidence = [];
+    window.__untrustedReadingEvents = [];
+    for (const type of ['wheel', 'pointerdown', 'beforematch', 'touchstart', 'keydown']) document.addEventListener(type, event => {
+      if (!event.isTrusted) window.__untrustedReadingEvents.push({ type, key: event.key ?? null });
+    }, true);
+    document.addEventListener('click', event => {
+      const button = event.target?.closest?.('nav[aria-label="Turn navigation"] button');
+      if (button) {
+        let owner = button.parentElement;
+        while (owner && !owner.querySelector('[data-chat-flow]')) owner = owner.parentElement;
+        const flow = owner?.querySelector('[data-chat-flow]');
+        const view = flow?.closest('[data-conversation-session]');
+        window.__hostTurnInputEvidence.push({ label: button.getAttribute('aria-label'), dataIndex: button.getAttribute('data-index'),
+          trusted: event.isTrusted, owningSessionId: view?.getAttribute('data-conversation-session') ?? null,
+          sameView: !!owner && owner.contains(flow) && owner.contains(button),
+          insideScrollport: !!button.closest('[data-conversation-scroll]') });
+      }
+    }, true);
     for (const type of ['pointerdown', 'keydown', 'click']) document.addEventListener(type, event => {
       if (!event.target?.closest?.('[data-find-all-return]')) return;
       window.__returnInputEvidence.push({ type, key: event.key ?? null, trusted: event.isTrusted,
@@ -171,9 +190,12 @@ try {
   }
   await page.addLocatorHandler(configureLater, async () => { await configureLater.click(); });
   report.bootstrap = 'passed';
-  const capture = name => captureSafePage(page, path.join(output, name), secrets, redact);
+  const capture = (name, targetPage = page) => captureSafePage(targetPage, path.join(output, name), secrets, redact);
   report.cases = await exerciseReturnPosition(page, capture);
   report.inputEvidence = await page.evaluate(() => window.__returnInputEvidence);
+  report.hostTurnInputEvidence = await page.evaluate(() => window.__hostTurnInputEvidence);
+  report.untrustedReadingEvents = await page.evaluate(() => window.__untrustedReadingEvents);
+  assert.deepEqual(report.untrustedReadingEvents, [], 'no fabricated reader-input events');
   report.browserErrors = errors.map(redact);
   assert.deepEqual(errors, [], 'unhandled browser errors');
   report.returnPosition = report.cases.every(item => item.result === 'passed') ? 'passed' : 'failed';

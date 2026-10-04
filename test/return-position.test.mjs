@@ -282,3 +282,71 @@ test('an explicitly removed host session invalidates the return point without cl
     assert.equal(h.scroll.scrollTop, 1320);
   } finally {await h.finish();}
 });
+
+function turnRail(h) {
+  const flow = h.v.flow, parent = flow.parentElement;
+  const frame = h.w.document.createElement('div');
+  const root = h.w.document.createElement('div'), list = h.w.document.createElement('div');
+  parent.insertBefore(frame, flow); frame.append(root); root.append(list); list.append(flow);
+  const nav = h.w.document.createElement('nav'); nav.setAttribute('aria-label', 'Turn navigation'); frame.prepend(nav);
+  const button = h.w.document.createElement('button'); button.type = 'button'; button.dataset.index = '1';
+  button.setAttribute('aria-label', 'Jump to turn 20'); button.setAttribute('aria-current', 'true'); nav.append(button);
+  flow.children[0].dataset.chatTurn = '10'; flow.children[1].dataset.chatTurn = '20';
+  return {frame, nav, button};
+}
+
+test('return uses a scoped loaded native Turn control to release host paging before its exact landing', async () => {
+  const h = await reader();
+  try {
+    const rail = turnRail(h); let preserved = true, clicks = 0;
+    h.scroll.scrollTo = ({top}) => {if (!preserved) h.scroll.scrollTop = top;};
+    rail.button.addEventListener('click', () => {clicks++; preserved = false;});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    clicks = 0; preserved = true;
+    h.button().click(); await h.advance(0); await h.advance(1500);
+    assert.equal(clicks, 1); assert.equal(h.scroll.scrollTop, 440);
+    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
+  } finally {await h.finish();}
+});
+
+test('return waits for both the public loading state and committed disabled history control', async () => {
+  const h = await reader();
+  try {
+    const rail = turnRail(h), state = snapshot({loadingOlder: true}); let clicks = 0;
+    const older = h.w.document.createElement('div'); older.innerHTML = '<button disabled>Loading…</button>'; h.v.flow.prepend(older);
+    h.faces.set('a', {getSnapshot: () => state, loadOlder() {assert.fail('already busy');}});
+    rail.button.addEventListener('click', () => {clicks++;});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.button().click(); await h.advance(0); await h.advance(200); assert.equal(clicks, 0);
+    state.loadingOlder = false; await h.advance(200); assert.equal(clicks, 0);
+    older.firstChild.disabled = false; await h.advance(1500);
+    assert.equal(clicks, 1); assert.equal(h.scroll.scrollTop, 440);
+  } finally {await h.finish();}
+});
+
+test('new query while awaiting native readiness prevents a late Turn activation', async () => {
+  const h = await reader();
+  try {
+    const rail = turnRail(h), state = snapshot({loadingOlder: true}); let clicks = 0;
+    h.faces.set('a', {getSnapshot: () => state, loadOlder() {assert.fail('already busy');}});
+    rail.button.addEventListener('click', () => {clicks++;});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.button().click(); await h.advance(0); h.search('other'); state.loadingOlder = false;
+    await h.advance(1500); assert.equal(clicks, 0); assert.equal(h.scroll.scrollTop, 1320);
+  } finally {await h.finish();}
+});
+
+test('unloaded Turn controls and another reading view are never activated by restoration', async () => {
+  const h = await reader();
+  try {
+    const rail = turnRail(h); let clicks = 0;
+    rail.button.setAttribute('aria-label', 'Load and jump to turn 1');
+    rail.button.addEventListener('click', () => {clicks++;});
+    const other = await h.mount('b');
+    other.panel.insertAdjacentHTML('beforeend', '<nav aria-label="Turn navigation"><button data-index="1" aria-current="true" aria-label="Jump to turn 20">other</button></nav>');
+    other.panel.querySelector('nav button').addEventListener('click', () => {clicks++;});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.button().click(); await h.advance(0); await h.advance(1500);
+    assert.equal(clicks, 0); assert.equal(h.scroll.scrollTop, 440);
+  } finally {await h.finish();}
+});

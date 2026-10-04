@@ -1,51 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup, snapshot, key} from './helpers/search-ui.mjs';
+import {snapshot, key} from './helpers/search-ui.mjs';
 
-// Geometry here is a deterministic state-machine fixture, not host acceptance.
-async function reader() {
-  const h = setup(), nodes = new Map();
-  const store = {get: key => nodes.get(key), values: () => [...nodes.values()]};
-  const v = await h.mount('a', true, {useChat: select => select({nodes: store})});
-  const scroll = v.flow.closest('[data-conversation-scroll]');
-  let top = 440;
-  Object.defineProperties(scroll, {
-    scrollTop: {get: () => top, set: value => {top = Math.max(0, Math.min(1800, value));}},
-    clientHeight: {get: () => 200}, scrollHeight: {get: () => 2000},
-  });
-  const rect = (y, height = 20) => ({top: y, bottom: y + height, left: 0, right: 400, width: 400, height});
-  scroll.getBoundingClientRect = () => rect(0, 200);
-  scroll.scrollTo = ({top: value}) => {scroll.scrollTop = value;};
-  function setRows() {
-    v.flow.innerHTML = '<div data-chat-node-key="origin" data-chat-anchor-key="origin"><p data-y="400">first paragraph</p><p data-y="460">original reading paragraph</p><p data-y="520">third paragraph</p></div><div data-chat-node-key="hit" data-chat-anchor-key="hit"><p data-y="1400">needle other</p><p data-y="1500">needle other</p></div>';
-  }
-  setRows();
-  nodes.set('origin', {key: 'origin', anchorSeq: 10, visibility: 'visible'});
-  nodes.set('hit', {key: 'hit', anchorSeq: 20, visibility: 'visible'});
-  const nativeRects = h.w.HTMLElement.prototype.getClientRects;
-  h.w.HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.dataset.y) return rect(Number(this.dataset.y) - top);
-    const p = this.querySelector?.('[data-y]');
-    return p ? rect(Number(p.dataset.y) - top, 140) : rect(0, 20);
-  };
-  h.w.HTMLElement.prototype.getClientRects = function () {
-    return this.isConnected ? [this.getBoundingClientRect()] : nativeRects.call(this);
-  };
-  h.w.HTMLElement.prototype.scrollIntoView = function () {
-    h.scrolls.push(this);
-    const p = this.closest('[data-y]');
-    if (p) scroll.scrollTop = Number(p.dataset.y) - 80;
-  };
-  h.w.Range.prototype.getClientRects = function () {
-    const p = this.startContainer.parentElement?.closest('[data-y]');
-    return p?.isConnected ? [rect(Number(p.dataset.y) - top)] : [];
-  };
-  h.w.Range.prototype.getBoundingClientRect = function () {return this.getClientRects()[0] || rect(0, 0);};
-  h.faces.set('a', {getSnapshot: () => snapshot({hasMore: false}), loadOlder() {assert.fail('terminal history');}});
-  const button = () => h.w.document.querySelector('[data-find-all-return]');
-  function open() {h.open(v.anchor); h.w.document.querySelector('.scope').click();}
-  return {...h, v, nodes, scroll, button, openReader: open, setRows};
-}
+import {reader} from './helpers/reading-ui.mjs';
 
 test('return is disabled until a measured result landing, then returns to original paragraph and closes', async () => {
   const h = await reader();
@@ -258,5 +215,45 @@ test('focus returns without a scroll or composer draft edit and success remains 
     assert.equal(h.scroll.scrollTop, 440);
     assert.ok([...h.w.document.querySelectorAll('[role="status"]')].some(node => node.textContent === 'Returned to reading position'));
     key(h, 'f', {ctrlKey: true}); assert.equal(h.button().disabled, true);
+  } finally {await h.finish();}
+});
+
+test('a missing older origin stops at the page cap and does not loop indefinitely', async () => {
+  const h = await reader();
+  try {
+    let calls = 0;
+    h.faces.set('a', {getSnapshot: () => snapshot(), async loadOlder() {
+      calls++; h.nodes.set(`old-${calls}`, {key: `old-${calls}`, anchorSeq: 1000 - calls});
+    }});
+    h.nodes.set('hit', {key: 'hit', anchorSeq: 2000});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.v.flow.firstChild.remove(); h.nodes.delete('origin');
+    h.button().click(); await h.advance(0); await h.advance(60000);
+    assert.equal(calls, 400); assert.match(h.status(), /History page limit reached/);
+    assert.equal(h.button().disabled, false);
+    await h.advance(6000); assert.equal(calls, 400);
+  } finally {await h.finish();}
+});
+
+test('ambiguous stable-part DOM identity cannot substitute either row', async () => {
+  const h = await reader();
+  try {
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.v.flow.prepend(h.v.flow.firstChild.cloneNode(true));
+    h.button().click(); await h.advance(0); await h.advance(6000);
+    assert.match(h.status(), /Could not return/); assert.equal(h.scroll.scrollTop, 1320);
+  } finally {await h.finish();}
+});
+
+test('host busy state is awaited without a concurrent history request', async () => {
+  const h = await reader();
+  try {
+    let calls = 0;
+    h.faces.set('a', {getSnapshot: () => snapshot({loadingOlder: true}), loadOlder() {calls++;}});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    h.v.flow.firstChild.remove(); h.nodes.delete('origin');
+    h.button().click(); await h.advance(0); await h.advance(6000);
+    assert.equal(calls, 0); assert.match(h.status(), /No progress/);
+    assert.equal(h.button().disabled, false);
   } finally {await h.finish();}
 });

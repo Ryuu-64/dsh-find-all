@@ -116,9 +116,9 @@ async function openSession(page, label) {
   await eventually(() => results.count(), n => n === 1, 'one seeded session result', 60_000);
   await results.click();
   await page.locator(`[data-find-all-session="${sessionId(label)}"]`).waitFor({ state: 'visible' });
-  await page.locator('[data-chat-flow]').getByText(paragraphMarker(label, 41), { exact: false }).waitFor();
+  await page.locator('[data-chat-flow]').first().getByText(paragraphMarker(label, 41), { exact: false }).waitFor();
   await page.waitForTimeout(700);
-  const initialUsers = await page.locator('[data-chat-flow]').evaluate((flow, prefix) =>
+  const initialUsers = await page.locator('[data-chat-flow]').first().evaluate((flow, prefix) =>
     (flow.textContent.match(new RegExp(prefix, 'g')) || []).length, `RETURN_${label}_USER_`);
   assert.ok(initialUsers > 0 && initialUsers < 80, 'each case must start with real partially loaded history');
   return initialUsers;
@@ -134,10 +134,7 @@ async function positionParagraph(page, marker) {
   assert.ok(box);
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.35);
   for (let pass = 0; pass < 3; pass++) {
-    const delta = await paragraph.evaluate(p => {
-      const s = p.closest('[data-conversation-scroll]');
-      return p.getBoundingClientRect().top - s.getBoundingClientRect().top - 4;
-    });
+    const delta = (await witnessForMarker(page, marker)).top - 4;
     if (Math.abs(delta) <= 2) break;
     await page.mouse.wheel(0, delta);
     await page.waitForTimeout(700);
@@ -149,7 +146,7 @@ async function positionParagraph(page, marker) {
 }
 
 async function witnessForMarker(page, marker) {
-  return page.locator('[data-chat-flow]').evaluate((flow, needle) => {
+  return page.locator('[data-chat-flow]').first().evaluate((flow, needle) => {
     const walker = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
     let text;
     while ((text = walker.nextNode())) {
@@ -267,14 +264,14 @@ export async function exerciseReturnPosition(page, capture) {
     await openSession(page, 'STREAM');
     await page.locator('[data-composer-input][contenteditable="true"]').last().fill('RETURN_LIVE_USER Continue with the deterministic replay stream.');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
-    await page.locator('[data-chat-flow]').getByText('RETURN_LIVE_000', { exact: false }).waitFor({ timeout: 20_000 });
+    await page.locator('[data-chat-flow]').first().getByText('RETURN_LIVE_000', { exact: false }).waitFor({ timeout: 20_000 });
     await page.waitForTimeout(1200);
     stream.followingBeforeSearch = await page.locator('[data-conversation-scroll]').evaluate(s => s.scrollHeight - s.clientHeight - s.scrollTop < 25);
     assert.ok(stream.followingBeforeSearch, 'host must be following the live tail before search');
     // Open find directly while the host owns bottom following. Choose a real
     // visible live paragraph as an independent Range witness; do not wheel or
     // click the transcript first, since that would already cancel tail intent.
-    const liveMarker = await page.locator('[data-chat-flow]').evaluate(flow => {
+    const liveMarker = await page.locator('[data-chat-flow]').first().evaluate(flow => {
       const top = flow.closest('[data-conversation-scroll]').getBoundingClientRect().top;
       for (const paragraph of flow.querySelectorAll('p')) {
         const marker = paragraph.textContent.match(/RETURN_LIVE_\d{3}/)?.[0];
@@ -290,9 +287,9 @@ export async function exerciseReturnPosition(page, capture) {
     if ((await bar.locator('.scope').innerText()).trim() !== 'Page') await bar.locator('.scope').click();
     await bar.locator('input').fill(userMarker('STREAM', 79));
     await eventually(() => bar.locator('[data-find-all-return]').isEnabled(), yes => yes, 'streaming return enabled');
-    const firstLiveLength = await page.locator('[data-chat-flow]').evaluate(flow => flow.textContent.length);
+    const firstLiveLength = await page.locator('[data-chat-flow]').first().evaluate(flow => flow.textContent.length);
     await page.waitForTimeout(1400);
-    stream.liveGrowthDuringSearch = await page.locator('[data-chat-flow]').evaluate(flow => flow.textContent.length) - firstLiveLength;
+    stream.liveGrowthDuringSearch = await page.locator('[data-chat-flow]').first().evaluate(flow => flow.textContent.length) - firstLiveLength;
     assert.ok(stream.liveGrowthDuringSearch > 300, 'real SSE stream must grow while search is open');
     stream.searchHeldAwayFromTail = await page.evaluate(() => {
       const scroll = document.querySelector('[data-conversation-scroll]');
@@ -313,7 +310,7 @@ export async function exerciseReturnPosition(page, capture) {
     assert.ok(Math.abs(stream.return.geometryDelta) <= 48, 'width reflow must preserve the original live passage within two line heights');
     assert.ok(Math.abs(stream.afterFurtherGrowth.top - firstReturn.top) <= 4, 'later stream growth must not pull reader to tail');
     assert.ok(stream.afterFurtherGrowth.distanceFromBottom > 1000, 'tail following must remain cancelled');
-    await page.locator('[data-chat-flow]').getByText('RETURN_LIVE_DONE.', { exact: false }).waitFor({ timeout: 60_000 });
+    await page.locator('[data-chat-flow]').first().getByText('RETURN_LIVE_DONE.', { exact: false }).waitFor({ timeout: 60_000 });
     stream.finished = true;
     stream.result = 'passed';
   } catch (error) {

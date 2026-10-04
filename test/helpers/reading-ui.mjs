@@ -45,4 +45,3 @@ export async function reader() {
   function open() {h.open(v.anchor); h.w.document.querySelector('.scope').click();}
   return {...h, v, nodes, scroll, button, openReader: open, setRows};
 }
-

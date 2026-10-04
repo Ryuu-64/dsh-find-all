@@ -237,11 +237,22 @@ export async function exerciseReturnPosition(page, capture) {
         record.nativePage = { beforeRows, afterRows: await page.locator('[data-chat-node-key]').count(),
           completedBeforeReturn: true };
       } else if (mode === 'Enter') {
-        await page.setViewportSize({ width: 900, height: 900 });
-        await page.waitForTimeout(250);
-        const wrapped = await witnessForMarker(page, record.before.marker);
-        record.reflow = { beforeWidth: 1400, afterWidth: 900, beforeHeight: record.before.paragraphHeight, afterHeight: wrapped.paragraphHeight };
-        assert.ok(wrapped.paragraphHeight > record.before.paragraphHeight, 'narrowing must actually reflow the origin paragraph');
+        // RC2's responsive scenario uses a real 700px browser viewport:
+        // https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/apps/web/tests/chat-scroll-contract.e2e.ts#L1010-L1014
+        // Avoid its sidebar click here: focus changes are a separate test.
+        // Observe actual wrapping after at most two real viewport changes.
+        const attempts = [];
+        for (const width of [700, 560]) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.waitForTimeout(250);
+          const wrapped = await witnessForMarker(page, record.before.marker);
+          attempts.push({ width, paragraphHeight: wrapped.paragraphHeight });
+          if (wrapped.paragraphHeight > record.before.paragraphHeight) break;
+        }
+        const last = attempts.at(-1);
+        record.reflow = { beforeWidth: 1400, afterWidth: last.width, beforeHeight: record.before.paragraphHeight,
+          afterHeight: last.paragraphHeight, attempts };
+        assert.ok(last.paragraphHeight > record.before.paragraphHeight, 'narrowing must actually reflow the origin paragraph');
       }
       await capture(`${label.toLowerCase()}-before-return`);
       const inputStart = await page.evaluate(() => window.__returnInputEvidence.length);
@@ -251,6 +262,20 @@ export async function exerciseReturnPosition(page, capture) {
       assert.ok(record.inputEvents.some(event => event.type === 'click' && event.trusted), 'return must receive a trusted browser click');
       assert.ok(record.inputEvents.every(event => !event.insideScrollport), 'fixture return control must be outside the host scrollport');
       await capture(`${label.toLowerCase()}-after-return`);
+      if (nativePaging && !record.return.hidden) {
+        // Keep the initial failure as a failure. Separately observe whether a
+        // real reader wheel releases host paging and lets the user retry.
+        const box = await page.locator('[data-conversation-scroll]').boundingBox();
+        await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.35);
+        await page.mouse.wheel(0, 120);
+        await page.waitForTimeout(700);
+        await activateReturn(page, bar, mode);
+        record.recovery = await settledResult(page, bar, record.before);
+        record.recovery.afterTrustedWheel = true;
+        record.recovery.result = record.recovery.hidden && record.recovery.sameAnchor && record.recovery.sameParagraph
+          && Math.abs(record.recovery.geometryDelta) <= 4 ? 'passed' : 'failed';
+        await capture(`${label.toLowerCase()}-wheel-retry`);
+      }
       assert.ok(record.return.hidden, `return must finish and close the bar: ${record.return.status}`);
       assert.ok(record.return.sameAnchor && record.return.sameParagraph, 'same semantic node, paragraph, and text offset');
       assert.ok(Math.abs(record.return.geometryDelta) <= 4, `return must restore passage geometry: ${record.return.geometryDelta}`);
@@ -303,7 +328,7 @@ export async function exerciseReturnPosition(page, capture) {
         && ranges.some(range => [...range.getClientRects()].some(rect => rect.bottom > viewport.top && rect.top < viewport.bottom));
     });
     assert.ok(stream.searchHeldAwayFromTail, 'search navigation must cancel existing bottom-follow intent');
-    await page.setViewportSize({ width: 900, height: 900 });
+    await page.setViewportSize({ width: 700, height: 900 });
     await activateReturn(page, bar, 'pointer');
     stream.return = await settledResult(page, bar, stream.before);
     const firstReturn = stream.return.after;

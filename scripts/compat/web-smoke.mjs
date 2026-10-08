@@ -10,6 +10,7 @@ import { chromium } from 'playwright';
 import { seedHistory, setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { createRedactor, captureSafePage } from './evidence.mjs';
 import { npmCommand } from './npm-command.mjs';
+import { exerciseFindButtonAppearance } from './find-button-appearance.mjs';
 const secrets = new Set();
 const redact = createRedactor(secrets);
 
@@ -130,7 +131,7 @@ const server = spawn(process.execPath, [bin, '--profile', 'web', '--no-open', '-
 server.stdout.on('data', data => serverLog += data);
 server.stderr.on('data', data => serverLog += data);
 let browser, page;
-const report = { version, artifactSha256, bootstrap: 'pending', syntheticHistory: 'not-run', desktop: 'not-run' };
+const report = { version, artifactSha256, bootstrap: 'pending', syntheticHistory: 'not-run', findButtonAppearance: {status: 'not-run'}, desktop: 'not-run' };
 try {
   let url;
   for (let elapsed = 0; elapsed < 180; elapsed++) {
@@ -212,6 +213,10 @@ try {
   if (full) {
     report.seeds = seeded;
     report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact), version);
+    if (version === '0.2.0-rc.2') {
+      report.findButtonAppearance = {status: 'running', host: version};
+      report.findButtonAppearance = await exerciseFindButtonAppearance(page, name => captureSafePage(page, path.join(output, name), secrets, redact));
+    }
     if (version === '0.2.0-rc.2') report.sidebarIsolation = await exerciseSidebarIsolation(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact));
     report.syntheticHistory = 'passed';
   }
@@ -220,6 +225,7 @@ try {
 } catch (error) {
   if (report.bootstrap !== 'passed') report.bootstrap = 'failed';
   else if (full) report.syntheticHistory = 'failed';
+  if (report.findButtonAppearance.status === 'running') report.findButtonAppearance.status = 'failed';
   report.error = redact(error);
   if (page) {
     try {

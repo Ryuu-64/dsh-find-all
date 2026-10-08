@@ -1,8 +1,17 @@
 name: Candidate Web compatibility
 on:
   push:
-    branches: [fix/session-scoped-compatibility]
+    branches: [fix/session-scoped-compatibility, fix/native-find-button-and-scope-copy]
   workflow_dispatch:
+    inputs:
+      target:
+        description: Existing host matrix, or the focused RC2 acceptance first
+        type: choice
+        options: [matrix, rc2]
+        default: matrix
+env:
+  # Keep the full original matrix available; the button work branch runs RC2 first.
+  FIND_ALL_RC2_ONLY: ${{ inputs.target == 'rc2' || (github.event_name == 'push' && github.ref_name == 'fix/native-find-button-and-scope-copy') }}
 permissions:
   contents: read
 concurrency:
@@ -24,41 +33,47 @@ jobs:
       - run: npm install --global --ignore-scripts pnpm@11.19.0
       - run: npx playwright install chromium --only-shell
       - name: Pack one candidate artifact
+        id: artifact
+        shell: bash
         run: |
           mkdir -p evidence/artifact
-          npm pack --ignore-scripts --pack-destination evidence/artifact
-          sha256sum evidence/artifact/*.tgz | tee evidence/artifact/SHA256SUMS
+          artifact=$(npm pack --ignore-scripts --pack-destination evidence/artifact --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename')
+          echo "filename=$artifact" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$artifact" > evidence/artifact/filename.txt
+          sha256sum "evidence/artifact/$artifact" | tee evidence/artifact/SHA256SUMS
+          git rev-parse HEAD > evidence/commit.txt
       - name: Oldest exact host acceptance
         id: oldest
-        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.2
+        if: ${{ env.FIND_ALL_RC2_ONLY != 'true' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.5-rc.2
       - name: Current exact host acceptance
         id: current
         if: ${{ !cancelled() }}
-        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.2
+        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.2.0-rc.2
       - name: User runtime 0.1.7-rc.1 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-rc.1
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.7-rc.1
       - name: Previously allowed 0.1.6-alpha.1 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.6-alpha.1
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.1 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.6-alpha.1
       - name: Previously allowed 0.1.7-alpha.1 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-alpha.1
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.1 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.7-alpha.1
       - name: Previously allowed 0.1.7-alpha.2 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-alpha.2
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.7-alpha.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.7-alpha.2
       - name: Exact host 0.1.5-rc.3 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.3 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.5-rc.3
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.5-rc.3 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.5-rc.3
       - name: Exact host 0.1.6-alpha.2 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.6-alpha.2
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.6-alpha.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.6-alpha.2
       - name: Exact host 0.1.7-rc.2 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.2 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.1.7-rc.2
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.7-rc.2
       - name: Exact host 0.2.0-rc.1 acceptance
-        if: ${{ !cancelled() && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
-        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.1 evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/0.2.0-rc.1
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.2.0-rc.1 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.2.0-rc.1
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: ${{ !cancelled() }}
         with:
@@ -68,7 +83,7 @@ jobs:
 
   windows-desktop-smoke:
     needs: web-bootstrap
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && inputs.target != 'rc2' && !(github.event_name == 'push' && github.ref_name == 'fix/native-find-button-and-scope-copy') }}
     # Explicit second supported image distinguishes the recorded Server 2025
     # pre-plugin startup failure from plugin behavior; security stays enabled.
     runs-on: windows-2022
@@ -93,19 +108,29 @@ jobs:
         with:
           name: candidate-web-evidence
           path: web-evidence
+      - name: Locate the same verified candidate artifact
+        id: downloaded
+        shell: pwsh
+        run: |
+          $artifact = (Get-Content web-evidence/artifact/filename.txt -Raw).Trim()
+          if ($artifact -notmatch '^ryuu-64-dsh-find-all-[0-9A-Za-z.+-]+\.tgz$') { throw 'Unexpected artifact filename' }
+          $path = "web-evidence/artifact/$artifact"
+          $expected = ((Get-Content web-evidence/artifact/SHA256SUMS -Raw).Trim() -split '\s+')[0]
+          if ((Get-FileHash -Algorithm SHA256 $path).Hash.ToLowerInvariant() -ne $expected) { throw 'Candidate artifact hash mismatch' }
+          "path=$path" >> $env:GITHUB_OUTPUT
       - run: npm install --global --ignore-scripts pnpm@11.19.0
       - run: npx playwright install chromium --only-shell
       - name: Windows real Web runtime and cross-platform harness regression
         env:
           FIND_ALL_FULL_ACCEPTANCE: '1'
-        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 web-evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/windows-web-0.1.7-rc.1
+        run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 '${{ steps.downloaded.outputs.path }}' evidence/windows-web-0.1.7-rc.1
       - name: Install verified official Windows rc2
         if: ${{ !cancelled() }}
         shell: pwsh
         run: ./scripts/compat/install-windows.ps1 -OutputDirectory evidence/windows-0.2.0-rc.2
       - name: Test same candidate in installed Electron
         if: ${{ !cancelled() }}
-        run: node scripts/compat/windows-smoke.mjs web-evidence/artifact/ryuu-64-dsh-find-all-0.1.4.tgz evidence/windows-0.2.0-rc.2
+        run: node scripts/compat/windows-smoke.mjs '${{ steps.downloaded.outputs.path }}' evidence/windows-0.2.0-rc.2
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: ${{ !cancelled() }}
         with:

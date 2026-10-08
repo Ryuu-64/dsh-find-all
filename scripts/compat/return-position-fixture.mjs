@@ -180,8 +180,8 @@ async function startSearch(page, label, whole, origin) {
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible' });
-  const expectedScope = whole ? 'Whole' : 'Page';
-  if ((await bar.locator('.scope').innerText()).trim() !== expectedScope) await bar.locator('.scope').click();
+  const expectedScope = whole ? '1' : null;
+  if (await bar.locator('.scope').getAttribute('data-whole') !== expectedScope) await bar.locator('.scope').click();
   await bar.locator('input').fill(userMarker(label, whole ? 1 : 79));
   await eventually(() => bar.locator('.count').innerText(), text => /^(0|1)\/1$/.test(text), 'one search result is available', 60_000);
   if (whole) {
@@ -318,7 +318,7 @@ export async function exerciseReturnPosition(page, capture) {
     stream.before = await witnessForMarker(page, liveMarker);
     await page.keyboard.press('Control+f');
     const bar = page.locator('#dsh-find-all-root');
-    if ((await bar.locator('.scope').innerText()).trim() !== 'Page') await bar.locator('.scope').click();
+    if (await bar.locator('.scope').getAttribute('data-whole') !== null) await bar.locator('.scope').click();
     await bar.locator('input').fill(userMarker('STREAM', 79));
     await eventually(() => bar.locator('[data-find-all-return]').isEnabled(), yes => yes, 'streaming return enabled');
     const firstLiveLength = await page.locator('[data-chat-flow]').first().evaluate(flow => flow.textContent.length);

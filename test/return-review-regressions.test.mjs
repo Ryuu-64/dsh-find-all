@@ -83,7 +83,7 @@ test('a replaced session face ends return progress and ignores the old history c
     await h.advance(6000);
     assert.match(h.status(), /Could not return/);
     assert.equal(h.button().textContent, 'Return to reading position');
-    assert.equal(h.button().disabled, true, 'an invalid origin cannot be retried against the replacement face');
+    assert.equal(h.button().hidden, true, 'an invalid origin cannot be retried against the replacement face');
     assert.notEqual(bar(h).style.display, 'none');
     h.v.flow.prepend(row); h.nodes.set('origin', {key: 'origin', anchorSeq: 10});
     resolveLoad(); await h.advance(1500);
@@ -209,7 +209,7 @@ test('same-session Node-store replacement cancels pending return and discards it
     h.v.flow.prepend(row); replacement.set('origin', {key: 'origin', anchorSeq: 10});
     finishLoad(); await h.advance(2000);
     assert.equal(h.scroll.scrollTop, landed, 'old async return cannot scroll the replacement reading instance');
-    assert.equal(h.button().disabled, true, 'old origin cannot be retried on the replacement store');
+    assert.equal(h.button().hidden, true, 'old origin cannot be retried on the replacement store');
     assert.notEqual(bar(h).style.display, 'none');
     key(h, 'Escape'); assertClosedAndClean(h);
   } finally {finishLoad?.(); await h.finish();}

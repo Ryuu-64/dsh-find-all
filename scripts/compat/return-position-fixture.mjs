@@ -186,14 +186,17 @@ async function startSearch(page, label, whole, origin) {
   await eventually(() => bar.locator('.count').innerText(), text => /^(0|1)\/1$/.test(text), 'one search result is available', 60_000);
   if (whole) {
     await eventually(() => bar.locator('.status').innerText(),
-      text => text === 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed',
+      text => text === 'Matches found; press Enter to navigate. Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed',
       'available-history scan completion', 60_000);
-    assert.equal(await bar.locator('[data-find-all-return]').isEnabled(), false, 'background paging is not a reader navigation');
+    assert.equal(await bar.locator('[data-find-all-return]').isHidden(), true, 'background paging is not a reader navigation');
     const beforeNavigation = await witnessForMarker(page, origin.marker);
     assert.ok(Math.abs(beforeNavigation.top - origin.top) <= 4, 'background history loading must preserve the passage');
     await bar.locator('input').press('Enter');
   }
-  await eventually(() => bar.locator('[data-find-all-return]').isEnabled(), yes => yes, 'return enabled after actual navigation');
+  await eventually(async () => {
+    const button = bar.locator('[data-find-all-return]');
+    return { visible: await button.isVisible(), enabled: await button.isEnabled() };
+  }, state => state.visible && state.enabled, 'return visible and enabled after actual navigation');
   return bar;
 }
 
@@ -320,7 +323,10 @@ export async function exerciseReturnPosition(page, capture) {
     const bar = page.locator('#dsh-find-all-root');
     if (await bar.locator('.scope').getAttribute('data-whole') !== null) await bar.locator('.scope').click();
     await bar.locator('input').fill(userMarker('STREAM', 79));
-    await eventually(() => bar.locator('[data-find-all-return]').isEnabled(), yes => yes, 'streaming return enabled');
+    await eventually(async () => {
+      const button = bar.locator('[data-find-all-return]');
+      return { visible: await button.isVisible(), enabled: await button.isEnabled() };
+    }, state => state.visible && state.enabled, 'streaming return visible and enabled');
     const firstLiveLength = await page.locator('[data-chat-flow]').first().evaluate(flow => flow.textContent.length);
     await page.waitForTimeout(1400);
     stream.liveGrowthDuringSearch = await page.locator('[data-chat-flow]').first().evaluate(flow => flow.textContent.length) - firstLiveLength;

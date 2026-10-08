@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+- Use the host-native icon button for the conversation search entry, including theme, hover and keyboard-focus styles.
+- Clarify that search covers loaded conversation content and can continue loading available earlier history; status text no longer implies complete history when the host cannot provide it.
+- Retain the current match during history loading when its identity can still be verified.
+
+The runtime code is unchanged from the accepted PR #17 merge (`f945fb9ccd581c808bc7f50128c3a7d7d2fca6da`). The existing 195 checks, release-artifact verification and RC2 Web acceptance passed; the user also confirmed their real-device test passed before this release. The exact supported host-version list is unchanged.
+
 ## 0.1.6
 
 Fix text matching, history feedback and search state after the 0.1.5 compatibility release.

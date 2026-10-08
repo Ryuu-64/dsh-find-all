@@ -27,7 +27,13 @@ export function setup() {
   w.Date.now = () => now;
   w.__ModuleLoader__ = { load(value) { registration = value; } };
   w.eval(source);
-  const plugin = registration.factory(name => { assert.equal(name, 'react'); return React; });
+  const plugin = registration.factory(name => {
+    if (name === '@deepseek-ai/dsh-client-ui-primitives') return {
+      Button: ({size, variant, ...props}) => React.createElement('button', props),
+      IconSearchOutlineRegular: ({size}) => React.createElement('svg', {width: size, height: size, 'aria-hidden': true}),
+    };
+    assert.equal(name, 'react'); return React;
+  });
   const faces = new Map();
   const ctx = {
     sessions: {

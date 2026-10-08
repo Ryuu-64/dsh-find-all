@@ -15,7 +15,13 @@ function fixture(html = '') {
   let entry;
   w.__ModuleLoader__ = { load(value) { entry = value; } };
   w.eval(source);
-  const plugin = entry.factory(name => { assert.equal(name, 'react'); return React; });
+  const plugin = entry.factory(name => {
+    if (name === '@deepseek-ai/dsh-client-ui-primitives') return {
+      Button: ({size, variant, ...props}) => React.createElement('button', props),
+      IconSearchOutlineRegular: ({size}) => React.createElement('svg', {width: size, height: size, 'aria-hidden': true}),
+    };
+    assert.equal(name, 'react'); return React;
+  });
   const root = w.document.querySelector('main');
   root.innerHTML = html;
   return { dom, w, root, plugin, ranges: query => Array.from(plugin.collectRanges(query, root)) };

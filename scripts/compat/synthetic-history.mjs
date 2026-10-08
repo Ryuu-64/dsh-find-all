@@ -91,49 +91,64 @@ export async function exerciseSidebarIsolation(page, home, queryPath, capture, p
   assert.equal(await content.getAttribute('data-content-phase'), 'active');
   assert.equal(await sidebar.locator('[data-find-all-session]').count(), 0, 'official embedded view has no utility anchor');
   const anchor = page.locator('[data-find-all-session="find-all-synthetic-a"]');
+  const bar = page.locator('#dsh-find-all-root');
+  async function assertMainScope(label) {
+    await eventually(() => bar.locator('.count').innerText(), '1/80', label);
+    const scoped = await page.evaluate(() => {
+      const flow = document.querySelector('[data-conversation-session="find-all-synthetic-a"] [data-chat-flow]');
+      const ranges = [...(CSS.highlights.get('dsh-find-all-hit') || [])];
+      return ranges.length === 80 && ranges.every(range => flow.contains(range.startContainer));
+    });
+    assert.equal(scoped, true, 'all 80 highlights belong to main A, never sidebar C');
+  }
   try {
     // Native re-enable creates a pristine plugin while both real panes remain.
     setFixturePatch(home, queryPath, true, profile);
-    await eventually(() => page.locator('[data-find-all-session]').count(), 0, 'disable before neutral multi-view regression');
+    await eventually(() => page.locator('[data-find-all-session]').count(), 0, 'disable before neutral main-target regression');
     setFixturePatch(home, queryPath, false, profile);
     await anchor.waitFor({ state: 'visible' });
     await page.evaluate(() => document.activeElement?.blur());
     assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
     await page.keyboard.press('Control+f');
-    const bar = page.locator('#dsh-find-all-root');
     await bar.locator('input').fill('FIND_ALL_A_USER_');
-    await page.waitForTimeout(1200);
-    assert.equal(await bar.locator('.count').innerText(), '0/0', 'main plus headerless sidebar is ambiguous on first neutral shortcut');
-    assert.match(await bar.locator('.status').innerText(), /Select a visible conversation|Search scope unavailable/);
-    assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
-    await capture('sidebar-neutral-ambiguity');
+    await assertMainScope('first neutral shortcut searches main A beside the headerless sidebar');
+    await capture('sidebar-neutral-main-scope');
     // At the installed Desktop's 1024px width the find bar overlaps the main
     // header utility. Dismiss it normally before selecting that visible control.
     await page.keyboard.press('Escape');
     await bar.waitFor({ state: 'hidden' });
     await anchor.click();
     await bar.locator('input').fill('FIND_ALL_A_USER_');
-    await eventually(() => bar.locator('.count').innerText(), '1/80', 'explicit main selection remains available beside a sidebar');
-    const scoped = await page.evaluate(() => {
-      const flow = document.querySelector('[data-conversation-session="find-all-synthetic-a"] [data-chat-flow]');
-      return [...CSS.highlights.get('dsh-find-all-hit')].every(range => flow.contains(range.startContainer));
-    });
-    assert.equal(scoped, true);
+    await assertMainScope('main header button uses the same target as Ctrl+F');
     await page.keyboard.press('Escape');
     await sidebar.getByText('FIND_ALL_C_USER_080 synthetic user', { exact: true }).click();
     await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('Control+f');
     await bar.locator('input').fill('FIND_ALL_A_USER_');
+    await assertMainScope('sidebar interaction preserves main A');
+    await capture('sidebar-interaction-main-scope');
+    await bar.locator('input').fill('FIND_ALL_C_USER_');
     await page.waitForTimeout(1200);
-    assert.equal(await bar.locator('.count').innerText(), '0/0', 'unsupported sidebar interaction must not search main A');
-    await capture('sidebar-explicit-rejection');
-    return { layout: 'official rc2 embedded subagent sidebar', neutralAmbiguity: 'passed', explicitMainScope: 'passed', explicitSidebarRejection: 'passed', nativeResetCycles: 1 };
-  } finally {
+    assert.equal(await bar.locator('.count').innerText(), '0/0', 'sidebar-only text is excluded from main search');
+    assert.equal(await page.evaluate(() => CSS.highlights.has('dsh-find-all-hit')), false);
     await page.keyboard.press('Escape');
     const close = page.locator('[data-sidebar-right-panel] [data-dockkit-tab-close]');
     assert.equal(await close.count(), 1);
     await close.click();
     await sidebar.waitFor({ state: 'detached' });
+    await page.keyboard.press('Control+f');
+    await bar.locator('input').fill('FIND_ALL_A_USER_');
+    await assertMainScope('closing the sidebar preserves main A without a preparatory main click');
+    await capture('sidebar-closed-main-scope');
+    return { layout: 'official rc2 embedded subagent sidebar', neutralMainScope: 'passed', mainHeaderScope: 'passed', sidebarInteractionMainScope: 'passed', sidebarTextExcluded: 'passed', sidebarCloseMainScope: 'passed', nativeResetCycles: 1 };
+  } finally {
+    await page.keyboard.press('Escape');
+    if (await sidebar.count()) {
+      const close = page.locator('[data-sidebar-right-panel] [data-dockkit-tab-close]');
+      assert.equal(await close.count(), 1);
+      await close.click();
+      await sidebar.waitFor({ state: 'detached' });
+    }
   }
 }
 

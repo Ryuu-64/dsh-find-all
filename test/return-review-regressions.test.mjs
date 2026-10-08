@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import React, {act} from 'react';
 import {reader} from './helpers/reading-ui.mjs';
 import {setup, snapshot, key} from './helpers/search-ui.mjs';
 
@@ -169,4 +170,47 @@ test('unchanged layout preserves the negative offset of a partially visible firs
     assert.equal(paragraph.getBoundingClientRect().top, -10, 'the visible line must not be shifted down to the viewport edge');
     assertClosedAndClean(h);
   } finally {await h.finish();}
+});
+
+
+test('sidebar focus and dismissal preserve the main reading origin', async () => {
+  const h = await reader();
+  try {
+    h.openReader(); h.search('needle'); await h.advance(200);
+    assert.equal(h.button().disabled, false);
+    const sidebar = h.w.document.createElement('aside');
+    sidebar.innerHTML = '<div data-sidebar-chat><div data-conversation-content data-conversation-session="child" data-content-phase="active"><div data-conversation-scroll><div data-chat-flow>child needle</div><textarea></textarea></div></div></div>';
+    h.w.document.body.append(sidebar);
+    sidebar.querySelector('textarea').focus();
+    h.open(sidebar.querySelector('textarea')); await h.advance(700);
+    assert.equal(h.button().disabled, false, 'the original main reading point survives sidebar focus and repeated find');
+    sidebar.remove();
+    h.button().click(); await h.advance(1400);
+    assert.equal(h.scroll.scrollTop, 440);
+    assertClosedAndClean(h);
+    assert.ok(h.requested.every(id => id === 'a'));
+  } finally {await h.finish();}
+});
+
+test('same-session Node-store replacement cancels pending return and discards its origin', async () => {
+  const h = await reader();
+  let finishLoad;
+  try {
+    h.faces.set('a', {getSnapshot: () => snapshot(), loadOlder() {return new Promise(resolve => {finishLoad = resolve;});}});
+    h.openReader(); h.search('needle'); await h.advance(200);
+    const row = h.v.flow.firstChild; row.remove(); h.nodes.delete('origin');
+    h.button().click(); await h.advance(0);
+    assert.equal(typeof finishLoad, 'function');
+    const landed = h.scroll.scrollTop;
+    const replacement = new Map(h.nodes);
+    await act(async () => h.v.root.render(React.createElement(h.Component, {
+      sessionId: 'a', useChat: select => select({nodes: replacement}),
+    })));
+    h.v.flow.prepend(row); replacement.set('origin', {key: 'origin', anchorSeq: 10});
+    finishLoad(); await h.advance(2000);
+    assert.equal(h.scroll.scrollTop, landed, 'old async return cannot scroll the replacement reading instance');
+    assert.equal(h.button().disabled, true, 'old origin cannot be retried on the replacement store');
+    assert.notEqual(bar(h).style.display, 'none');
+    key(h, 'Escape'); assertClosedAndClean(h);
+  } finally {finishLoad?.(); await h.finish();}
 });

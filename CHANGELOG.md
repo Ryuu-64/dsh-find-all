@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep Ctrl+F and the header search button bound to the current main conversation when embedded sidebars open, receive focus, or close. Rebind after main-view navigation with instance/store generation checks, and leave modal/editor shortcuts alone.
+
 - Add a draft return-to-reading-position feature for Issue #15. Capture one semantic content/text position per find opening, preserve the query, verify actual visible landings, and bound/cancel recovery work. This feature remains pending real Web and Desktop acceptance; no release version or support declaration is changed.
 
 ## 0.1.7

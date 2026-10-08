@@ -61,13 +61,13 @@ function setup() {
     now = end;
     for (let i = 0; i < 60; i++) await Promise.resolve();
   }
-  async function mount(id, modern = false) {
+  async function mount(id, modern = false, props = {}) {
     const panel = w.document.createElement('section');
     panel.dataset.phase = 'active';
     panel.innerHTML = `<header><div class="utility"></div></header><div ${modern ? `data-conversation-content data-conversation-session="${id}"` : ''}><div data-conversation-scroll><div data-chat-flow><p>${id} needle</p></div><textarea>composer needle</textarea></div></div>`;
     w.document.body.append(panel);
     const root = createRoot(panel.querySelector('.utility'));
-    await act(async () => root.render(React.createElement(Component, { sessionId: id })));
+    await act(async () => root.render(React.createElement(Component, { sessionId: id, ...props })));
     const view = { panel, root, anchor: panel.querySelector('[data-find-all-session]'), flow: panel.querySelector('[data-chat-flow]') };
     views.push(view);
     return view;
@@ -116,7 +116,7 @@ test('multiple instances require focus; chosen instance survives focus in the fi
     h.faces.set('session-b', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false }), loadOlder() {} });
     h.open(); h.search('needle'); await h.advance(251);
     assert.equal(h.count(), '0/0'); assert.equal(h.requested.length, 0);
-    assert.match(h.status(), /Select a visible conversation/);
+    assert.match(h.status(), /scope unavailable/i);
     h.open(b.anchor); h.search('needle'); await h.advance(1200);
     assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
     a.panel.hidden = true;
@@ -140,19 +140,21 @@ test('first body-focused Ctrl+F discovers the sole visible registered conversati
   } finally { await h.finish(); }
 });
 
-test('first body shortcut cannot infer A while an unregistered visible B panel also exists', async () => {
+test('first body shortcut targets the sole registered main beside an unregistered conversation', async () => {
   const h = setup();
   try {
-    await h.mount('session-a');
+    const a = await h.mount('session-a');
     const b = h.w.document.createElement('section');
     b.dataset.phase = 'active';
     b.innerHTML = '<div data-conversation-scroll><div data-chat-flow>unregistered needle</div></div>';
     h.w.document.body.append(b);
+    idleFaces(h, 'session-a');
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
     b.remove();
     h.open(h.w.document.body); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+    assert.equal(h.count(), '1/1'); assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });
 
@@ -188,17 +190,20 @@ test('composer data-phase is not confused with the enclosing conversation root',
   } finally { await h.finish(); }
 });
 
-test('a broken nested active panel remains a boundary and cannot resolve to its outer registered conversation', async () => {
+test('an unregistered nested process control does not replace the registered main target', async () => {
   const h = setup();
   try {
     const a = await h.mount('session-a');
-    const b = h.w.document.createElement('section');
-    b.dataset.phase = 'active';
-    b.innerHTML = '<button>unsupported conversation</button>';
-    a.flow.append(b);
-    b.querySelector('button').focus();
-    h.open(b.querySelector('button')); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+    idleFaces(h, 'session-a');
+    a.flow.insertAdjacentHTML('beforeend', '<div data-chat-group-key="group-a"><div data-step-process-body><div data-step-process-content data-chat-flow><button data-phase="active">process needle</button></div></div></div>');
+    const process = a.flow.querySelector('button');
+    process.focus();
+    h.open(process); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '1/2'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
+    clickText(h, process); await h.advance(1200);
+    h.open(); await h.advance(1200);
+    assert.equal(h.count(), '1/2'); assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });
 
@@ -227,25 +232,34 @@ function embeddedConversation(h, phase = 'active') {
   return sidebar;
 }
 
-test('first shortcut accounts for a visible embedded sidebar without a header anchor', async () => {
+test('first shortcut searches the main with a visible embedded sidebar and no preparatory click', async () => {
   const h = setup();
   try {
-    await h.mount('session-a', true);
+    const a = await h.mount('session-a', true);
     embeddedConversation(h);
+    idleFaces(h, 'session-a');
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });
 
 for (const phase of ['active', 'hero', 'settling']) {
-  test(`explicit unregistered embedded ${phase} interaction stays rejected after it disappears`, async () => {
+  test(`embedded ${phase} focus, pointer interaction and close preserve the main target`, async () => {
     const h = setup();
     try {
-      await h.mount('session-a', true);
+      const a = await h.mount('session-a', true);
       const b = embeddedConversation(h, phase);
-      b.querySelector('textarea').focus(); b.remove();
-      h.open(); h.search('needle'); await h.advance(1200);
-      assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+      idleFaces(h, 'session-a');
+      b.querySelector('textarea').focus();
+      h.open(b.querySelector('textarea')); h.search('needle'); await h.advance(1200);
+      assert.equal(h.count(), '1/1'); assertMainHighlights(h, a);
+      clickText(h, b.querySelector('p')); await h.advance(1200);
+      assert.equal(h.count(), '1/1'); assertMainHighlights(h, a);
+      b.remove();
+      h.open(); await h.advance(1200);
+      assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+      assertMainHighlights(h, a);
     } finally { await h.finish(); }
   });
 }
@@ -261,17 +275,19 @@ test('a hidden embedded view does not make the sole visible main conversation am
   } finally { await h.finish(); }
 });
 
-test('an unbound Hero beside an already visible session does not reset explicit rejection', async () => {
+test('an unbound Hero interaction beside a main does not poison subsequent body shortcuts', async () => {
   const h = setup();
   try {
-    await h.mount('session-a', true);
+    const a = await h.mount('session-a', true);
+    idleFaces(h, 'session-a');
     const hero = h.w.document.createElement('div');
     hero.dataset.phase = 'hero';
     hero.innerHTML = '<div data-conversation-scroll><textarea data-phase="plain"></textarea></div>';
     h.w.document.body.append(hero);
     hero.querySelector('textarea').focus(); hero.remove();
     h.open(); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], []);
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });
 
@@ -422,20 +438,18 @@ test('an unsupported focused view never redirects search to another valid view',
 });
 
 
-test('focused unregistered conversation must not fall back to sole other registered session', async () => {
+test('focus in an unregistered conversation leaves the fixed main search target unchanged', async () => {
   const h = setup();
   try {
     const a = await h.mount('session-a', true);
-    h.faces.set('session-a', { getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore: false}), loadOlder() {} });
-    const b = h.w.document.createElement('section');
-    b.dataset.phase = 'active';
-    b.innerHTML = '<header></header><div data-conversation-content data-conversation-session="session-b"><div data-conversation-scroll><div data-chat-flow><p>B other text</p></div><textarea></textarea></div></div>';
-    h.w.document.body.append(b);
+    idleFaces(h, 'session-a');
+    const b = addUnregistered(h);
     const focus = b.querySelector('textarea');
     focus.focus();
     h.open(focus); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0');
-    assert.deepEqual([...new Set(h.requested)], []);
+    assert.equal(h.count(), '1/1');
+    assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });
 test('click in a second non-focusable conversation remains selected through polling', async () => {
@@ -466,20 +480,24 @@ function clickText(h, el) {
   h.w.document.activeElement.blur();
 }
 function idleFaces(h, ...ids) { for (const id of ids) h.faces.set(id, {getSnapshot: () => ({openState: 'open', openError: null, loadingOlder: false, hasMore:false}), loadOlder() {}}); }
-function observation(h) {return {count:h.count(), requested:h.requested, status:h.status(), focus:h.w.document.activeElement.tagName};}
+function assertMainHighlights(h, view) {
+  const ranges = [...(h.w.CSS.highlights.get('dsh-find-all-hit') || [])];
+  assert.ok(ranges.length > 0, 'the main conversation has highlighted matches');
+  assert.ok(ranges.every(range => view.flow.contains(range.startContainer)), 'every highlight stays in the main Chat body');
+}
 
-test('P1 rejected unregistered message click stays rejected after passive polls', async () => {
-  const h=setup();
+test('unregistered message clicks preserve main results through passive polls', async () => {
+  const h = setup();
   try {
-    const a=await h.mount('session-a',true), b=addUnregistered(h);
-    idleFaces(h,'session-a');
-    h.open(a.anchor);h.search('needle');await h.advance(300);
-    h.requested.length=0;
-    clickText(h,b.querySelector('p'));
-    assert.equal(h.count(),'0/0');
+    const a = await h.mount('session-a', true), b = addUnregistered(h);
+    idleFaces(h, 'session-a');
+    h.open(a.anchor); h.search('needle'); await h.advance(300);
+    clickText(h, b.querySelector('p'));
+    assert.equal(h.count(), '1/1');
     await h.advance(1200);
-    assert.equal(h.count(),'0/0');assert.deepEqual(h.requested,[]);
-  } finally {await h.finish();}
+    assert.equal(h.count(), '1/1'); assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
+  } finally { await h.finish(); }
 });
 
 test('P2 explicit registered message click survives repeated Ctrl+F on body', async () => {
@@ -511,19 +529,25 @@ test('P1 detach selected anchor never picks the sole other registered view', asy
   } finally {await h.finish();}
 });
 
-test('removed selected panel and in-flight request stay cancelled', async () => {
-  const h=setup();
+test('a replaced main binds the new instance and cancels the old in-flight results', async () => {
+  const h = setup();
   try {
-    const a=await h.mount('session-a',true), b=await h.mount('session-b',true);
-    let finish, calls=0;
-    h.faces.set('session-a',{getSnapshot:()=>({openState: 'open', openError: null, loadingOlder: false, hasMore:true}),loadOlder(){calls++;return new Promise(r=>finish=r);}});
-    idleFaces(h,'session-b');
-    h.open(a.anchor);h.search('needle');await h.advance(300);
-    clickText(h,a.flow.querySelector('p'));
-    a.panel.remove();await h.advance(1200);
-    finish();await h.advance(1200);
-    assert.equal(h.count(),'0/0');assert.equal(calls,1);assert.deepEqual([...new Set(h.requested)],['session-a']);
-  } finally {await h.finish();}
+    const a = await h.mount('session-a', true);
+    let finish, calls = 0;
+    h.faces.set('session-a', { getSnapshot: () => ({ openState: 'open', openError: null, loadingOlder: false, hasMore: true }), loadOlder() { calls++; return new Promise(resolve => finish = resolve); } });
+    idleFaces(h, 'session-b');
+    h.open(a.anchor); h.search('needle'); await h.advance(300);
+    a.panel.remove();
+    const b = await h.mount('session-b', true);
+    b.flow.append(h.w.document.createTextNode(' needle'));
+    await h.advance(1200);
+    assert.equal(h.count(), '1/2'); assertMainHighlights(h, b);
+    a.flow.append(h.w.document.createTextNode(' stale needle'));
+    finish(); await h.advance(1200);
+    assert.equal(h.count(), '1/2'); assert.equal(calls, 1);
+    assert.deepEqual([...new Set(h.requested)], ['session-a', 'session-b']);
+    assertMainHighlights(h, b);
+  } finally { await h.finish(); }
 });
 
 test('replaced flow revalidates same explicit view and ignores old pending data',async()=>{
@@ -556,14 +580,15 @@ test('same anchor rebound to a new session does not page the old session again',
     finish();await h.advance(1200);
     assert.equal(calls,1);
     assert.ok(!h.requested.includes('session-b'));
-    assert.equal(h.count(),'0/0');
+    assert.equal(h.count(),'1/2');
+    assertMainHighlights(h, a);
     const anchor=a.panel.querySelector('[data-find-all-session]');
     h.open(anchor);await h.advance(300);assert.equal(h.count(),'1/2');
     assert.equal(h.requested.at(-1),'session-c');
   }finally{await h.finish();}
 });
 
-test('closed-bar interactions establish or reject the next shortcut context', async () => {
+test('closed-bar registered-main context survives unrelated conversation interaction', async () => {
   const h = setup();
   try {
     await h.mount('session-a', true);
@@ -577,6 +602,101 @@ test('closed-bar interactions establish or reject the next shortcut context', as
     const unsupported = addUnregistered(h, 'session-c');
     clickText(h, unsupported.querySelector('p'));
     h.open(h.w.document.body); h.search('needle'); await h.advance(1200);
-    assert.equal(h.count(), '0/0'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
+    assert.equal(h.count(), '1/2'); assert.deepEqual([...new Set(h.requested)], ['session-b']);
+    assertMainHighlights(h, b);
+  } finally { await h.finish(); }
+});
+
+
+test('sidebar and outside UI do not interrupt the main history request', async () => {
+  const h = setup();
+  try {
+    const a = await h.mount('session-a', true), b = embeddedConversation(h);
+    let finish, calls = 0;
+    h.faces.set('session-a', { getSnapshot: () => ({ openState: 'open', openError: null, loadingOlder: false, hasMore: calls === 0 }), loadOlder() { calls++; return new Promise(resolve => finish = resolve); } });
+    h.open(); h.search('needle'); await h.advance(300);
+    assert.equal(calls, 1);
+    for (const target of [b.querySelector('p'), h.w.document.querySelector('aside')]) {
+      clickText(h, target); await h.advance(600);
+      assert.equal(h.count(), '1/1'); assertMainHighlights(h, a);
+    }
+    b.remove(); a.flow.insertAdjacentHTML('afterbegin', '<p>older needle</p>');
+    finish(); await h.advance(1200);
+    assert.equal(calls, 1); assert.equal(h.count(), '2/2'); assertMainHighlights(h, a);
+    assert.deepEqual([...new Set(h.requested)], ['session-a']);
+  } finally { await h.finish(); }
+});
+
+test('sidebar without a registered main reports unavailable and never searches the page', async () => {
+  const h = setup();
+  try {
+    const sidebar = embeddedConversation(h);
+    h.w.find = () => { throw new Error('must not search the whole window'); };
+    h.open(sidebar.querySelector('p')); h.search('needle'); await h.advance(1200);
+    assert.equal(h.count(), '0/0'); assert.deepEqual(h.requested, []);
+    assert.equal(h.status(), 'No searchable chat content in the main conversation');
+    assert.equal(h.w.CSS.highlights.size, 0);
+  } finally { await h.finish(); }
+});
+
+for (const markup of [
+  '<div role="dialog" aria-modal="true"><textarea></textarea></div>',
+  '<div class="cm-editor"><textarea></textarea></div>',
+  '<div class="monaco-editor"><textarea></textarea></div>',
+]) {
+  test(`modal or editor owns its shortcut focus: ${markup}`, async () => {
+    const h = setup();
+    try {
+      const a = await h.mount('session-a', true);
+      idleFaces(h, 'session-a');
+      const owner = h.w.document.createElement('div'); owner.innerHTML = markup;
+      h.w.document.body.append(owner);
+      const input = owner.querySelector('textarea'); input.focus();
+      const press = (key, ctrlKey = false) => {
+        const event = new h.w.KeyboardEvent('keydown', { key, ctrlKey, bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false, 'host keyboard owner receives the default action');
+        assert.equal(h.w.document.activeElement, input);
+      };
+      press('f', true);
+      assert.equal(h.w.document.querySelector('#dsh-find-all-root'), null);
+      owner.hidden = true;
+      h.open(a.anchor); h.search('needle'); await h.advance(300);
+      owner.hidden = false; input.focus();
+      for (const [key, ctrlKey] of [['f', true], ['g', true], ['F3', false], ['Escape', false]]) press(key, ctrlKey);
+      await h.advance(600);
+      assert.equal(h.count(), '1/1'); assertMainHighlights(h, a);
+      assert.notEqual(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
+    } finally { await h.finish(); }
+  });
+}
+
+
+test('a new Node store generation on the same session and DOM cancels old async feedback', async () => {
+  const h = setup();
+  try {
+    let nodes = new Map(), rejectOlder, calls = 0, hasMore = true;
+    const useChat = select => select({ nodes });
+    const a = await h.mount('session-a', true, { useChat });
+    h.faces.set('session-a', {
+      getSnapshot: () => ({ openState: 'open', openError: null, loadingOlder: false, hasMore }),
+      loadOlder() { calls++; return new Promise((resolve, reject) => rejectOlder = reject); },
+    });
+    h.open(); h.search('needle'); await h.advance(300);
+    assert.equal(calls, 1);
+    const originalAnchor = a.anchor, originalFlow = a.flow;
+    nodes = new Map(); hasMore = false;
+    a.flow.textContent = 'new generation needle needle';
+    await act(async () => a.root.render(React.createElement(h.Component, { sessionId: 'session-a', useChat })));
+    await h.advance(600);
+    assert.equal(a.panel.querySelector('[data-find-all-session]'), originalAnchor);
+    assert.equal(a.panel.querySelector('[data-chat-flow]'), originalFlow);
+    assert.equal(h.count(), '1/2'); assertMainHighlights(h, a);
+    rejectOlder(new Error('old generation failure')); await h.advance(1200);
+    assert.equal(calls, 1); assert.equal(h.count(), '1/2');
+    assert.equal(h.status(), 'Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed', 'stale failure cannot overwrite the new generation status');
+    assert.doesNotMatch(h.status(), /incomplete|failed/i);
+    assert.deepEqual([...new Set(h.requested)], ['session-a']);
+    assertMainHighlights(h, a);
   } finally { await h.finish(); }
 });

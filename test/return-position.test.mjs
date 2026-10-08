@@ -4,13 +4,14 @@ import {snapshot, key} from './helpers/search-ui.mjs';
 
 import {reader} from './helpers/reading-ui.mjs';
 
-test('return is disabled until a measured result landing, then returns to original paragraph and closes', async () => {
+test('return is hidden until a measured result landing, then returns to original paragraph and closes', async () => {
   const h = await reader();
   try {
     h.openReader();
     assert.ok(h.button(), 'named return button exists');
-    assert.equal(h.button().disabled, true);
+    assert.equal(h.button().hidden, true);
     h.search('needle'); await h.advance(200);
+    assert.equal(h.button().hidden, false);
     assert.equal(h.button().disabled, false);
     assert.equal(h.scroll.scrollTop, 1320);
     h.button().click(); await h.advance(0); await h.advance(1000);
@@ -19,6 +20,21 @@ test('return is disabled until a measured result landing, then returns to origin
     assert.equal(h.w.CSS.highlights.size, 0);
     assert.equal(h.timers.size, 0);
     h.open(); assert.equal(h.w.document.querySelector('#dsh-find-all-root input').value, 'needle');
+    assert.equal(h.button().hidden, true);
+  } finally {await h.finish();}
+});
+
+test('navigation does not recenter a match that is already visible', async () => {
+  const h = await reader();
+  try {
+    h.openReader(); h.search('needle'); await h.advance(200);
+    assert.equal(h.scroll.scrollTop, 1320);
+    const scrollCalls = h.scrolls.length;
+    key(h, 'Enter'); await h.advance(200);
+    assert.equal(h.scroll.scrollTop, 1320, 'the visible next match keeps the reading viewport stable');
+    assert.equal(h.scrolls.length, scrollCalls, 'visible navigation does not call scrollIntoView again');
+    key(h, 'Enter', {shiftKey: true}); await h.advance(200);
+    assert.equal(h.scroll.scrollTop, 1320, 'the visible previous match also keeps the viewport stable');
   } finally {await h.finish();}
 });
 
@@ -60,12 +76,37 @@ test('Esc abandons the origin, and the next opening captures the current reading
   } finally {await h.finish();}
 });
 
-test('no result and failed scrolling never enable return', async () => {
+test('no result and failed scrolling never reveal return', async () => {
   const h = await reader();
   try {
-    h.openReader(); h.search('absent'); await h.advance(800); assert.equal(h.button().disabled, true);
+    h.openReader(); h.search('absent'); await h.advance(800); assert.equal(h.button().hidden, true);
     h.w.HTMLElement.prototype.scrollIntoView = () => {};
-    h.search('needle'); await h.advance(2000); assert.equal(h.button().disabled, true);
+    h.search('needle'); await h.advance(2000); assert.equal(h.button().hidden, true);
+  } finally {await h.finish();}
+});
+
+test('history matches preserve the reading position, prompt for Enter, then reveal return after navigation', async () => {
+  const h = await reader();
+  try {
+    const oldHit = h.v.flow.lastChild;
+    oldHit.remove(); h.nodes.delete('hit');
+    const state = snapshot();
+    h.faces.set('a', {getSnapshot: () => state, async loadOlder() {
+      h.v.flow.insertAdjacentHTML('beforeend', '<div data-chat-node-key="older-hit" data-chat-anchor-key="older-hit"><p data-y="1400">needle</p></div>');
+      h.nodes.set('older-hit', {key: 'older-hit', anchorSeq: 1, visibility: 'visible'});
+      state.hasMore = false;
+    }});
+    h.open(h.v.anchor); h.search('needle'); await h.advance(800);
+    assert.equal(h.scroll.scrollTop, 440, 'background paging preserves the reading position');
+    assert.equal(h.button().hidden, true);
+    assert.match(h.status(), /^Matches found; press Enter to navigate\./);
+    assert.equal(h.w.document.querySelector('.status').getAttribute('aria-atomic'), 'true');
+    key(h, 'Enter'); await h.advance(200);
+    assert.equal(h.scroll.scrollTop, 1320);
+    assert.equal(h.button().hidden, false);
+    assert.equal(h.button().disabled, false);
+    assert.doesNotMatch(h.status(), /press Enter/i);
+    assert.ok([...h.w.document.querySelectorAll('[role="status"]')].some(node => node.textContent === 'Moved to a match; return to the reading position is available'));
   } finally {await h.finish();}
 });
 
@@ -214,7 +255,7 @@ test('focus returns without a scroll or composer draft edit and success remains 
     assert.equal(h.w.document.activeElement, draft); assert.equal(draft.value, 'unfinished draft');
     assert.equal(h.scroll.scrollTop, 440);
     assert.ok([...h.w.document.querySelectorAll('[role="status"]')].some(node => node.textContent === 'Returned to reading position'));
-    key(h, 'f', {ctrlKey: true}); assert.equal(h.button().disabled, true);
+    key(h, 'f', {ctrlKey: true}); assert.equal(h.button().hidden, true);
   } finally {await h.finish();}
 });
 
@@ -277,7 +318,7 @@ test('an explicitly removed host session invalidates the return point without cl
     h.openReader(); h.search('needle'); await h.advance(200); state.removed = true;
     h.button().click(); await h.advance(0); await h.advance(1000);
     assert.match(h.status(), /original content is no longer available/);
-    assert.equal(h.button().disabled, true);
+    assert.equal(h.button().hidden, true);
     assert.notEqual(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
     assert.equal(h.scroll.scrollTop, 1320);
   } finally {await h.finish();}

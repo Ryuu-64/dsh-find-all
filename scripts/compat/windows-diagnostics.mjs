@@ -38,7 +38,7 @@ export function readAsarManifest(archive) {
   } finally { fs.closeSync(fd); }
 }
 
-export async function startDiagnostics(installation, appEnv, redact) {
+export async function startDiagnostics(installation, appEnv, redact, { analyzeDumps = false } = {}) {
   assert.equal(process.platform, 'win32');
   const manifest = readAsarManifest(path.join(installation.installDirectory, 'resources', 'app.asar'));
   assert.equal(manifest.name, '@deepseek-ai/dsh-desktop');
@@ -125,8 +125,10 @@ export async function startDiagnostics(installation, appEnv, redact) {
           file.artifact = filename;
           delete file.text;
         }
-        try { summary.dumpAnalysis = await analyzeExistingDumps(raw, context); }
-        catch (error) { summary.dumpAnalysis = { status: 'failed', error: redact(error.message) }; }
+        if (analyzeDumps) {
+          try { summary.dumpAnalysis = await analyzeExistingDumps(raw, context); }
+          catch (error) { summary.dumpAnalysis = { status: 'failed', error: redact(error.message) }; }
+        } else summary.dumpAnalysis = { status: 'not-run', reason: 'optional startup diagnostics disabled' };
         summary.evidence = raw;
       }
       fs.writeFileSync(path.join(output, 'windows-diagnostics.json'), JSON.stringify(summary, (_key, value) => typeof value === 'string' ? redact(value) : value, 2));

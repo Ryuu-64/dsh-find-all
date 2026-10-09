@@ -186,7 +186,7 @@ async function startSearch(page, label, whole, origin) {
   await eventually(() => bar.locator('.count').innerText(), text => /^(0|1)\/1$/.test(text), 'one search result is available', 60_000);
   if (whole) {
     await eventually(() => bar.locator('.status').innerText(),
-      text => text === 'Matches found; press Enter to navigate. Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed',
+      text => text === '1 matches found; Enter or Next goes to the first, Previous goes to the last. Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed',
       'available-history scan completion', 60_000);
     assert.equal(await bar.locator('[data-find-all-return]').isHidden(), true, 'background paging is not a reader navigation');
     const beforeNavigation = await witnessForMarker(page, origin.marker);
@@ -212,10 +212,11 @@ async function activateReturn(page, bar, mode) {
 async function settledResult(page, bar, witness, timeout = 5000) {
   const state = await eventually(async () => ({ hidden: !(await bar.isVisible()),
     status: await bar.locator('.status').innerText(),
-  }), state => state.hidden || /Unable|could not|failed|Cannot|not keep|no longer|not available/i.test(state.status), 'return settles visibly', timeout);
+    returnHidden: await bar.locator('[data-find-all-return]').isHidden(),
+  }), state => (!state.hidden && state.returnHidden && state.status === 'Returned to reading position') || /Unable|could not|failed|Cannot|not keep|no longer|not available/i.test(state.status), 'return settles visibly', timeout);
   await page.waitForTimeout(1200);
   const after = await witnessForMarker(page, witness.marker);
-  return { ...state, after, geometryDelta: after.top - witness.top,
+  return { ...state, returned: !state.hidden && state.returnHidden && state.status === 'Returned to reading position', after, geometryDelta: after.top - witness.top,
     sameAnchor: after.anchorKey === witness.anchorKey && after.nodeKey === witness.nodeKey,
     sameParagraph: after.offset === witness.offset && after.paragraph === witness.paragraph };
 }
@@ -265,26 +266,12 @@ export async function exerciseReturnPosition(page, capture) {
       record.return = await settledResult(page, bar, record.before);
       record.inputEvents = await page.evaluate(start => window.__returnInputEvidence.slice(start), inputStart);
       record.hostTurnEvents = await page.evaluate(start => window.__hostTurnInputEvidence.slice(start), hostInputStart);
-      if (nativePaging && record.return.hidden) assert.ok(record.hostTurnEvents.some(event => !event.trusted),
+      if (nativePaging && record.return.returned) assert.ok(record.hostTurnEvents.some(event => !event.trusted),
         'plugin should normally click the host Turn control; this is programmatic, not a trusted reading event');
       assert.ok(record.inputEvents.some(event => event.type === 'click' && event.trusted), 'return must receive a trusted browser click');
       assert.ok(record.inputEvents.every(event => !event.insideScrollport), 'fixture return control must be outside the host scrollport');
       await capture(`${label.toLowerCase()}-after-return`);
-      if (nativePaging && !record.return.hidden) {
-        // Keep the initial failure as a failure. Separately observe whether a
-        // real reader wheel releases host paging and lets the user retry.
-        const box = await page.locator('[data-conversation-scroll]').boundingBox();
-        await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.35);
-        await page.mouse.wheel(0, 120);
-        await page.waitForTimeout(700);
-        await activateReturn(page, bar, mode);
-        record.recovery = await settledResult(page, bar, record.before);
-        record.recovery.afterTrustedWheel = true;
-        record.recovery.result = record.recovery.hidden && record.recovery.sameAnchor && record.recovery.sameParagraph
-          && Math.abs(record.recovery.geometryDelta) <= 4 ? 'passed' : 'failed';
-        await capture(`${label.toLowerCase()}-wheel-retry`);
-      }
-      assert.ok(record.return.hidden, `return must finish and close the bar: ${record.return.status}`);
+      assert.ok(record.return.returned, `return must finish successfully: ${record.return.status}`);
       assert.ok(record.return.sameAnchor && record.return.sameParagraph, 'same semantic node, paragraph, and text offset');
       assert.ok(Math.abs(record.return.geometryDelta) <= 4, `return must restore passage geometry: ${record.return.geometryDelta}`);
       record.result = 'passed';
@@ -346,7 +333,7 @@ export async function exerciseReturnPosition(page, capture) {
     await page.waitForTimeout(1500);
     stream.afterFurtherGrowth = await witnessForMarker(page, stream.before.marker);
     await capture('stream-after-return');
-    assert.ok(stream.return.hidden && stream.return.sameAnchor && stream.return.sameParagraph, 'streaming return must restore and close');
+    assert.ok(stream.return.returned && stream.return.sameAnchor && stream.return.sameParagraph, 'streaming return must restore successfully');
     assert.ok(Math.abs(stream.return.geometryDelta) <= 48, 'width reflow must preserve the original live passage within two line heights');
     assert.ok(Math.abs(stream.afterFurtherGrowth.top - firstReturn.top) <= 4, 'later stream growth must not pull reader to tail');
     assert.ok(stream.afterFurtherGrowth.distanceFromBottom > 1000, 'tail following must remain cancelled');
@@ -364,7 +351,7 @@ export async function exerciseReturnPosition(page, capture) {
 }
 
 function assertReturned(result) {
-  assert.ok(result.hidden, `return finishes visibly: ${result.status}`);
+  assert.ok(result.returned, `return finishes visibly: ${result.status}`);
   assert.ok(result.sameAnchor && result.sameParagraph, 'return retains semantic node, paragraph, and offset');
   assert.ok(Math.abs(result.geometryDelta) <= 4, `return geometry delta ${result.geometryDelta}`);
 }

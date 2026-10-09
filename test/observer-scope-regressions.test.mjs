@@ -193,7 +193,7 @@ for (const scope of ['whole', 'page']) {
       h.w.document.body.append(menu);
       view.flow.innerHTML = '<p>first needle</p><p>second needle</p>';
       await waitFor(() => h.hits().length === 2, 'body additions must become searchable');
-      assert.equal(h.count().split('/')[1], '2'); h.assertHits(view.flow, 2);
+      assert.equal(h.count(), '2 results'); h.assertHits(view.flow, 2);
       // Selection after a zero-result update is a separate issue; a new input
       // event establishes the first result before checking both navigation paths.
       h.search('needle');

@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.8
 
-- Keep Ctrl+F and the header search button bound to the current main conversation when embedded sidebars open, receive focus, or close. Rebind after main-view navigation with instance/store generation checks, and leave modal/editor shortcuts alone.
+- Keep Ctrl+F and the header search button bound to the current main conversation across sidebar focus changes and main-view navigation.
+- Add a return-to-reading-position control that restores a saved passage after navigating search results, with visible feedback when the host cannot restore it.
+- Improve match navigation feedback and align the find bar with the conversation's layout and theme.
+- Reveal retained, collapsed result content through the host's disclosure controls when navigating to a match; explain when it cannot be displayed.
+- Exclude message-action controls from conversation search results.
 
-- Add a draft return-to-reading-position feature for Issue #15. Capture one semantic content/text position per find opening, preserve the query, verify actual visible landings, and bound/cancel recovery work. This feature remains pending real Web and Desktop acceptance; no release version or support declaration is changed.
+The supported host-version list is unchanged. Returning to a saved passage depends on the host retaining and displaying that content; if restoration fails, the find bar remains available for retry.
 
 ## 0.1.7
 

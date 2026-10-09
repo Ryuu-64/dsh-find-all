@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9
+
+- Reveal host-owned `hidden="until-found"` content before scrolling to a search match, instead of treating its layout geometry as proof that the match is visible.
+- Wait for concealed matches to become visible before marking navigation as successful.
+
+The supported host-version list is unchanged.
+
 ## 0.1.8
 
 - Keep Ctrl+F and the header search button bound to the current main conversation across sidebar focus changes and main-view navigation.

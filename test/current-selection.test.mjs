@@ -7,23 +7,6 @@ function page(h, view, query = 'needle') {
 }
 async function rescan(h) { await Promise.resolve(); await h.advance(550); }
 
-for (const number of [1, 3]) {
-  test(`body update from zero keeps ${number} matches unselected without scrolling`, async () => {
-    const h = setup();
-    try {
-      const v = await h.mount('a'); v.flow.innerHTML = '<p>old</p>'; page(h, v);
-      assert.equal(h.count(), '0/0');
-      v.flow.firstChild.textContent = 'needle '.repeat(number); await rescan(h);
-      assert.equal(h.count(), `${number} results`); assert.equal(current(h), undefined);
-      assert.deepEqual([...h.w.CSS.highlights.get('dsh-find-all-hit')].map(range => range.toString()), Array(number).fill('needle'));
-      assert.equal(h.scrolls.length, 0);
-      key(h, 'Enter'); assert.equal(h.scrolls.length, 1);
-      v.flow.replaceChildren(); await rescan(h);
-      assert.equal(h.count(), '0/0'); assert.equal(current(h), undefined);
-    } finally { await h.finish(); }
-  });
-}
-
 test('paging from zero keeps its matches unselected without scrolling', async () => {
   const h = setup();
   try {

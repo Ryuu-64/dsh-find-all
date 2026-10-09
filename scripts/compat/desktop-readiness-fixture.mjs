@@ -25,8 +25,8 @@ export async function verifyDesktopReadinessFixture() {
     assert.equal(await workspaceControlsVisible(page), false, 'visible lookalikes are not official controls');
     await page.setContent('<main>Loading workspace</main>');
     assert.equal(await workspaceControlsVisible(page), false, 'no shell');
-    await verifyDesktopPluginInstallFixture(page);
-    console.log('Desktop readiness: old failures reproduced; six real DOM visibility cases passed');
+    const pluginInstall = await verifyDesktopPluginInstallFixture(page);
+    console.log('Static Desktop fixtures: six readiness cases and two plugin-install cases passed');
+    return { status: 'passed', cases: 6, oldCaseAndStrictFailuresReproduced: true, pluginInstall };
   } finally { await browser.close(); }
-  return { status: 'passed', cases: 6, oldCaseAndStrictFailuresReproduced: true };
 }

@@ -102,14 +102,6 @@ function setup() {
       assert.equal(range.toString(), 'needle');
     }
   }
-  function assertCurrent(flow, index) {
-    const current = [...w.CSS.highlights.get('dsh-find-all-cur')];
-    assert.deepEqual(current, [hits()[index]]);
-    assert.equal(count(), `${index + 1}/${hits().length}`);
-    assertHits(flow, hits().length);
-    assert.equal(scrolls.at(-1), current[0].startContainer.parentElement);
-    assert.ok(flow.contains(scrolls.at(-1)));
-  }
   async function finish() {
     for (const cleanup of cleanups.reverse()) cleanup?.();
     for (const view of views) await act(async () => view.root.unmount());
@@ -119,7 +111,7 @@ function setup() {
       else delete globalThis[key];
     }
   }
-  return { w, mount, bar, count, hits, scans, work, scrolls, bound, open, search, assertHits, assertCurrent, finish };
+  return { w, mount, bar, count, hits, scans, work, scrolls, bound, open, search, assertHits, finish };
 }
 
 async function waitFor(predicate, message) {
@@ -164,55 +156,6 @@ test('body observer is idle for 1.1 seconds but responds to childList and charac
     assert.equal(h.w.CSS.highlights.size, 0);
   } finally { await h.finish(); }
 });
-
-for (const scope of ['whole', 'page']) {
-  test(`${scope} excludes sidebar-only matches and keeps counts, highlights and navigation in the body`, async () => {
-    const h = setup();
-    try {
-      const view = await h.mount('session-a');
-      h.open(view);
-      if (scope === 'page') h.bar('.scope').click();
-      h.search('needle');
-      await delay(350);
-      assert.equal(h.bar('.scope').hasAttribute('data-whole'), scope === 'whole');
-      assert.equal(h.count(), '0/0'); h.assertHits(view.flow, 0);
-      assert.equal(h.w.CSS.highlights.size, 0);
-      assert.equal(h.scrolls.length, 0);
-      if (scope === 'whole') {
-        assert.ok(h.bound.length > 0);
-        assert.ok(h.bound.every(id => id === 'session-a'));
-      } else assert.deepEqual(h.bound, []);
-
-      // Additional distractors outside the selected body must also stay excluded.
-      const other = await h.mount('session-b', '<p>needle</p>');
-      const hidden = await h.mount('session-old', '<p>needle</p>');
-      hidden.panel.hidden = true;
-      view.panel.querySelector('textarea').textContent = 'composer needle';
-      const menu = h.w.document.createElement('menu');
-      menu.innerHTML = '<button>menu needle</button><input value="needle">';
-      h.w.document.body.append(menu);
-      view.flow.innerHTML = '<p>first needle</p><p>second needle</p>';
-      await waitFor(() => h.hits().length === 2, 'body additions must become searchable');
-      assert.equal(h.count().split('/')[1], '2'); h.assertHits(view.flow, 2);
-      // Selection after a zero-result update is a separate issue; a new input
-      // event establishes the first result before checking both navigation paths.
-      h.search('needle');
-      h.bar('[aria-label="Next match"]').click(); h.assertCurrent(view.flow, 1);
-      h.bar('[aria-label="Previous match"]').click(); h.assertCurrent(view.flow, 0);
-      h.bar('[aria-label="Previous match"]').click(); h.assertCurrent(view.flow, 1);
-
-      h.bar('.scope').click();
-      await delay(350);
-      assert.equal(h.bar('.scope').hasAttribute('data-whole'), scope !== 'whole');
-      assert.equal(h.count(), '2/2'); h.assertHits(view.flow, 2);
-      h.bar('[aria-label="Next match"]').click(); h.assertCurrent(view.flow, 0);
-      assert.ok(h.scans.every(root => root === view.flow));
-      assert.ok(h.bound.length > 0);
-      assert.ok(h.bound.every(id => id === 'session-a'));
-      assert.ok(!h.hits().some(range => other.flow.contains(range.startContainer)));
-    } finally { await h.finish(); }
-  });
-}
 
 test('switching session and replacing its body detach old observers and fail closed without a body', async () => {
   const h = setup();

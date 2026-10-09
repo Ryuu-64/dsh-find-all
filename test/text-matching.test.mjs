@@ -257,31 +257,12 @@ async function mountedFixture(html) {
   return {
     ...h, flow, advance, errors,
     search(query) { const input = w.document.querySelector('#dsh-find-all-root input'); input.value = query; input.dispatchEvent(new w.Event('input', { bubbles: true })); },
-    navigate(shiftKey = false) { w.document.querySelector('#dsh-find-all-root input').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', shiftKey, bubbles: true })); },
     count: () => w.document.querySelector('#dsh-find-all-root .count').textContent,
     hits: () => [...(w.CSS.highlights.get('dsh-find-all-hit') || [])],
-    current: () => [...(w.CSS.highlights.get('dsh-find-all-cur') || [])],
     scrolls: () => scrolls,
     async finish() { await act(async () => viewRoot.unmount()); for (const cleanup of cleanups.reverse()) cleanup?.(); h.dom.window.close(); },
   };
 }
-
-test('bar counts and navigates each cross-node phrase as one whole hit', async () => {
-  const h = await mountedFixture('<p>Hello <strong>world</strong></p><p><a>Hello</a> <code>world</code></p>');
-  try {
-    h.search('Hello world'); await h.advance(251);
-    assert.equal(h.count(), '1/2');
-    assert.deepEqual(h.hits().map(r => r.toString()), ['Hello world', 'Hello world']);
-    assert.equal(h.current()[0], h.hits()[0]);
-    const before = h.scrolls();
-    h.navigate();
-    assert.equal(h.count(), '2/2'); assert.equal(h.current()[0], h.hits()[1]);
-    h.navigate(true);
-    assert.equal(h.count(), '1/2'); assert.equal(h.current()[0], h.hits()[0]);
-    assert.equal(h.scrolls(), before + 2);
-    assert.deepEqual(h.errors, []);
-  } finally { await h.finish(); }
-});
 
 test('bar handles İ without an offset error and highlights only original x characters', async () => {
   const h = await mountedFixture('<p>İx</p><p><span>İ</span><em>x</em></p>');

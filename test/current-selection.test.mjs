@@ -7,28 +7,15 @@ function page(h, view, query = 'needle') {
 }
 async function rescan(h) { await Promise.resolve(); await h.advance(550); }
 
-for (const number of [1, 3]) {
-  test(`body update from zero selects the first of ${number} matches without scrolling`, async () => {
-    const h = setup();
-    try {
-      const v = await h.mount('a'); v.flow.innerHTML = '<p>old</p>'; page(h, v);
-      assert.equal(h.count(), '0/0');
-      v.flow.firstChild.textContent = 'needle '.repeat(number); await rescan(h);
-      assert.equal(h.count(), `1/${number}`); assert.equal(current(h).toString(), 'needle'); assert.equal(h.scrolls.length, 0);
-      key(h, 'Enter'); assert.equal(h.scrolls.length, 1);
-      v.flow.replaceChildren(); await rescan(h);
-      assert.equal(h.count(), '0/0'); assert.equal(current(h), undefined);
-    } finally { await h.finish(); }
-  });
-}
-
-test('paging from zero selects its first match without scrolling', async () => {
+test('paging from zero keeps its matches unselected without scrolling', async () => {
   const h = setup();
   try {
     const v = await h.mount('a'); v.flow.innerHTML = '<p>old</p>'; const state = snapshot();
     h.faces.set('a', {getSnapshot: () => state, async loadOlder() {v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p><p>needle</p>'); state.hasMore = false;}});
     h.open(v.anchor); h.search('needle'); h.scrolls.length = 0; await h.advance(600);
-    assert.equal(h.count(), '1/2'); assert.equal(current(h).toString(), 'needle'); assert.equal(h.scrolls.length, 0);
+    assert.equal(h.count(), '2 results'); assert.equal(current(h), undefined);
+    assert.deepEqual([...h.w.CSS.highlights.get('dsh-find-all-hit')].map(range => range.toString()), ['needle', 'needle']);
+    assert.equal(h.scrolls.length, 0);
   } finally { await h.finish(); }
 });
 

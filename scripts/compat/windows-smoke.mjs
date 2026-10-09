@@ -2,6 +2,8 @@
 // qualify other Desktop releases. Only synthetic profile/history data is used.
 // Usage: node scripts/compat/windows-smoke.mjs <candidate.tgz> <evidence-directory>
 // First run install-windows.ps1 with that same fresh evidence directory.
+// Optional FIND_ALL_STARTUP_DIAGNOSTICS=1 enables the deliberate rc2 USERPROFILE
+// comparison and existing dump/symbol analysis; base logs and error gates stay on.
 //
 // Official dsh-v0.2.0-rc.2 sources: apps/desktop/README.md, src/paths.ts,
 // src/main.ts, src/runtime-tree.ts, src/welcome-window.ts, src/client/WelcomePage.tsx,
@@ -37,6 +39,7 @@ const targets = JSON.parse(fs.readFileSync(new URL('./desktop-targets.json', imp
 const version = requestedVersion || '0.2.0-rc.2';
 assert.ok(Object.hasOwn(targets, version), 'only exact researched Desktop versions are allowed');
 const target = targets[version];
+const startupDiagnostics = process.env.FIND_ALL_STARTUP_DIAGNOSTICS === '1';
 const packageName = '@ryuu-64/dsh-find-all';
 const secrets = new Set();
 const basicRedact = createRedactor(secrets);
@@ -51,6 +54,7 @@ const report = {
   schemaVersion: 1, target: 'windows-x64-installed-electron', version,
   sourceTag: `dsh-v${version}`, status: 'pending', stage: 'preflight',
   bootstrap: 'not-run', emptySessionFind: 'not-run', syntheticHistory: 'not-run',
+  readinessFixture: { status: 'not-run' },
   desktopReleaseMatrix: 'not-run', browserErrors: [], consoleErrors: [], consoleEvents: [], networkFailures: [],
   testedScope: [],
   intendedScope: [
@@ -407,22 +411,37 @@ try {
   setStage('readiness-dom-regression');
   // Preserve DEBUG_FILE initialization before the fixture first loads Playwright.
   await loadPlaywright();
-  const { verifyDesktopReadinessFixture } = await import('./desktop-readiness-fixture.mjs');
-  report.readinessFixture = await verifyDesktopReadinessFixture();
+  // Historical children reuse only this run's parent evidence. An explicit
+  // standalone version has no inherited report, so it runs the fixtures itself.
+  const fixtureReport = process.env.FIND_ALL_DESKTOP_FIXTURE_REPORT;
+  if (requestedVersion && fixtureReport) {
+    report.readinessFixture = { status: 'not-run', reason: 'shared static fixtures run by the matrix parent', report: path.relative(output, fixtureReport) };
+    const parent = JSON.parse(fs.readFileSync(fixtureReport, 'utf8'));
+    assert.equal(parent.target, report.target);
+    assert.equal(parent.version, '0.2.0-rc.2');
+    assert.equal(parent.artifactSha256, report.artifactSha256, 'shared fixture evidence must belong to this candidate');
+    assert.equal(parent.readinessFixture?.status, 'passed', 'matrix parent static fixtures must pass');
+    assert.equal(parent.readinessFixture.cases, 6);
+    assert.equal(parent.readinessFixture.pluginInstall?.status, 'passed');
+    assert.equal(parent.readinessFixture.pluginInstall.cases, 2);
+  } else {
+    const { verifyDesktopReadinessFixture } = await import('./desktop-readiness-fixture.mjs');
+    report.readinessFixture = { status: 'running' };
+    report.readinessFixture = await verifyDesktopReadinessFixture();
+  }
   setStage('prepare-startup-diagnostics');
-  diagnostics = await startDiagnostics(installation, env, redact);
-  // Controlled reproduction of the user report: same executable, DSH_HOME,
-  // HOME, cwd and default native appData path; only USERPROFILE changes.
-  // Both profiles belong to this new hosted runner, never a user's desktop.
-  const comparisonEnv = { ...env, DSH_HOME: path.join(home, 'comparison-dsh'), DSH_AGENTS_HOME: path.join(home, 'comparison-agents') };
-  if (version === '0.2.0-rc.2') {
+  diagnostics = await startDiagnostics(installation, env, redact, { analyzeDumps: startupDiagnostics });
+  // Optional controlled reproduction: only USERPROFILE changes between these
+  // owned runner profiles. Neither launch supplies Desktop UI acceptance.
+  if (startupDiagnostics && version === '0.2.0-rc.2') {
+    const comparisonEnv = { ...env, DSH_HOME: path.join(home, 'comparison-dsh'), DSH_AGENTS_HOME: path.join(home, 'comparison-agents') };
     report.profileEnvironmentComparison = {
       changedVariable: 'USERPROFILE', userDataOverride: false,
       temporary: await diagnoseNormalLaunch({ mode: 'temporary-userprofile', environment: { ...comparisonEnv, USERPROFILE: home }, useUserDataDir: false }),
       original: await diagnoseNormalLaunch({ mode: 'original-userprofile', environment: comparisonEnv, useUserDataDir: false }),
       limitation: 'Process survival is a startup diagnostic, not Desktop UI acceptance; the actual smoke below uses its own explicit user-data-dir.',
     };
-  } else report.profileEnvironmentComparison = { status: 'not-repeated', reason: 'the deliberate temporary-USERPROFILE crash control was already established on rc2; this case preserves the real runner USERPROFILE' };
+  } else report.profileEnvironmentComparison = { status: 'not-run', reason: startupDiagnostics ? 'the optional USERPROFILE comparison is scoped to rc2' : 'optional startup diagnostics disabled' };
   report.diagnosticCollector = diagnostics.ready;
   setStage('initialize-desktop-profile');
   await launch();
@@ -537,6 +556,7 @@ try {
   report.status = 'failed';
   report.error = redact(error instanceof Error ? error.message : error);
   report.errorStack = error instanceof Error ? redact(error.stack || '') : undefined;
+  if (report.readinessFixture.status === 'running') report.readinessFixture = { status: 'failed', error: report.error };
   if (report.stage === 'initialize-desktop-profile' && !app && installation && env) {
     try { report.normalLaunchDiagnostic = await diagnoseNormalLaunch(); }
     catch (diagnosticError) { report.normalLaunchDiagnostic = { error: redact(diagnosticError.message) }; }
@@ -596,7 +616,7 @@ if (!requestedVersion) {
     save(file, value) { fs.writeFileSync(file, JSON.stringify(value, (_key, item) => typeof item === 'string' ? redact(item) : item, 2)); },
     async run(executable, args, log, timeoutMs) {
       console.log(`[desktop-matrix] ${new Date().toISOString()} ${path.basename(log)}`);
-      const childEnv = { ...process.env };
+      const childEnv = { ...process.env, FIND_ALL_DESKTOP_FIXTURE_REPORT: resultPath };
       delete childEnv.DEBUG; delete childEnv.DEBUG_FILE; delete childEnv.PWDEBUG;
       return runOwnedCommand(executable, args, {
         env: childEnv, timeoutMs, stop: stopOwnedProcessTree,

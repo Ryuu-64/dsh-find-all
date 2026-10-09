@@ -4,7 +4,7 @@ import {snapshot, key} from './helpers/search-ui.mjs';
 
 import {reader} from './helpers/reading-ui.mjs';
 
-test('return is hidden until a measured result landing, then returns to original paragraph and closes', async () => {
+test('return is hidden until a measured result landing, then returns to original paragraph', async () => {
   const h = await reader();
   try {
     h.openReader();
@@ -16,10 +16,9 @@ test('return is hidden until a measured result landing, then returns to original
     assert.equal(h.scroll.scrollTop, 1320);
     h.button().click(); await h.advance(0); await h.advance(1000);
     assert.equal(h.scroll.scrollTop, 440);
-    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
-    assert.equal(h.w.CSS.highlights.size, 0);
-    assert.equal(h.timers.size, 0);
-    h.open(); assert.equal(h.w.document.querySelector('#dsh-find-all-root input').value, 'needle');
+    assert.notEqual(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
+    assert.equal(h.status(), 'Returned to reading position');
+    assert.equal(h.w.document.querySelector('#dsh-find-all-root input').value, 'needle');
     assert.equal(h.button().hidden, true);
   } finally {await h.finish();}
 });
@@ -99,13 +98,13 @@ test('history matches preserve the reading position, prompt for Enter, then reve
     h.open(h.v.anchor); h.search('needle'); await h.advance(800);
     assert.equal(h.scroll.scrollTop, 440, 'background paging preserves the reading position');
     assert.equal(h.button().hidden, true);
-    assert.match(h.status(), /^Matches found; press Enter to navigate\./);
+    assert.match(h.status(), /^1 matches found; Enter or Next goes to the first, Previous goes to the last\./);
     assert.equal(h.w.document.querySelector('.status').getAttribute('aria-atomic'), 'true');
     key(h, 'Enter'); await h.advance(200);
     assert.equal(h.scroll.scrollTop, 1320);
     assert.equal(h.button().hidden, false);
     assert.equal(h.button().disabled, false);
-    assert.doesNotMatch(h.status(), /press Enter/i);
+    assert.doesNotMatch(h.status(), /Enter or Next goes to the first/);
     assert.ok([...h.w.document.querySelectorAll('[role="status"]')].some(node => node.textContent === 'Moved to a match; return to the reading position is available'));
   } finally {await h.finish();}
 });
@@ -135,7 +134,6 @@ test('a line in the middle of a long paragraph survives changed wrapping', async
     columns = 5;
     h.button().click(); await h.advance(0); await h.advance(1200);
     assert.equal(h.scroll.scrollTop, 880, 'same text offset, not the paragraph or message top');
-    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
   } finally {await h.finish();}
 });
 
@@ -246,13 +244,13 @@ test('history no-progress and request rejection are bounded, visible and retryab
   }
 });
 
-test('focus returns without a scroll or composer draft edit and success remains announced after close', async () => {
+test('return focuses search without a scroll or composer draft edit and announces success', async () => {
   const h = await reader();
   try {
     const draft = h.v.panel.querySelector('textarea'); draft.value = 'unfinished draft'; draft.focus();
     h.openReader(); h.search('needle'); await h.advance(200);
     h.button().focus(); h.button().click(); await h.advance(0); await h.advance(1200);
-    assert.equal(h.w.document.activeElement, draft); assert.equal(draft.value, 'unfinished draft');
+    assert.equal(h.w.document.activeElement, h.w.document.querySelector('#dsh-find-all-root input')); assert.equal(draft.value, 'unfinished draft');
     assert.equal(h.scroll.scrollTop, 440);
     assert.ok([...h.w.document.querySelectorAll('[role="status"]')].some(node => node.textContent === 'Returned to reading position'));
     key(h, 'f', {ctrlKey: true}); assert.equal(h.button().hidden, true);
@@ -306,7 +304,6 @@ test('inline token replacement preserves whitespace and the same semantic text p
     h.v.flow.firstChild.children[1].innerHTML = '<span>original</span> <em>reading</em> <strong>paragraph</strong>';
     h.button().click(); await h.advance(0); await h.advance(1200);
     assert.equal(h.scroll.scrollTop, 440);
-    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
   } finally {await h.finish();}
 });
 
@@ -346,7 +343,6 @@ test('return uses a scoped loaded native Turn control to release host paging bef
     clicks = 0; preserved = true;
     h.button().click(); await h.advance(0); await h.advance(1500);
     assert.equal(clicks, 1); assert.equal(h.scroll.scrollTop, 440);
-    assert.equal(h.w.document.querySelector('#dsh-find-all-root').style.display, 'none');
   } finally {await h.finish();}
 });
 

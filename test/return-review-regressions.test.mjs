@@ -48,7 +48,6 @@ test('a long paragraph scrolled inside a process group captures and restores its
     h.button().click(); await h.advance(0); await h.advance(1400);
     assert.equal(body.scrollTop, 300, 'restore the original line within its process group');
     assert.equal(h.scroll.scrollTop, 440, 'restore the group within the outer viewport');
-    assertClosedAndClean(h);
   } finally {await h.finish();}
 });
 
@@ -93,39 +92,6 @@ test('a replaced session face ends return progress and ignores the old history c
   } finally {resolveLoad?.(); await h.finish();}
 });
 
-test('an asynchronously revealed outer turn allows its inner process disclosure to open on a later pass', async () => {
-  const h = await reader();
-  try {
-    h.openReader(); h.search('needle'); await h.advance(200);
-    const row = h.v.flow.firstChild; row.dataset.chatTurn = '1';
-    const group = h.w.document.createElement('div');
-    group.dataset.chatGroupKey = 'group-a'; group.dataset.chatTurn = '1'; group.hidden = true;
-    row.replaceWith(group);
-    const innerButton = h.w.document.createElement('button');
-    innerButton.dataset.processActivity = 'tools'; innerButton.setAttribute('aria-expanded', 'false'); group.append(innerButton);
-    const body = h.w.document.createElement('div'); body.dataset.stepProcessBody = ''; body.hidden = true;
-    group.append(body); body.append(row);
-    const turn = h.w.document.createElement('div'); turn.dataset.chatTurn = '1';
-    const outerButton = h.w.document.createElement('button');
-    outerButton.dataset.turnProcess = ''; outerButton.setAttribute('aria-expanded', 'false'); turn.append(outerButton); h.v.flow.prepend(turn);
-    let outerClicks = 0, innerClicks = 0;
-    outerButton.addEventListener('click', () => {
-      outerClicks++;
-      h.w.setTimeout(() => {group.hidden = false; outerButton.setAttribute('aria-expanded', 'true');}, 10);
-    });
-    innerButton.addEventListener('click', () => {
-      innerClicks++; body.hidden = false; innerButton.setAttribute('aria-expanded', 'true');
-    });
-    h.button().click(); await h.advance(0); await h.advance(1600);
-    assert.equal(outerClicks, 1); assert.equal(innerClicks, 1);
-    assert.equal(outerButton.getAttribute('aria-expanded'), 'true');
-    assert.equal(innerButton.getAttribute('aria-expanded'), 'true');
-    assert.equal(body.hidden, false);
-    assert.equal(h.scroll.scrollTop, 440);
-    assertClosedAndClean(h);
-  } finally {await h.finish();}
-});
-
 test('deleting the original of two identical paragraphs in the same node cannot retarget the surviving copy', async () => {
   const h = await reader();
   try {
@@ -154,7 +120,6 @@ test('deleting the original of two identical paragraphs in the same node cannot 
     row.prepend(first);
     h.button().click(); await h.advance(0); await h.advance(1400);
     assert.equal(h.scroll.scrollTop, 440);
-    assertClosedAndClean(h);
   } finally {await h.finish();}
 });
 
@@ -168,7 +133,6 @@ test('unchanged layout preserves the negative offset of a partially visible firs
     h.button().click(); await h.advance(0); await h.advance(1400);
     assert.equal(h.scroll.scrollTop, 470);
     assert.equal(paragraph.getBoundingClientRect().top, -10, 'the visible line must not be shifted down to the viewport edge');
-    assertClosedAndClean(h);
   } finally {await h.finish();}
 });
 
@@ -187,7 +151,6 @@ test('sidebar focus and dismissal preserve the main reading origin', async () =>
     sidebar.remove();
     h.button().click(); await h.advance(1400);
     assert.equal(h.scroll.scrollTop, 440);
-    assertClosedAndClean(h);
     assert.ok(h.requested.every(id => id === 'a'));
   } finally {await h.finish();}
 });

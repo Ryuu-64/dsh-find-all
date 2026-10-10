@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match the Host’s filled three-dot options icon and show readable idle, searching, empty, and incomplete count states; only available results open match-number navigation.
+
 - Show the running plugin version and a manual public-npm latest check in search options, with bounded requests, explicit failure states, and update instructions. No automatic installation or restart.
 
 - Add a localized About dialog using the Host Modal, with the author, explicit QQ-group copying, project links, upstream credits, and license notices.

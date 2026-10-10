@@ -38,6 +38,7 @@ var BAR_ID = "dsh-find-all-root";
 			move: "拖动查找栏；点击展开移动按钮", moveLeft: "向左移动", moveRight: "向右移动", moveUp: "向上移动", moveDown: "向下移动", resetPosition: "恢复默认位置",
 			cap: "仅显示前 {n} 处匹配",
 			resultCount: "{n} 个结果",
+            countReady: "待输入", countSearching: "搜索中", countEmpty: "无结果", countIncomplete: "未完成", countUnavailable: "不可用",
             jumpNumber: "跳转到结果序号", jumpRange: "输入 1–{n} 的整数；Enter 跳转，Esc 取消。", jumpInvalid: "请输入 1–{n} 的整数。",
 			contentButton: "搜索选项",
 			scopeLegend: "搜索范围",
@@ -82,6 +83,7 @@ var BAR_ID = "dsh-find-all-root";
 			move: "Drag find bar; click for move controls", moveLeft: "Move left", moveRight: "Move right", moveUp: "Move up", moveDown: "Move down", resetPosition: "Reset position",
 			cap: "Showing only the first {n} matches",
 			resultCount: "{n} results",
+            countReady: "Type to find", countSearching: "Searching", countEmpty: "No results", countIncomplete: "Incomplete", countUnavailable: "Unavailable",
             jumpNumber: "Go to match number", jumpRange: "Enter an integer from 1 to {n}; Enter to jump, Escape to cancel.", jumpInvalid: "Enter an integer from 1 to {n}.",
 			contentButton: "Search options",
 			scopeLegend: "Search scope",
@@ -229,8 +231,8 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
-				"#" + BAR_ID + " .count{flex:0 1 auto;min-width:44px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
-				"#" + BAR_ID + " button.count{width:auto;padding:0 4px;flex:0 1 auto}#" + BAR_ID + " button.count[hidden],#" + BAR_ID + " .count-editor[hidden],#" + BAR_ID + " .count-hint[hidden]{display:none}" +
+				"#" + BAR_ID + " .count{box-sizing:border-box;flex:0 1 80px;width:80px;min-width:64px;max-width:96px;height:28px;line-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/28px var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
+				"#" + BAR_ID + " button.count{width:80px;min-width:64px;padding:0 4px;flex:0 1 80px}#" + BAR_ID + " .count[hidden],#" + BAR_ID + " .count-editor[hidden],#" + BAR_ID + " .count-hint[hidden]{display:none}" +
                 "#" + BAR_ID + " .count-editor{display:flex;align-items:center;gap:2px;flex:none;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums}#" + BAR_ID + " input.count-input{box-sizing:border-box;width:5.5ch;min-width:0;height:28px;padding:0 3px;text-align:right;font:inherit;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l4);border-radius:4px}#" + BAR_ID + " input.count-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}#" + BAR_ID + " input.count-input[aria-invalid=true]{border-color:var(--dsw-alias-state-error-primary,#c33)}" +
                 "#" + BAR_ID + " .count-hint{padding:2px 8px 0 32px;color:var(--dsw-alias-label-secondary);font:12px/1.5 var(--dsw-font-family);overflow-wrap:anywhere}#" + BAR_ID + " .count-hint[data-error]{color:var(--dsw-alias-state-error-primary,#c33)}" +
                 "#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px 32px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
@@ -272,7 +274,8 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " [data-find-all-return][hidden]{display:none}" +
 				"#" + BAR_ID + " [data-find-all-return]{gap:4px;padding:0 8px;white-space:nowrap}" +
 				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
-				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count{min-width:32px;max-width:64px}#" + BAR_ID + " .status{padding-left:30px}}" +
+				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count,#" + BAR_ID + " button.count{width:64px;min-width:64px;max-width:64px}#" + BAR_ID + " .status{padding-left:30px}}" +
+				"@container dsh-find-all (max-width:330px){#" + BAR_ID + " .controls{flex-wrap:wrap}#" + BAR_ID + " .navigation-controls{margin-left:auto}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
 				"#" + BAR_ID + "[data-about-open]{z-index:999;pointer-events:none}" +
                 ".dsh-find-all-about{max-height:100%;font-family:var(--dsw-font-family)}.dsh-find-all-about-content{min-height:0;overflow:auto}.dsh-find-all-about-details{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family);overflow-wrap:anywhere}.dsh-find-all-about-details p{margin:0}.dsh-find-all-about-details h3{margin:0 0 6px;font:500 13px/20px var(--dsw-font-family)}.dsh-find-all-about-details a{color:var(--dsw-alias-state-business-primary);text-underline-offset:3px}.dsh-find-all-about-links{display:flex;flex-wrap:wrap;gap:6px 16px}.dsh-find-all-about-group{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.dsh-find-all-about-status{color:var(--dsw-alias-label-secondary)}.dsh-find-all-about-details :focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}" +
@@ -1231,7 +1234,7 @@ var BAR_ID = "dsh-find-all-root";
 			settleCancel: null,
 			bar: null,
 			input: null,
-			count: null, countEditor: null, countInput: null, countTotal: null, countHint: null, countLive: null, countEdit: null, resultsRevision: 0, pageDirty: false,
+			count: null, countState: null, countEditor: null, countInput: null, countTotal: null, countHint: null, countLive: null, countEdit: null, resultsRevision: 0, pageDirty: false,
 			status: null,
 			scopeInputs: null,
 			contentBtn: null,
@@ -1521,16 +1524,34 @@ var BAR_ID = "dsh-find-all-root";
             var n = resultLength(), whole = state.scope === "whole";
             var total = whole ? state.total : n;
             var suffix = (whole ? !state.scanComplete : state.capped) ? "+" : "";
-            if (!state.query) state.count.textContent = "";
-            else if (!n) state.count.textContent = whole && (state.paging || state.scanBusy) ? "…" : whole && !state.scanComplete ? L.resultCount.replace("{n}", "0+") : "0/0";
-            else if (state.index < 0) state.count.textContent = L.resultCount.replace("{n}", String(total) + suffix);
-            else state.count.textContent = (state.index + 1) + "/" + total + suffix;
+            var available = !!state.query && n > 0;
+            var valid = !!state.adapter?.valid(state.target);
+            var remote = state.remote && state.remote.session;
+            var wholeAvailable = !!state.projector && typeof remote?.follow === "function" && typeof remote?.page === "function";
+            var complete = whole ? state.scanComplete : valid;
+            var searching = whole && valid && wholeAvailable && !state.scanCancelled &&
+                (state.paging || state.scanBusy || !state.historySnapshot ||
+                    state.historySnapshot.status === "reading" || state.historySnapshot.status === "projecting");
+            var label;
+            if (!state.query) label = L.countReady;
+            else if (!n) label = complete ? L.countEmpty : searching ? L.countSearching :
+                (!valid || (whole && !wholeAvailable)) ? L.countUnavailable : L.countIncomplete;
+            else if (state.index < 0) label = L.resultCount.replace("{n}", String(total) + suffix);
+            else label = (state.index + 1) + "/" + total + suffix;
             var cap = state.capped ? L.cap.replace("{n}", String(MAX_MATCHES)) : "";
-            state.count.title = state.count.textContent + (cap ? "; " + cap : "");
+            state.count.textContent = label;
+            state.count.title = label + (cap ? "; " + cap : "");
             state.count.setAttribute("aria-label", state.count.title + "; " + L.jumpNumber);
-            state.count.disabled = !state.query || !n;
-            if (state.countLive && state.countLive.textContent !== state.count.textContent) state.countLive.textContent = state.count.textContent;
-            if (state.countEdit && !n) cancelCountEdit(false);
+            state.count.setAttribute("aria-disabled", String(!available));
+            if (state.countEdit && !available) cancelCountEdit(false);
+            state.count.hidden = !available || !!state.countEdit;
+            state.countState.hidden = available;
+            state.countState.textContent = label;
+            state.countState.title = label;
+            // The existing status region announces loading/failure details. Do not
+            // announce the same progress twice, or turn the ordinary state into a button.
+            var announcement = !state.query || available || complete ? label : "";
+            if (state.countLive && state.countLive.textContent !== announcement) state.countLive.textContent = announcement;
             if (state.countEdit) {
                 state.countTotal.textContent = "/" + total + suffix;
                 updateCountHint();
@@ -1548,8 +1569,8 @@ var BAR_ID = "dsh-find-all-root";
             state.countEdit = null; // Clear before hiding: blur is a cancellation fallback.
             state.countEditor.hidden = true;
             state.countHint.hidden = true;
-            state.count.hidden = false;
-            if (restoreFocus && !state.count.disabled && isOpen()) state.count.focus({ preventScroll: true });
+            state.count.hidden = !state.query || !resultLength();
+            if (restoreFocus && state.query && resultLength() && isOpen()) state.count.focus({ preventScroll: true });
         }
         function beginCountEdit() {
             if (state.countEdit || !isOpen() || !state.query || !resultLength()) return;
@@ -2234,6 +2255,21 @@ var BAR_ID = "dsh-find-all-root";
 			return svg;
 		}
 
+        function optionsIcon() {
+            // Match the Host's fill-only IconEllipsisOutline artwork without
+            // mounting a separate React tree inside this DOM-owned toolbar.
+            var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("width", "15"); svg.setAttribute("height", "15");
+            svg.setAttribute("viewBox", "0 0 16 16"); svg.setAttribute("fill", "currentColor");
+            svg.setAttribute("aria-hidden", "true");
+            [3, 8, 13].forEach(function (x) {
+                var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                dot.setAttribute("cx", String(x)); dot.setAttribute("cy", "8"); dot.setAttribute("r", "1");
+                svg.appendChild(dot);
+            });
+            return svg;
+        }
+
 		function button(label, d, onClick) {
 			var btn = document.createElement("button");
 			btn.type = "button";
@@ -2281,7 +2317,7 @@ var BAR_ID = "dsh-find-all-root";
 			var contentBtn = document.createElement("button");
 			contentBtn.type = "button";
 			contentBtn.className = "content-filter";
-			contentBtn.appendChild(icon("M5 12h.01M12 12h.01M19 12h.01", 16));
+			contentBtn.appendChild(optionsIcon());
 			contentBtn.setAttribute("aria-expanded", "false");
 			contentBtn.setAttribute("aria-controls", BAR_ID + "-content-panel");
 			contentBtn.addEventListener("click", toggleContentPanel);
@@ -2350,7 +2386,10 @@ var BAR_ID = "dsh-find-all-root";
 			contentPanel.appendChild(contentViewport);
 
 			var count = document.createElement("button");
-            count.type = "button"; count.className = "count"; count.disabled = true;
+            count.type = "button"; count.className = "count"; count.hidden = true;
+            count.setAttribute("aria-disabled", "true");
+            var countState = document.createElement("span"); countState.className = "count";
+            state.countState = countState;
             count.addEventListener("click", beginCountEdit);
             var countEditor = document.createElement("span");
             countEditor.className = "count-editor"; countEditor.hidden = true;
@@ -2384,7 +2423,7 @@ var BAR_ID = "dsh-find-all-root";
 
 			buildPositionControls(controls, bar);
 			controls.appendChild(input);
-			controls.appendChild(count); controls.appendChild(countEditor);
+			controls.appendChild(countState); controls.appendChild(count); controls.appendChild(countEditor);
 			var refreshBtn = button(L.refreshHistory, "M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2", function () {
 				if (state.scope !== "whole") return;
 				closeContentPanel(true);
@@ -2751,7 +2790,7 @@ var BAR_ID = "dsh-find-all-root";
                     state.updateBtn = state.updateStatus = state.updateGuide = state.updateResult = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
 					if (style) style.remove();
-					state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
+					state.countState = state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
                     state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
 					state.adapter.clear();
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = null;

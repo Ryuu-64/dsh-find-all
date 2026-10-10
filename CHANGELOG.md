@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a localized About dialog using the Host Modal, with the installed version, author, explicit QQ-group copying, project links, upstream credits, and license notices.
+
+- Add a fixed GitHub feedback link next to diagnostic copying, with public-submission guidance and no automatic data transfer.
+- Let the result count temporarily edit a match number, with strict bounds, Enter-only navigation, accessible keyboard controls, and cancellation when result identities change.
+
 - Search the current session through a fixed durable cursor, checking continuous event coverage instead of loading the entire Chat DOM.
 - Keep query scans separate from history reads, show cutoff and partial states, and retain loaded-only search when the full-history capability is unavailable.
 - Project text with the Host renderer and resolve matches to exact original-Chat message blocks on demand. Keep saved-but-unrendered fields explicit, and isolate image descriptions and live-tail counts.

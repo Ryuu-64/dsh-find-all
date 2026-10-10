@@ -37,10 +37,14 @@ var BAR_ID = "dsh-find-all-root";
 			move: "拖动查找栏；点击展开移动按钮", moveLeft: "向左移动", moveRight: "向右移动", moveUp: "向上移动", moveDown: "向下移动", resetPosition: "恢复默认位置",
 			cap: "仅显示前 {n} 处匹配",
 			resultCount: "{n} 个结果",
+            jumpNumber: "跳转到结果序号", jumpRange: "输入 1–{n} 的整数；Enter 跳转，Esc 取消。", jumpInvalid: "请输入 1–{n} 的整数。",
 			contentButton: "搜索选项",
 			scopeLegend: "搜索范围",
 			refreshHistory: "重新读取最新会话历史",
-			copyDiagnostics: "复制诊断信息", copyingDiagnostics: "正在复制…", copiedDiagnostics: "已复制", copyDiagnosticsFailed: "复制失败，请重试",
+			copyDiagnostics: "复制诊断信息", copyingDiagnostics: "正在复制…", copiedDiagnostics: "诊断信息已复制，可粘贴到“反馈问题”中", copyDiagnosticsFailed: "复制失败，请重试",
+			about: "关于", aboutUnavailable: "当前宿主无法显示关于对话框", aboutClose: "关闭关于", aboutDescription: "在 DSH Desktop 中搜索当前会话的已保存历史，并跳转到原聊天位置。",
+            aboutAuthor: "作者", aboutSupport: "支持与交流", aboutRepository: "源码与说明", aboutGroup: "QQ 交流群", aboutCopy: "复制群号", aboutCopying: "正在复制…", aboutCopied: "群号已复制", aboutCopyFailed: "复制失败，请手动复制群号", aboutCredits: "致谢与许可", aboutUpstream: "基于 secyborg/dsh-find-bar 开发，感谢 secyborg 提供原始查找功能。", aboutNotices: "完整致谢与第三方许可",
+            feedbackIssue: "反馈问题（GitHub）", feedbackPrivacy: "需 GitHub 账号；提交后公开。请粘贴诊断信息并说明复现步骤。",
 			refreshUnavailable: "完整会话范围下可重新读取历史",
 			contentButtonLabel: "搜索选项；{scope}；已选择 {n} 种内容{changed}",
 			optionsChanged: "；已修改默认设置",
@@ -76,10 +80,14 @@ var BAR_ID = "dsh-find-all-root";
 			move: "Drag find bar; click for move controls", moveLeft: "Move left", moveRight: "Move right", moveUp: "Move up", moveDown: "Move down", resetPosition: "Reset position",
 			cap: "Showing only the first {n} matches",
 			resultCount: "{n} results",
+            jumpNumber: "Go to match number", jumpRange: "Enter an integer from 1 to {n}; Enter to jump, Escape to cancel.", jumpInvalid: "Enter an integer from 1 to {n}.",
 			contentButton: "Search options",
 			scopeLegend: "Search scope",
 			refreshHistory: "Refresh saved history",
-			copyDiagnostics: "Copy diagnostics", copyingDiagnostics: "Copying…", copiedDiagnostics: "Copied", copyDiagnosticsFailed: "Copy failed. Try again",
+			copyDiagnostics: "Copy diagnostics", copyingDiagnostics: "Copying…", copiedDiagnostics: "Diagnostics copied. Paste them into Report an issue", copyDiagnosticsFailed: "Copy failed. Try again",
+			about: "About", aboutUnavailable: "This host cannot display the About dialog", aboutClose: "Close About", aboutDescription: "Search the current conversation’s saved history in DSH Desktop and jump to the original messages.",
+            aboutAuthor: "Author", aboutSupport: "Support and community", aboutRepository: "Source and documentation", aboutGroup: "QQ group", aboutCopy: "Copy group number", aboutCopying: "Copying…", aboutCopied: "Group number copied", aboutCopyFailed: "Copy failed. Copy the group number manually", aboutCredits: "Credits and license", aboutUpstream: "Based on secyborg/dsh-find-bar. Thanks to secyborg for the original find functionality.", aboutNotices: "Full credits and third-party licenses",
+            feedbackIssue: "Report an issue (GitHub)", feedbackPrivacy: "GitHub account required; submitted issues are public. Paste diagnostics and describe the steps to reproduce.",
 			refreshUnavailable: "Refresh is available for Whole conversation",
 			contentButtonLabel: "Search options; {scope}; {n} content types selected{changed}",
 			optionsChanged: "; defaults changed",
@@ -138,6 +146,8 @@ var BAR_ID = "dsh-find-all-root";
 		// Keyboard routing, isolated so tests can drive it with spies.
 		function createHandlers(ops) {
 			return function onKeydown(event) {
+				// Route the inline match editor before global capture-phase shortcuts.
+                if (ops.matchNumberKey && ops.matchNumberKey(event)) return;
 				// Let actual modals and editors with their own find UI own their keys.
 				if (event.defaultPrevented || event.isComposing || (ops.ownsKeys && !ops.ownsKeys(event))) return;
 				var meta = event.metaKey || event.ctrlKey;
@@ -217,7 +227,10 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .count{flex:0 1 auto;min-width:44px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
-				"#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px 32px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
+				"#" + BAR_ID + " button.count{width:auto;padding:0 4px;flex:0 1 auto}#" + BAR_ID + " button.count[hidden],#" + BAR_ID + " .count-editor[hidden],#" + BAR_ID + " .count-hint[hidden]{display:none}" +
+                "#" + BAR_ID + " .count-editor{display:flex;align-items:center;gap:2px;flex:none;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums}#" + BAR_ID + " input.count-input{box-sizing:border-box;width:5.5ch;min-width:0;height:28px;padding:0 3px;text-align:right;font:inherit;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l4);border-radius:4px}#" + BAR_ID + " input.count-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}#" + BAR_ID + " input.count-input[aria-invalid=true]{border-color:var(--dsw-alias-state-error-primary,#c33)}" +
+                "#" + BAR_ID + " .count-hint{padding:2px 8px 0 32px;color:var(--dsw-alias-label-secondary);font:12px/1.5 var(--dsw-font-family);overflow-wrap:anywhere}#" + BAR_ID + " .count-hint[data-error]{color:var(--dsw-alias-state-error-primary,#c33)}" +
+                "#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px 32px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
 				"#" + BAR_ID + " .status:empty{display:none}" +
 				"#" + BAR_ID + " .position-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
 				"#" + BAR_ID + " .position-controls[hidden]{display:none}" +
@@ -245,6 +258,7 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "-content-panel .diagnostic-command{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
                 "#" + BAR_ID + "-content-panel .diagnostic-command button{flex:1;width:auto}" +
                 "#" + BAR_ID + "-content-panel .diagnostic-feedback{padding:0 8px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-secondary)}" +
+                "#" + BAR_ID + "-content-panel .feedback-issue{display:flex;align-items:center;gap:6px;box-sizing:border-box;min-height:28px;width:100%;padding:4px 8px;color:var(--dsw-alias-label-secondary);text-decoration:none;border-radius:var(--dsw-radius-sm,6px)}#" + BAR_ID + "-content-panel .feedback-issue:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}#" + BAR_ID + "-content-panel .feedback-privacy{margin:0;padding:0 8px 4px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere}" +
 				"#" + BAR_ID + "-content-panel .history-command button{width:100%;height:auto;min-height:28px;justify-content:flex-start;gap:6px;padding:4px 8px;text-align:left;font:13px/20px var(--dsw-font-family)}" +
 				"#" + BAR_ID + " button,#" + BAR_ID + "-content-panel button{box-sizing:border-box;flex:none;height:28px;min-width:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:var(--dsw-radius-sm,6px);align-items:center;justify-content:center;display:inline-flex}" +
 				"#" + BAR_ID + " button[hidden]{display:none}" +
@@ -256,7 +270,9 @@ var BAR_ID = "dsh-find-all-root";
 				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
 				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count{min-width:32px;max-width:64px}#" + BAR_ID + " .status{padding-left:30px}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
-				"::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
+				"#" + BAR_ID + "[data-about-open]{z-index:999;pointer-events:none}" +
+                ".dsh-find-all-about{max-height:100%;font-family:var(--dsw-font-family)}.dsh-find-all-about-content{min-height:0;overflow:auto}.dsh-find-all-about-details{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family);overflow-wrap:anywhere}.dsh-find-all-about-details p{margin:0}.dsh-find-all-about-details h3{margin:0 0 6px;font:500 13px/20px var(--dsw-font-family)}.dsh-find-all-about-details a{color:var(--dsw-alias-state-business-primary);text-underline-offset:3px}.dsh-find-all-about-links{display:flex;flex-wrap:wrap;gap:6px 16px}.dsh-find-all-about-group{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.dsh-find-all-about-status{color:var(--dsw-alias-label-secondary)}.dsh-find-all-about-details :focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}" +
+                "::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
 				"::highlight(" + HL_CUR + "){background-color:#f5a623;color:#141414}";
 		}
 
@@ -1074,6 +1090,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		async function returnToOrigin() {
+            cancelCountEdit(false);
             cancelNavigation();
 			var origin = state.origin;
 			if (state.restoring || !originValid(origin) || !origin.navigated) return;
@@ -1200,6 +1217,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		var state = {
 			ctx: null,
+            aboutAvailable: false, aboutViews: new Map(), aboutOwner: null, aboutEpoch: 0,
 			mounted: false, writeClipboard: null, diagnosticBtn: null, diagnosticFeedback: null, copyPending: false, copyEpoch: 0, lastFailure: null,
             remote: null, history: null, historySnapshot: null, projector: null, hits: [], total: 0, queryToken: 0, scanTimer: 0, scanCursor: 0, scanCancelled: false, scanBusy: false, scanComplete: false, scanQuery: null, liveCount: 0, liveCapped: false, sourceNotice: "", refreshBtn: null,
 			adapter: null,
@@ -1208,7 +1226,7 @@ var BAR_ID = "dsh-find-all-root";
 			settleCancel: null,
 			bar: null,
 			input: null,
-			count: null,
+			count: null, countEditor: null, countInput: null, countTotal: null, countHint: null, countLive: null, countEdit: null, resultsRevision: 0, pageDirty: false,
 			status: null,
 			scopeInputs: null,
 			contentBtn: null,
@@ -1504,7 +1522,71 @@ var BAR_ID = "dsh-find-all-root";
             else state.count.textContent = (state.index + 1) + "/" + total + suffix;
             var cap = state.capped ? L.cap.replace("{n}", String(MAX_MATCHES)) : "";
             state.count.title = state.count.textContent + (cap ? "; " + cap : "");
-            state.count.setAttribute("aria-label", state.count.title);
+            state.count.setAttribute("aria-label", state.count.title + "; " + L.jumpNumber);
+            state.count.disabled = !state.query || !n;
+            if (state.countLive && state.countLive.textContent !== state.count.textContent) state.countLive.textContent = state.count.textContent;
+            if (state.countEdit && !n) cancelCountEdit(false);
+            if (state.countEdit) {
+                state.countTotal.textContent = "/" + total + suffix;
+                updateCountHint();
+            }
+        }
+
+        function updateCountHint() {
+            if (!state.countEdit) return;
+            var invalid = state.countInput.getAttribute("aria-invalid") === "true";
+            state.countHint.textContent = (invalid ? L.jumpInvalid : L.jumpRange).replace("{n}", String(resultLength()));
+            if (state.capped) state.countHint.textContent += " " + L.cap.replace("{n}", String(resultLength()));
+        }
+        function cancelCountEdit(restoreFocus) {
+            if (!state.countEdit) return;
+            state.countEdit = null; // Clear before hiding: blur is a cancellation fallback.
+            state.countEditor.hidden = true;
+            state.countHint.hidden = true;
+            state.count.hidden = false;
+            if (restoreFocus && !state.count.disabled && isOpen()) state.count.focus({ preventScroll: true });
+        }
+        function beginCountEdit() {
+            if (state.countEdit || !isOpen() || !state.query || !resultLength()) return;
+            if (state.scope === "page" && state.observer?.takeRecords().length) scheduleRescan();
+            if (state.scope === "page" && state.pageDirty) runSearch(true);
+            if (!resultLength() || !state.adapter?.valid(state.target)) return;
+            cancelReturn(L.returnCancelled); cancelNavigation(); closeContentPanel();
+            state.countEdit = { target: state.target, query: state.query, scope: state.scope, revision: state.resultsRevision, composing: false };
+            state.countInput.value = String(state.index < 0 ? 1 : state.index + 1);
+            state.countInput.removeAttribute("aria-invalid"); state.countHint.removeAttribute("data-error");
+            state.count.hidden = true; state.countEditor.hidden = false; state.countHint.hidden = false;
+            updateCount();
+            state.countInput.focus({ preventScroll: true }); state.countInput.select();
+        }
+        function commitCountEdit() {
+            var edit = state.countEdit;
+            if (!edit) return;
+            // A synchronous DOM mutation may precede MutationObserver delivery.
+            if (state.scope === "page" && state.observer?.takeRecords().length) scheduleRescan();
+            if (!state.countEdit || edit.target !== state.target || edit.query !== state.query || edit.scope !== state.scope || edit.revision !== state.resultsRevision || !state.adapter?.valid(state.target)) { cancelCountEdit(true); return; }
+            var value = state.countInput.value.trim(), n = Number(value), length = resultLength();
+            if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(n) || n < 1 || n > length) {
+                state.countInput.setAttribute("aria-invalid", "true"); state.countHint.setAttribute("data-error", ""); updateCountHint(); return;
+            }
+            cancelCountEdit(true);
+            activateMatch(n - 1);
+        }
+        function matchNumberKey(event) {
+            if (event.target === state.countInput && state.countEdit) {
+                if (event.isComposing || event.keyCode === 229 || state.countEdit.composing) return true;
+                if (event.key === "F3" || ((event.metaKey || event.ctrlKey) && /^[gG]$/.test(event.key))) { event.preventDefault(); event.stopPropagation(); return true; }
+                if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault(); event.stopPropagation();
+                    if (!event.repeat) { if (event.key === "Enter") commitCountEdit(); else cancelCountEdit(true); }
+                }
+                return true;
+            }
+            if (event.target === state.count && (event.key === "Enter" || event.key === " ")) {
+                if (event.repeat) event.preventDefault();
+                return true; // Native button activation is the only opening path.
+            }
+            return false;
         }
 
 		function setStatus(text, busy) {
@@ -1593,6 +1675,28 @@ var BAR_ID = "dsh-find-all-root";
 			return true;
 		}
 
+        function closeAbout() {
+            var owner = state.aboutOwner;
+            state.aboutOwner = null;
+            state.aboutEpoch += 1;
+            if (state.bar) { state.bar.removeAttribute('data-about-open'); state.bar.inert = false; }
+            if (owner) owner.setOpen(false);
+        }
+
+        function openAbout() {
+            var owner = state.target && state.aboutViews.get(state.target.anchor);
+            if (!state.aboutAvailable || !owner || state.aboutOwner || !state.mounted) return;
+            cancelCountEdit(false);
+            cancelReturn(L.returnCancelled);
+            cancelNavigation();
+            // The host Modal must remember the persistent trigger, not this hidden menu item.
+            closeContentPanel(true);
+            state.aboutOwner = owner;
+            state.aboutEpoch += 1;
+            state.bar.setAttribute('data-about-open', '');
+            owner.setOpen(true);
+        }
+
 		function toggleContentPanel() {
 			if (!state.contentPanel) return;
 			if (closeContentPanel(true)) return;
@@ -1665,6 +1769,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function contentSelectionChanged() {
+            cancelCountEdit(false);
 			cancelReturn(L.returnCancelled); cancelNavigation();
 			state.selection = null; state.ranges = []; state.index = -1;
 			updateContentButton(); setStatus("", false); runSearch(false);
@@ -1765,6 +1870,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		function runSearch(keepIndex) {
             if (state.scope === "whole") { searchHistory(!keepIndex); return; }
+            cancelCountEdit(false); state.resultsRevision++; state.pageDirty = false; cancelNavigation();
 			var valid = state.adapter && state.adapter.valid(state.target);
 			var store = valid ? state.adapter.nodes(state.target) : null;
 			state.ranges = valid ? collectRanges(state.query, state.target.root, function (node) { return loadedContentType(node, store); }, contentTypeEnabled) : [];
@@ -1781,20 +1887,25 @@ var BAR_ID = "dsh-find-all-root";
 
 		}
 
-		function goTo(delta) {
-            if (state.scope === "whole") { goToHistory(delta); return; }
-			cancelReturn(L.returnCancelled);
-			if (!state.adapter || !state.adapter.valid(state.target)) { runSearch(false); return; }
-			var n = state.ranges.length;
-			if (n === 0) return;
-			state.index = state.index < 0 ? (delta < 0 ? n - 1 : 0) : ((state.index + delta) % n + n) % n;
-			rememberSelection();
-			paint();
-			updateCount();
-			navigateToRange(state.ranges[state.index]);
-		}
+        function goTo(delta) {
+            cancelCountEdit(false);
+            var n = resultLength();
+            if (!n) return;
+            activateMatch(state.index < 0 ? (delta < 0 ? n - 1 : 0) : ((state.index + delta) % n + n) % n);
+        }
+        function activateMatch(index) {
+            if (!Number.isInteger(index) || index < 0 || index >= resultLength()) return;
+            cancelReturn(L.returnCancelled); cancelNavigation();
+            if (!state.adapter?.valid(state.target)) { runSearch(false); return; }
+            if (state.scope === "whole") { activateHistoryMatch(index); return; }
+            var range = state.ranges[index];
+            if (!range || !state.target.root.contains(range.startContainer) || !state.target.root.contains(range.endContainer)) { runSearch(true); return; }
+            state.index = index;
+            rememberSelection(); paint(); updateCount(); navigateToRange(range);
+        }
 
 		function scheduleRescan() {
+            if (state.scope === "page") { state.pageDirty = true; cancelCountEdit(false); }
 			// While a page-in is running the pager rescans itself after every page;
 			// rescanning on each mutation as well would walk the whole DOM per row.
 			if (state.paging) return;
@@ -1879,6 +1990,7 @@ var BAR_ID = "dsh-find-all-root";
         function searchHistory(reset) {
             if(state.scope!=="whole")return;
             if(reset||state.scanQuery!==state.query){
+                cancelCountEdit(false); state.resultsRevision++; cancelNavigation();
                 cancelHistoryScan(false);state.scanQuery=state.query;state.scanCursor=0;state.hits=[];state.total=0;state.ranges=[];state.index=-1;state.capped=false;state.sourceNotice='';state.liveCount=0;paint();
             }
             if(!state.query){setStatus("",false);return;}
@@ -1965,10 +2077,8 @@ var BAR_ID = "dsh-find-all-root";
             for(var button of new Set(buttons))if(activateDisclosure(button,activated))return true;
             return false;
         }
-        function goToHistory(delta){
-            cancelReturn(L.returnCancelled);cancelNavigation();
-            var n=state.hits.length;if(!n||!state.adapter?.valid(state.target))return;
-            state.index=state.index<0?(delta<0?n-1:0):((state.index+delta)%n+n)%n;
+        function activateHistoryMatch(index){
+            state.index=index;
             state.ranges=[];paint();updateCount();
             var hit=state.hits[state.index],source=hit.source;
 			state.sourceNotice='';
@@ -1983,7 +2093,7 @@ var BAR_ID = "dsh-find-all-root";
         async function navigateHistoryHit(hit){
             var target=state.target,source=hit.source,token=state.navigationToken,queryToken=state.queryToken;
             var face=state.adapter.face(target),store=state.adapter.nodes(target),activated=new Set();
-            function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face;}
+            function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face&&state.hits[state.index]===hit;}
             function pause(){return new Promise(resolve=>setTimeout(resolve,35));}
             if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus(L.matchRevealFailed,false);return;}
             state.historyNavigating=true;
@@ -2038,6 +2148,7 @@ var BAR_ID = "dsh-find-all-root";
 				return;
 			}
 			clearDiagnostics();
+            cancelCountEdit(false);
 			closeContentPanel();
 			discardOrigin();
 			cancelPageIn();
@@ -2089,6 +2200,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
         function onQueryInput(input) {
+            cancelCountEdit(false);
             cancelReturn(L.returnCancelled); cancelNavigation();
             state.query = input.value;
             if (state.scope === "whole") { searchHistory(true); if (state.query) schedulePageIn(); return; }
@@ -2097,6 +2209,7 @@ var BAR_ID = "dsh-find-all-root";
         }
         function setScope(scope) {
             if (state.scope === scope) return;
+            cancelCountEdit(false);
             cancelReturn(L.returnCancelled); cancelNavigation(); cancelPageIn();
             state.scope = scope;
             state.ranges=[];state.index=-1;state.selection=null;updateScopeButton();setStatus("",false);
@@ -2191,11 +2304,26 @@ var BAR_ID = "dsh-find-all-root";
 			contentGroup.appendChild(resetContent);
 			contentPanel.appendChild(contentViewport);
 
-			var count = document.createElement("span");
-			count.className = "count";
-			count.setAttribute("role", "status");
-			count.setAttribute("aria-live", "polite");
-			count.setAttribute("aria-atomic", "true");
+			var count = document.createElement("button");
+            count.type = "button"; count.className = "count"; count.disabled = true;
+            count.addEventListener("click", beginCountEdit);
+            var countEditor = document.createElement("span");
+            countEditor.className = "count-editor"; countEditor.hidden = true;
+            var countInput = document.createElement("input");
+            countInput.className = "count-input"; countInput.type = "text"; countInput.inputMode = "numeric"; countInput.autocomplete = "off";
+            countInput.setAttribute("aria-label", L.jumpNumber); countInput.setAttribute("aria-describedby", BAR_ID + "-count-hint");
+            countInput.addEventListener("input", function () { countInput.removeAttribute("aria-invalid"); state.countHint.removeAttribute("data-error"); updateCountHint(); });
+            countInput.addEventListener("blur", function () { cancelCountEdit(false); });
+            countInput.addEventListener("compositionstart", function () { if (state.countEdit) state.countEdit.composing = true; });
+            countInput.addEventListener("compositionend", function () { if (state.countEdit) state.countEdit.composing = false; });
+            var countTotal = document.createElement("span"); countTotal.setAttribute("aria-hidden", "true");
+            countEditor.append(countInput, countTotal);
+            var countHint = document.createElement("span"); countHint.className = "count-hint"; countHint.id = BAR_ID + "-count-hint"; countHint.hidden = true;
+            countHint.setAttribute("role", "status"); countHint.setAttribute("aria-atomic", "true");
+            var countLive = document.createElement("span");
+            countLive.setAttribute("role", "status"); countLive.setAttribute("aria-live", "polite"); countLive.setAttribute("aria-atomic", "true");
+            countLive.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)";
+            state.countEditor = countEditor; state.countInput = countInput; state.countTotal = countTotal; state.countHint = countHint; state.countLive = countLive;
 
 			var status = document.createElement("span");
 			status.className = "status";
@@ -2211,7 +2339,7 @@ var BAR_ID = "dsh-find-all-root";
 
 			buildPositionControls(controls, bar);
 			controls.appendChild(input);
-			controls.appendChild(count);
+			controls.appendChild(count); controls.appendChild(countEditor);
 			var refreshBtn = button(L.refreshHistory, "M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2", function () {
 				if (state.scope !== "whole") return;
 				closeContentPanel(true);
@@ -2235,8 +2363,25 @@ var BAR_ID = "dsh-find-all-root";
             var diagnosticFeedback = document.createElement('span');
             diagnosticFeedback.className = 'diagnostic-feedback';
             diagnosticFeedback.setAttribute('role', 'status');
-            diagnosticCommand.append(diagnosticBtn, diagnosticFeedback);
+            var feedbackIssue = document.createElement('a');
+            feedbackIssue.className = 'feedback-issue'; feedbackIssue.textContent = L.feedbackIssue;
+            feedbackIssue.href = 'https://github.com/Ryuu-64/dsh-find-all/issues';
+            feedbackIssue.target = '_blank'; feedbackIssue.rel = 'noopener noreferrer';
+            feedbackIssue.appendChild(icon('M14 3h7v7M21 3l-9 9M10 5H5v14h14v-5', 14));
+            var feedbackPrivacy = document.createElement('p');
+            feedbackPrivacy.className = 'feedback-privacy'; feedbackPrivacy.textContent = L.feedbackPrivacy;
+            feedbackPrivacy.id = BAR_ID + '-feedback-privacy'; feedbackIssue.setAttribute('aria-describedby', feedbackPrivacy.id);
+            diagnosticCommand.append(diagnosticBtn, diagnosticFeedback, feedbackIssue, feedbackPrivacy);
             contentViewport.appendChild(diagnosticCommand);
+            var aboutCommand = document.createElement('div');
+            aboutCommand.className = 'history-command';
+            var aboutBtn = document.createElement('button');
+            aboutBtn.type = 'button'; aboutBtn.textContent = L.about;
+            aboutBtn.disabled = !state.aboutAvailable;
+            if (!state.aboutAvailable) aboutBtn.title = L.aboutUnavailable;
+            aboutBtn.setAttribute('aria-haspopup', 'dialog');
+            aboutBtn.addEventListener('click', openAbout);
+            aboutCommand.appendChild(aboutBtn); contentViewport.appendChild(aboutCommand);
             state.diagnosticBtn = diagnosticBtn;
             state.diagnosticFeedback = diagnosticFeedback;
 			navigation.appendChild(button(L.prev, "m18 15-6-6-6 6", function () { goTo(-1); }));
@@ -2259,13 +2404,13 @@ var BAR_ID = "dsh-find-all-root";
 				if (event.key !== "Tab") return;
 				if (event.shiftKey && event.target === scopeInputs[state.scope]) {
 					event.preventDefault(); closeContentPanel(true);
-				} else if (!event.shiftKey && event.target === diagnosticBtn) {
+				} else if (!event.shiftKey && event.target === (aboutBtn.disabled ? feedbackIssue : aboutBtn)) {
 					event.preventDefault(); closeContentPanel(); closeBtn.focus({ preventScroll: true });
 				}
 			});
 			controls.appendChild(navigation);
 			bar.insertBefore(controls, bar.firstChild);
-			bar.appendChild(status);
+			bar.appendChild(countHint); bar.appendChild(status); bar.appendChild(countLive);
 
 			state.bar = bar;
 			state.input = input;
@@ -2315,6 +2460,8 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
+            closeAbout();
+            cancelCountEdit(false);
             resetDiagnosticCopy();
 			closeContentPanel();
 			discardOrigin();
@@ -2343,6 +2490,7 @@ var BAR_ID = "dsh-find-all-root";
 		function apply(ctx) {
 			var react = require("react");
 			var ui = require("@deepseek-ai/dsh-client-ui-primitives");
+			state.aboutAvailable = !!ui.Modal;
 			var SearchIcon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
 			state.ctx = ctx;
             state.writeClipboard = typeof ui.writeClipboard === "function" ? ui.writeClipboard : null;
@@ -2352,15 +2500,105 @@ var BAR_ID = "dsh-find-all-root";
                 remoteCtx.effect(function(){
                     state.remote=remoteCtx.remote;
                     if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
-                    return function(){clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
+                    return function(){cancelCountEdit(false);clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
                 });
             });
             try { state.projector=createProjector(ui,react,document); } catch(error) { state.projector=null; }
 			state.adapter = createHostAdapter(ctx, function () {
 				if (isOpen()) syncTarget(null, true);
 			});
+            function AboutPanel() {
+                var copy = react.useState(''), copyStatus = copy[0], setCopyStatus = copy[1];
+                var details = react.useRef(null);
+                react.useLayoutEffect(function () {
+                    var dialog = details.current && details.current.closest('[role="dialog"]');
+                    var trigger = state.contentBtn;
+                    // Older admitted Hosts export Modal without useModalLayer. Only those
+                    // Hosts need the compatibility focus layer; modern Hosts keep ownership.
+                    var legacy = typeof ui.useModalLayer !== 'function';
+                    function items() { return Array.from(dialog.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),[tabindex="0"]')).filter(function (item) { return !item.closest('[hidden],[inert]'); }); }
+                    function topmost() { return dialog && Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"],[role="menu"]')).pop() === dialog; }
+                    function focusFirst() { focusWithoutScroll(items()[0] || dialog); }
+                    function keydown(event) {
+                        if (!topmost() || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+                        if (event.key === 'Escape') {
+                            // Old Modal's document listener has no IME/repeat guard.
+                            event.stopPropagation();
+                            if (event.isComposing || event.keyCode === 229) return;
+                            event.preventDefault();
+                            if (!event.repeat) closeAbout();
+                        } else if (event.key === 'Tab') {
+                            var controls = items(), first = controls[0] || dialog, last = controls[controls.length - 1] || dialog;
+                            if (!dialog.contains(document.activeElement) || document.activeElement === dialog || document.activeElement === (event.shiftKey ? first : last)) {
+                                event.preventDefault(); focusWithoutScroll(event.shiftKey ? last : first);
+                            }
+                        }
+                    }
+                    function focusin(event) { if (topmost() && !dialog.contains(event.target)) focusFirst(); }
+                    if (legacy && dialog) {
+                        if (!dialog.contains(document.activeElement)) focusFirst();
+                        window.addEventListener('keydown', keydown, true);
+                        window.addEventListener('focusin', focusin, true);
+                    }
+                    // Modern Modal's child layout effect has already captured the trigger.
+                    if (state.bar && state.aboutOwner) state.bar.inert = true;
+                    return function () {
+                        window.removeEventListener('keydown', keydown, true);
+                        window.removeEventListener('focusin', focusin, true);
+                        if (state.bar) state.bar.inert = false;
+                        if (legacy && state.mounted && isOpen() && trigger && trigger.isConnected) focusWithoutScroll(trigger);
+                    };
+                }, []);
+                function requestClose() {
+                    // Older Modal closes on every document Escape. Ignore requests from
+                    // behind a newer dialog/menu rather than dismissing two layers at once.
+                    var dialog = details.current && details.current.closest('[role="dialog"]');
+                    if (dialog && Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"],[role="menu"]')).pop() === dialog) closeAbout();
+                }
+                async function copyGroup() {
+                    if (copyStatus === 'pending') return;
+                    var owner = state.aboutOwner, epoch = state.aboutEpoch;
+                    setCopyStatus('pending');
+                    var copied = false;
+                    try { copied = typeof state.writeClipboard === 'function' && await state.writeClipboard('1129212995') === true; } catch (error) {}
+                    if (state.mounted && state.aboutOwner === owner && state.aboutEpoch === epoch) setCopyStatus(copied ? 'copied' : 'failed');
+                }
+                function link(label, href) { return react.createElement('a', { href: href, target: '_blank', rel: 'noopener noreferrer' }, label); }
+                var repository = 'https://github.com/Ryuu-64/dsh-find-all';
+                return react.createElement(ui.Modal, {
+                    open: true, onClose: requestClose, title: 'dsh-find-all · ' + __DSH_FIND_ALL_VERSION__,
+                    closeLabel: L.aboutClose, description: L.aboutDescription,
+                    className: 'dsh-find-all-about', contentClassName: 'dsh-find-all-about-content'
+                }, react.createElement('div', { ref: details, className: 'dsh-find-all-about-details' },
+                    react.createElement('p', null, L.aboutAuthor + ': ', link('Ryuu-64', 'https://github.com/Ryuu-64')),
+                    react.createElement('section', null,
+                        react.createElement('h3', null, L.aboutSupport),
+                        react.createElement('div', { className: 'dsh-find-all-about-links' }, link(L.feedbackIssue, repository + '/issues'), link(L.aboutRepository, repository)),
+                        react.createElement('p', { className: 'dsh-find-all-about-status' }, L.feedbackPrivacy),
+                        react.createElement('div', { className: 'dsh-find-all-about-group' },
+                            react.createElement('span', null, L.aboutGroup + ': 1129212995'),
+                            react.createElement(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', disabled: copyStatus === 'pending', onClick: copyGroup }, L.aboutCopy)),
+                        react.createElement('p', { role: 'status', className: 'dsh-find-all-about-status' }, copyStatus === 'pending' ? L.aboutCopying : copyStatus === 'copied' ? L.aboutCopied : copyStatus === 'failed' ? L.aboutCopyFailed : '')),
+                    react.createElement('section', null,
+                        react.createElement('h3', null, L.aboutCredits),
+                        react.createElement('p', null, L.aboutUpstream),
+                        react.createElement('div', { className: 'dsh-find-all-about-links' },
+                            link('secyborg/dsh-find-bar', 'https://github.com/secyborg/dsh-find-bar'),
+                            link('MIT', repository + '/blob/main/LICENSE'), link(L.aboutNotices, repository + '/blob/main/NOTICE.md')))));
+            }
 			function SessionFind(props) {
 				var anchor = react.useRef(null);
+                var about = react.useState(false);
+                react.useEffect(function () {
+                    var button = anchor.current && anchor.current.querySelector('button[data-find-all-session]');
+                    if (!button) return;
+                    var owner = { setOpen: about[1] };
+                    state.aboutViews.set(button, owner);
+                    return function () {
+                        state.aboutViews.delete(button);
+                        if (state.aboutOwner === owner) closeAbout();
+                    };
+                }, [props.sessionId]);
 				var nodes = typeof props.useChat === 'function' ? props.useChat(function (snapshot) { return snapshot.nodes; }) : null;
 				react.useEffect(function () {
 					if (!anchor.current || !props.sessionId) return;
@@ -2375,7 +2613,7 @@ var BAR_ID = "dsh-find-all-root";
 					style: { flex: "none", width: 28, padding: 0, color: "var(--dsw-alias-label-secondary)" },
 					"data-find-all-session": props.sessionId,
 					onClick: function (event) { open(event.currentTarget); }
-				}, react.createElement(SearchIcon, { size: 15 })));
+				}, react.createElement(SearchIcon, { size: 15 })), about[0] ? react.createElement(AboutPanel) : null);
 			}
 			ctx.slots.inject("conversation.session.header.utilities", function () {
 				return ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all" }, SessionFind);
@@ -2384,8 +2622,10 @@ var BAR_ID = "dsh-find-all-root";
                 state.mounted = true;
 				injectCss();
 				var handler = createHandlers({
-					open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
+					matchNumberKey: matchNumberKey,
+                    open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
 					ownsKeys: function (event) {
+                        if (state.aboutOwner) return false;
 						var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
 						return !path.some(function (node) {
 							return node && node.closest && node.closest('dialog[open], [aria-modal="true"], .monaco-editor, .cm-editor, .CodeMirror');
@@ -2394,6 +2634,8 @@ var BAR_ID = "dsh-find-all-root";
 					isBarInput: function (target) { return target === state.input; }
 				});
 				function focus(event) {
+                    if (state.aboutOwner) return;
+                    if (state.countEdit && !state.countEditor.contains(event.target)) cancelCountEdit(false);
 					var inContent = state.contentPanel && state.contentPanel.contains(event.target);
 					if (!inContent && !state.contentBtn?.contains(event.target)) closeContentPanel();
 					if (!inContent && (!state.bar || !state.bar.contains(event.target))) syncTarget(event.target);
@@ -2416,12 +2658,12 @@ var BAR_ID = "dsh-find-all-root";
 				window.addEventListener("focusin", focus, true);
 				window.addEventListener("pointerdown", focus, true);
 				window.addEventListener("wheel", readingFocus, true);
-				function blur() { finishBarDrag(); }
+				function blur() { cancelCountEdit(false); finishBarDrag(); }
 				window.addEventListener("blur", blur);
 				window.addEventListener("resize", scheduleBarPosition);
 				window.addEventListener("scroll", scheduleBarPosition, true);
 				return function () {
-                    state.mounted = false; clearDiagnostics();
+                    state.mounted = false; closeAbout(); state.aboutViews.clear(); clearDiagnostics();
 					['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) { window.removeEventListener(type, interruptReading, true); });
 					window.removeEventListener("keydown", handler, true);
 					window.removeEventListener("focusin", focus, true);
@@ -2439,7 +2681,8 @@ var BAR_ID = "dsh-find-all-root";
                     state.diagnosticBtn = state.diagnosticFeedback = state.writeClipboard = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
 					if (style) style.remove();
-					state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
+					state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
+                    state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
 					state.adapter.clear();
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = null;
 				};

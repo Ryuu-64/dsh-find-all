@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.10
+
+- Keep the find bar below the conversation header and allow moving it within the conversation body with a drag handle or directional buttons.
+- Preserve its manual position while the same conversation stays open, with a control to restore the default position; reset it when the bar reopens or the conversation changes.
+- Constrain the bar to the available conversation area as the window, sidebar or input area changes, and reduce unused space in its default layout.
+- Keep the current search match clear of the find bar, including matches in nested scrolling areas and when navigation feedback expands the bar.
+
+The supported host-version list and return-to-reading-position behavior are unchanged.
+
 ## 0.1.9
 
 - Reveal host-owned `hidden="until-found"` content before scrolling to a search match, instead of treating its layout geometry as proof that the match is visible.

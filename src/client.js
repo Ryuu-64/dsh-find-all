@@ -40,6 +40,7 @@ var BAR_ID = "dsh-find-all-root";
 			contentButton: "搜索选项",
 			scopeLegend: "搜索范围",
 			refreshHistory: "重新读取最新会话历史",
+			copyDiagnostics: "复制诊断信息", copyingDiagnostics: "正在复制…", copiedDiagnostics: "已复制", copyDiagnosticsFailed: "复制失败，请重试",
 			refreshUnavailable: "完整会话范围下可重新读取历史",
 			contentButtonLabel: "搜索选项；{scope}；已选择 {n} 种内容{changed}",
 			optionsChanged: "；已修改默认设置",
@@ -78,6 +79,7 @@ var BAR_ID = "dsh-find-all-root";
 			contentButton: "Search options",
 			scopeLegend: "Search scope",
 			refreshHistory: "Refresh saved history",
+			copyDiagnostics: "Copy diagnostics", copyingDiagnostics: "Copying…", copiedDiagnostics: "Copied", copyDiagnosticsFailed: "Copy failed. Try again",
 			refreshUnavailable: "Refresh is available for Whole conversation",
 			contentButtonLabel: "Search options; {scope}; {n} content types selected{changed}",
 			optionsChanged: "; defaults changed",
@@ -208,14 +210,14 @@ var BAR_ID = "dsh-find-all-root";
 
 		function cssText() {
 			return "" +
-				"#" + BAR_ID + "{--dsh-find-all-max-width:600px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
+				"#" + BAR_ID + "{--dsh-find-all-max-width:480px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
 				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
 				"#" + BAR_ID + ":before,#" + BAR_ID + "-content-panel:before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2)));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
 				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .count{flex:0 1 auto;min-width:44px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
-				"#" + BAR_ID + " .status{width:100%;color:var(--dsw-alias-label-tertiary);font:12px/1.25 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
+				"#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px 32px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
 				"#" + BAR_ID + " .status:empty{display:none}" +
 				"#" + BAR_ID + " .position-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
 				"#" + BAR_ID + " .position-controls[hidden]{display:none}" +
@@ -240,6 +242,9 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "-content-panel .content-reset{margin-top:4px;padding:0 8px;font:12px/18px var(--dsw-font-family)}" +
 				"#" + BAR_ID + "-content-panel .scope-group{padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--dsw-alias-border-l1)}" +
 				"#" + BAR_ID + "-content-panel .history-command{margin-top:4px;padding-top:4px;border-top:1px solid var(--dsw-alias-border-l1)}" +
+				"#" + BAR_ID + "-content-panel .diagnostic-command{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
+                "#" + BAR_ID + "-content-panel .diagnostic-command button{flex:1;width:auto}" +
+                "#" + BAR_ID + "-content-panel .diagnostic-feedback{padding:0 8px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-secondary)}" +
 				"#" + BAR_ID + "-content-panel .history-command button{width:100%;height:auto;min-height:28px;justify-content:flex-start;gap:6px;padding:4px 8px;text-align:left;font:13px/20px var(--dsw-font-family)}" +
 				"#" + BAR_ID + " button,#" + BAR_ID + "-content-panel button{box-sizing:border-box;flex:none;height:28px;min-width:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:var(--dsw-radius-sm,6px);align-items:center;justify-content:center;display:inline-flex}" +
 				"#" + BAR_ID + " button[hidden]{display:none}" +
@@ -249,7 +254,7 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " [data-find-all-return][hidden]{display:none}" +
 				"#" + BAR_ID + " [data-find-all-return]{gap:4px;padding:0 8px;white-space:nowrap}" +
 				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
-				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count{min-width:32px;max-width:64px}}" +
+				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count{min-width:32px;max-width:64px}#" + BAR_ID + " .status{padding-left:30px}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
 				"::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
 				"::highlight(" + HL_CUR + "){background-color:#f5a623;color:#141414}";
@@ -994,6 +999,7 @@ var BAR_ID = "dsh-find-all-root";
 					state.navigationTimer = setTimeout(check, 100);
 					return;
 				}
+				recordFailure('jump', 'render');
 				setStatus(L.matchRevealFailed, false);
 				if (state.announcement) state.announcement.textContent = L.matchRevealFailed;
 			}
@@ -1078,6 +1084,7 @@ var BAR_ID = "dsh-find-all-root";
 			function cancelled() { return state.restoring !== task || !originValid(origin); }
 			function finishFailure(reason) {
 				if (cancelled()) return;
+				recordFailure('return', reason);
 				state.restoring = null;
 				if (reason === 'removed') state.origin = null;
 				setStatus(returnFailure(reason), false); updateReturnButton();
@@ -1193,6 +1200,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		var state = {
 			ctx: null,
+			mounted: false, writeClipboard: null, diagnosticBtn: null, diagnosticFeedback: null, copyPending: false, copyEpoch: 0, lastFailure: null,
             remote: null, history: null, historySnapshot: null, projector: null, hits: [], total: 0, queryToken: 0, scanTimer: 0, scanCursor: 0, scanCancelled: false, scanBusy: false, scanComplete: false, scanQuery: null, liveCount: 0, liveCapped: false, sourceNotice: "", refreshBtn: null,
 			adapter: null,
 			target: null,
@@ -1227,6 +1235,96 @@ var BAR_ID = "dsh-find-all-root";
 			positionFrame: null,
 			positionOwner: null, manualPosition: null, drag: null, dragHandle: null, positionControls: null, suppressMoveClick: false
 		};
+
+        // Diagnostic output is built field by field. Never serialize host records,
+        // error objects, message text, IDs, paths or DOM, including error.code.
+        function diagnosticCode(code) {
+            switch (code) {
+                case 'unsupported-host': return 'unsupported-host';
+                case 'invalid-snapshot': return 'invalid-snapshot';
+                case 'wrong-session': return 'wrong-session';
+                case 'invalid-cursor': return 'invalid-cursor';
+                case 'invalid-page': return 'invalid-page';
+                case 'empty-page': return 'empty-page';
+                case 'history-gap': return 'history-gap';
+                case 'invalid-content': return 'invalid-content';
+                case 'invalid-stream': return 'invalid-stream';
+                case 'unsupported-stream': return 'unsupported-stream';
+                case 'unsupported-event': return 'unsupported-event';
+                case 'unsupported-body-event': return 'unsupported-body-event';
+                case 'invalid-projection': return 'invalid-projection';
+                case 'projection-incomplete': return 'projection-incomplete';
+                case 'truncated-tool-output': return 'truncated-tool-output';
+                case 'tool-renderer-unavailable': return 'tool-renderer-unavailable';
+                case 'tool-projection-empty': return 'tool-projection-empty';
+                case 'custom-tool-projection-unverified': return 'custom-tool-projection-unverified';
+                case 'render': return 'render';
+                case 'position': return 'position';
+                case 'removed': return 'removed';
+                case 'unavailable': return 'unavailable';
+                case 'capped': return 'capped';
+                case 'stalled': return 'stalled';
+                case 'unknown': return 'unknown';
+                default: return 'operation-failed';
+            }
+        }
+        function diagnosticCount(value) {
+            return Number.isSafeInteger(value) && value >= 0 ? value : null;
+        }
+        function diagnosticState() {
+            var snapshot = state.historySnapshot, remote = state.remote && state.remote.session;
+            var historyStatus = snapshot && ['idle', 'reading', 'projecting', 'complete', 'partial', 'error', 'cancelled'].includes(snapshot.status) ? snapshot.status : snapshot ? 'unknown' : 'not-started';
+            var bound = !!(state.adapter && state.adapter.valid(state.target));
+            var face = bound ? state.adapter.face(state.target) : null;
+            return {
+                scope: state.scope === 'whole' ? 'whole' : 'page',
+                contentTypes: CONTENT_TYPES.filter(function (type) { return contentTypeEnabled(type); }),
+                capabilities: { target: bound, history: !!(remote && typeof remote.follow === 'function' && typeof remote.page === 'function'),
+                    projector: typeof state.projector === 'function', navigation: !!(face && typeof face.loadThrough === 'function'), clipboard: typeof state.writeClipboard === 'function' },
+                history: { status: historyStatus, pages: diagnosticCount(snapshot && snapshot.pages), eventsRead: diagnosticCount(snapshot && snapshot.eventsRead),
+                    documents: diagnosticCount(snapshot && snapshot.documents.length), readComplete: snapshot ? snapshot.readComplete === true : null,
+                    coverageComplete: snapshot ? snapshot.coverageComplete === true : null,
+                    projectionComplete: snapshot ? snapshot.projectionComplete === true : null,
+                    selectedProjectionComplete: snapshot ? selectedProjectionComplete(snapshot) : null },
+                scan: { busy: !!state.scanBusy, complete: !!state.scanComplete, cancelled: !!state.scanCancelled,
+                    documents: state.scope === 'whole' ? diagnosticCount(state.scanCursor) : null, matches: diagnosticCount(state.scope === 'whole' ? state.total : state.ranges.length),
+                    displayed: diagnosticCount(resultLength()), capped: !!state.capped, liveMatches: state.scope === 'whole' ? diagnosticCount(state.liveCount) : null, liveCapped: state.scope === 'whole' ? !!state.liveCapped : null },
+                navigation: { pending: !!state.historyNavigating || !!state.navigationTimer, returning: !!state.restoring }
+            };
+        }
+        function recordFailure(phase, code) {
+            if (!state.mounted || code === 'cancelled') return;
+            state.lastFailure = { phase: phase, code: diagnosticCode(code), state: diagnosticState() };
+        }
+        function resetDiagnosticCopy() {
+            state.copyEpoch++;
+            state.copyPending = false;
+            if (state.diagnosticBtn) state.diagnosticBtn.removeAttribute('aria-busy');
+            if (state.diagnosticFeedback) state.diagnosticFeedback.textContent = '';
+        }
+        function clearDiagnostics() {
+            resetDiagnosticCopy();
+            state.lastFailure = null;
+        }
+        async function copyDiagnostics() {
+            if (state.copyPending || !state.mounted) return;
+            // A click can arrive before the 600ms session poll. Snapshot only the
+            // refreshed owner, even if the refresh closes this options panel.
+            syncTarget(null, true);
+            var epoch = ++state.copyEpoch, feedback = state.diagnosticFeedback;
+            state.copyPending = true;
+            state.diagnosticBtn.setAttribute('aria-busy', 'true');
+            feedback.textContent = L.copyingDiagnostics;
+            var copied = false;
+            try {
+                var summary = { schemaVersion: 1, pluginVersion: __DSH_FIND_ALL_VERSION__, current: diagnosticState(), lastFailure: state.lastFailure };
+                copied = typeof state.writeClipboard === 'function' && await state.writeClipboard(JSON.stringify(summary, null, 2)) === true;
+            } catch (error) { /* Clipboard failures must not expose raw errors. */ }
+            if (!state.mounted || epoch !== state.copyEpoch || state.diagnosticFeedback !== feedback || !feedback.isConnected) return;
+            state.copyPending = false;
+            state.diagnosticBtn.removeAttribute('aria-busy');
+            feedback.textContent = copied ? L.copiedDiagnostics : L.copyDiagnosticsFailed;
+        }
 
 		function barAnchor(target) {
 			if (!target || !target.anchor || !target.panel || !target.anchor.closest) return null;
@@ -1488,6 +1586,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		function closeContentPanel(restoreFocus) {
 			if (!state.contentPanel || state.contentPanel.hidden) return false;
+			resetDiagnosticCopy();
 			state.contentPanel.hidden = true;
 			state.contentBtn?.setAttribute("aria-expanded", "false");
 			if (restoreFocus && state.contentBtn?.isConnected) state.contentBtn.focus({ preventScroll: true });
@@ -1758,16 +1857,21 @@ var BAR_ID = "dsh-find-all-root";
             if(!state.adapter||!state.adapter.valid(target)){setStatus(unavailableStatus(),false);return;}
             var remote=state.remote&&state.remote.session;
             if(!state.projector||!remote||typeof remote.follow!=='function'||typeof remote.page!=='function'){
+                recordFailure('capability', 'unsupported-host');
                 setStatus(ZH?"完整会话搜索不可用：宿主缺少完整历史接口。请切换到已加载内容":"Whole-session search unavailable: complete-history API missing. Switch to Loaded content",false);return;
             }
             if(state.history&&state.historySnapshot&&state.historySnapshot.sessionId===target.id&& !['cancelled','error'].includes(state.historySnapshot.status)){
                 searchHistory(false);return;
             }
-            var token=++state.pageToken;
+            var token=++state.pageToken, errorCount=0;
             state.paging=true;state.sourceNotice='';state.historySnapshot=null;searchHistory(true);
             state.history=createHistoryReader({remote:state.remote,sessionId:target.id,generation:token,project:state.projector,onUpdate:function(snapshot){
                 if(token!==state.pageToken||state.target!==target||!isOpen()||state.scope!=="whole"||!state.adapter.valid(target))return;
                 state.historySnapshot=snapshot;state.paging=['reading','projecting','idle'].includes(snapshot.status);
+                if(snapshot.status!=='cancelled' && snapshot.errors.length>errorCount){
+                    recordFailure(snapshot.readComplete?'projection':'history', snapshot.errors[snapshot.errors.length-1].code);
+                    errorCount=snapshot.errors.length;
+                }
                 searchHistory(false);historyStatus();
             }});
             state.history.start();historyStatus();
@@ -1881,7 +1985,7 @@ var BAR_ID = "dsh-find-all-root";
             var face=state.adapter.face(target),store=state.adapter.nodes(target),activated=new Set();
             function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face;}
             function pause(){return new Promise(resolve=>setTimeout(resolve,35));}
-            if(!face||typeof face.loadThrough!=='function'||!store){setStatus(L.matchRevealFailed,false);return;}
+            if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus(L.matchRevealFailed,false);return;}
             state.historyNavigating=true;
             try{
                 if(!sourceNode(source,store))await face.loadThrough(source.seq);
@@ -1905,10 +2009,11 @@ var BAR_ID = "dsh-find-all-root";
                     await pause();
                 }
                 if(current()){
+                    recordFailure('jump','render');
                     state.historyNavigating=false;
 					state.sourceNotice=L.matchRevealFailed;historyStatus();
                 }
-			}catch(error){if(current()){state.historyNavigating=false;state.sourceNotice=L.matchRevealFailed;historyStatus();}}
+			}catch(error){if(current()){recordFailure('jump','error');state.historyNavigating=false;state.sourceNotice=L.matchRevealFailed;historyStatus();}}
         }
 
 		function syncTarget(target, passive) {
@@ -1932,6 +2037,7 @@ var BAR_ID = "dsh-find-all-root";
 				if (isOpen()) runSearch(false);
 				return;
 			}
+			clearDiagnostics();
 			closeContentPanel();
 			discardOrigin();
 			cancelPageIn();
@@ -2120,6 +2226,19 @@ var BAR_ID = "dsh-find-all-root";
 			historyCommand.appendChild(refreshBtn);
 			contentViewport.appendChild(historyCommand);
 			state.refreshBtn = refreshBtn;
+            var diagnosticCommand = document.createElement('div');
+            diagnosticCommand.className = 'history-command diagnostic-command';
+            var diagnosticBtn = button(L.copyDiagnostics, 'M9 5H5v16h12v-4M9 3h12v12H9z', copyDiagnostics);
+            var diagnosticLabel = document.createElement('span');
+            diagnosticLabel.textContent = L.copyDiagnostics;
+            diagnosticBtn.appendChild(diagnosticLabel);
+            var diagnosticFeedback = document.createElement('span');
+            diagnosticFeedback.className = 'diagnostic-feedback';
+            diagnosticFeedback.setAttribute('role', 'status');
+            diagnosticCommand.append(diagnosticBtn, diagnosticFeedback);
+            contentViewport.appendChild(diagnosticCommand);
+            state.diagnosticBtn = diagnosticBtn;
+            state.diagnosticFeedback = diagnosticFeedback;
 			navigation.appendChild(button(L.prev, "m18 15-6-6-6 6", function () { goTo(-1); }));
 			navigation.appendChild(button(L.next, "m6 9 6 6 6-6", function () { goTo(1); }));
 			var returnBtn = document.createElement('button');
@@ -2140,7 +2259,7 @@ var BAR_ID = "dsh-find-all-root";
 				if (event.key !== "Tab") return;
 				if (event.shiftKey && event.target === scopeInputs[state.scope]) {
 					event.preventDefault(); closeContentPanel(true);
-				} else if (!event.shiftKey && event.target === (refreshBtn.disabled ? resetContent : refreshBtn)) {
+				} else if (!event.shiftKey && event.target === diagnosticBtn) {
 					event.preventDefault(); closeContentPanel(); closeBtn.focus({ preventScroll: true });
 				}
 			});
@@ -2196,6 +2315,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
+            resetDiagnosticCopy();
 			closeContentPanel();
 			discardOrigin();
 			cancelPageIn();
@@ -2225,13 +2345,14 @@ var BAR_ID = "dsh-find-all-root";
 			var ui = require("@deepseek-ai/dsh-client-ui-primitives");
 			var SearchIcon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
 			state.ctx = ctx;
+            state.writeClipboard = typeof ui.writeClipboard === "function" ? ui.writeClipboard : null;
             // A child dependency scope may remain pending on an older Host;
             // sessions/slots (and loaded-only search) keep running independently.
             if(typeof ctx.inject==='function')ctx.inject(['remote','remote.session'],function(remoteCtx){
                 remoteCtx.effect(function(){
                     state.remote=remoteCtx.remote;
                     if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
-                    return function(){cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
+                    return function(){clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
                 });
             });
             try { state.projector=createProjector(ui,react,document); } catch(error) { state.projector=null; }
@@ -2260,6 +2381,7 @@ var BAR_ID = "dsh-find-all-root";
 				return ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all" }, SessionFind);
 			});
 			ctx.effect(function () {
+                state.mounted = true;
 				injectCss();
 				var handler = createHandlers({
 					open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
@@ -2299,6 +2421,7 @@ var BAR_ID = "dsh-find-all-root";
 				window.addEventListener("resize", scheduleBarPosition);
 				window.addEventListener("scroll", scheduleBarPosition, true);
 				return function () {
+                    state.mounted = false; clearDiagnostics();
 					['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) { window.removeEventListener(type, interruptReading, true); });
 					window.removeEventListener("keydown", handler, true);
 					window.removeEventListener("focusin", focus, true);
@@ -2313,6 +2436,7 @@ var BAR_ID = "dsh-find-all-root";
 					if (state.contentPanel) state.contentPanel.remove();
 					if (state.announcement) state.announcement.remove();
 					state.announcement = state.returnBtn = state.dragHandle = state.positionControls = null;
+                    state.diagnosticBtn = state.diagnosticFeedback = state.writeClipboard = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
 					if (style) style.remove();
 					state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;

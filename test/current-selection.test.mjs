@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {setup, key, current} from './helpers/search-ui.mjs';
 
 function page(h, view, query = 'needle') {
-  h.open(view.anchor); h.w.document.querySelector('.scope').click(); h.search(query); h.scrolls.length = 0;
+  h.open(view.anchor);
+  h.w.document.querySelector('.content-filter').click();
+  h.w.document.querySelector('input[name="dsh-find-all-root-scope"][value="page"]').click();
+  h.search(query); h.scrolls.length = 0;
 }
 async function rescan(h) { await Promise.resolve(); await h.advance(550); }
 

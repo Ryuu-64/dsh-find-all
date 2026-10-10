@@ -1,5 +1,6 @@
 /*! dsh-find-all. Copyright (c) 2026 secyborg; Copyright (c) 2026 Ryuu-64. MIT.
  * Forked from secyborg/dsh-find-bar ce7eb75efe94d768127c5977c649ecd950a9356c. See LICENSE and NOTICE.md. */
+import { checkLatestVersion } from "./updates.js";
 import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
 
@@ -42,7 +43,8 @@ var BAR_ID = "dsh-find-all-root";
 			scopeLegend: "搜索范围",
 			refreshHistory: "重新读取最新会话历史",
 			copyDiagnostics: "复制诊断信息", copyingDiagnostics: "正在复制…", copiedDiagnostics: "诊断信息已复制，可粘贴到“反馈问题”中", copyDiagnosticsFailed: "复制失败，请重试",
-			about: "关于", aboutUnavailable: "当前宿主无法显示关于对话框", aboutClose: "关闭关于", aboutDescription: "在 DSH Desktop 中搜索当前会话的已保存历史，并跳转到原聊天位置。",
+			currentVersion: "当前版本", checkUpdate: "检查更新", checkingUpdate: "正在检查…", updateSource: "从公共 npm 检查更新", updateCurrent: "已是最新版本", updateAhead: "当前版本比已发布版本更新", updateAvailable: "有新版本 {v}", updateFailed: "检查失败，请重试", updateGuide: "查看更新说明",
+            about: "关于", aboutUnavailable: "当前宿主无法显示关于对话框", aboutClose: "关闭关于", aboutDescription: "在 DSH Desktop 中搜索当前会话的已保存历史，并跳转到原聊天位置。",
             aboutAuthor: "作者", aboutSupport: "支持与交流", aboutRepository: "源码与说明", aboutGroup: "QQ 交流群", aboutCopy: "复制群号", aboutCopying: "正在复制…", aboutCopied: "群号已复制", aboutCopyFailed: "复制失败，请手动复制群号", aboutCredits: "致谢与许可", aboutUpstream: "基于 secyborg/dsh-find-bar 开发，感谢 secyborg 提供原始查找功能。", aboutNotices: "完整致谢与第三方许可",
             feedbackIssue: "反馈问题（GitHub）", feedbackPrivacy: "需 GitHub 账号；提交后公开。请粘贴诊断信息并说明复现步骤。",
 			refreshUnavailable: "完整会话范围下可重新读取历史",
@@ -85,7 +87,8 @@ var BAR_ID = "dsh-find-all-root";
 			scopeLegend: "Search scope",
 			refreshHistory: "Refresh saved history",
 			copyDiagnostics: "Copy diagnostics", copyingDiagnostics: "Copying…", copiedDiagnostics: "Diagnostics copied. Paste them into Report an issue", copyDiagnosticsFailed: "Copy failed. Try again",
-			about: "About", aboutUnavailable: "This host cannot display the About dialog", aboutClose: "Close About", aboutDescription: "Search the current conversation’s saved history in DSH Desktop and jump to the original messages.",
+			currentVersion: "Current version", checkUpdate: "Check for updates", checkingUpdate: "Checking…", updateSource: "Check the public npm registry", updateCurrent: "You’re up to date", updateAhead: "Current version is newer than the published version", updateAvailable: "Version {v} is available", updateFailed: "Check failed. Try again", updateGuide: "View update instructions",
+            about: "About", aboutUnavailable: "This host cannot display the About dialog", aboutClose: "Close About", aboutDescription: "Search the current conversation’s saved history in DSH Desktop and jump to the original messages.",
             aboutAuthor: "Author", aboutSupport: "Support and community", aboutRepository: "Source and documentation", aboutGroup: "QQ group", aboutCopy: "Copy group number", aboutCopying: "Copying…", aboutCopied: "Group number copied", aboutCopyFailed: "Copy failed. Copy the group number manually", aboutCredits: "Credits and license", aboutUpstream: "Based on secyborg/dsh-find-bar. Thanks to secyborg for the original find functionality.", aboutNotices: "Full credits and third-party licenses",
             feedbackIssue: "Report an issue (GitHub)", feedbackPrivacy: "GitHub account required; submitted issues are public. Paste diagnostics and describe the steps to reproduce.",
 			refreshUnavailable: "Refresh is available for Whole conversation",
@@ -255,7 +258,8 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "-content-panel .content-reset{margin-top:4px;padding:0 8px;font:12px/18px var(--dsw-font-family)}" +
 				"#" + BAR_ID + "-content-panel .scope-group{padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--dsw-alias-border-l1)}" +
 				"#" + BAR_ID + "-content-panel .history-command{margin-top:4px;padding-top:4px;border-top:1px solid var(--dsw-alias-border-l1)}" +
-				"#" + BAR_ID + "-content-panel .diagnostic-command{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
+				"#" + BAR_ID + "-content-panel .update-version,#" + BAR_ID + "-content-panel .update-status{margin:0;padding:4px 8px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}#" + BAR_ID + "-content-panel .update-status:empty{padding:0}#" + BAR_ID + "-content-panel .update-command [hidden]{display:none}" +
+                "#" + BAR_ID + "-content-panel .diagnostic-command{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
                 "#" + BAR_ID + "-content-panel .diagnostic-command button{flex:1;width:auto}" +
                 "#" + BAR_ID + "-content-panel .diagnostic-feedback{padding:0 8px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-secondary)}" +
                 "#" + BAR_ID + "-content-panel .feedback-issue{display:flex;align-items:center;gap:6px;box-sizing:border-box;min-height:28px;width:100%;padding:4px 8px;color:var(--dsw-alias-label-secondary);text-decoration:none;border-radius:var(--dsw-radius-sm,6px)}#" + BAR_ID + "-content-panel .feedback-issue:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}#" + BAR_ID + "-content-panel .feedback-privacy{margin:0;padding:0 8px 4px;font:12px/18px var(--dsw-font-family);color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere}" +
@@ -264,7 +268,7 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " button[hidden]{display:none}" +
 				"#" + BAR_ID + " button:hover,#" + BAR_ID + "-content-panel button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}" +
 				"#" + BAR_ID + " button:focus-visible,#" + BAR_ID + "-content-panel :focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}" +
-				"#" + BAR_ID + " button:disabled,#" + BAR_ID + "-content-panel button:disabled{opacity:.5;cursor:default}" +
+				"#" + BAR_ID + " button:disabled,#" + BAR_ID + "-content-panel button:disabled,#" + BAR_ID + "-content-panel button[aria-disabled=true]{opacity:.5;cursor:default}" +
 				"#" + BAR_ID + " [data-find-all-return][hidden]{display:none}" +
 				"#" + BAR_ID + " [data-find-all-return]{gap:4px;padding:0 8px;white-space:nowrap}" +
 				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
@@ -1217,6 +1221,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		var state = {
 			ctx: null,
+            updateTask: null, updateResult: null, updateBtn: null, updateStatus: null, updateGuide: null,
             aboutAvailable: false, aboutViews: new Map(), aboutOwner: null, aboutEpoch: 0,
 			mounted: false, writeClipboard: null, diagnosticBtn: null, diagnosticFeedback: null, copyPending: false, copyEpoch: 0, lastFailure: null,
             remote: null, history: null, historySnapshot: null, projector: null, hits: [], total: 0, queryToken: 0, scanTimer: 0, scanCursor: 0, scanCancelled: false, scanBusy: false, scanComplete: false, scanQuery: null, liveCount: 0, liveCapped: false, sourceNotice: "", refreshBtn: null,
@@ -1667,6 +1672,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function closeContentPanel(restoreFocus) {
+            cancelUpdateCheck();
 			if (!state.contentPanel || state.contentPanel.hidden) return false;
 			resetDiagnosticCopy();
 			state.contentPanel.hidden = true;
@@ -1674,6 +1680,45 @@ var BAR_ID = "dsh-find-all-root";
 			if (restoreFocus && state.contentBtn?.isConnected) state.contentBtn.focus({ preventScroll: true });
 			return true;
 		}
+
+        function renderUpdateCheck() {
+            if (!state.updateBtn) return;
+            state.updateBtn.setAttribute('aria-disabled', state.updateTask ? 'true' : 'false');
+            if (state.updateBtn.textContent !== L.checkUpdate) state.updateBtn.textContent = L.checkUpdate;
+            var result = state.updateResult;
+            var message = state.updateTask ? L.checkingUpdate : !result ? '' :
+                result.status === 'available' ? L.updateAvailable.replace('{v}', result.version) :
+                result.status === 'current' ? L.updateCurrent :
+                result.status === 'ahead' ? L.updateAhead.replace('{v}', result.version) : L.updateFailed;
+            if (state.updateStatus.textContent !== message) state.updateStatus.textContent = message;
+            state.updateGuide.hidden = !result || result.status !== 'available' || !!state.updateTask;
+        }
+
+        function cancelUpdateCheck() {
+            var task = state.updateTask;
+            state.updateTask = null;
+            if (task) { task.abort(); state.updateResult = null; }
+            renderUpdateCheck();
+        }
+
+        async function checkForUpdates() {
+            if (!state.mounted || state.updateTask) return;
+            var task = new AbortController();
+            state.updateTask = task;
+            state.updateResult = null;
+            renderUpdateCheck();
+            try {
+                var result = await checkLatestVersion(__DSH_FIND_ALL_VERSION__, task.signal);
+                if (state.mounted && state.updateTask === task) state.updateResult = result;
+            } catch (error) {
+                if (state.mounted && state.updateTask === task) state.updateResult = { status: 'failed' };
+            } finally {
+                if (state.mounted && state.updateTask === task) {
+                    state.updateTask = null;
+                    renderUpdateCheck();
+                }
+            }
+        }
 
         function closeAbout() {
             var owner = state.aboutOwner;
@@ -2354,6 +2399,29 @@ var BAR_ID = "dsh-find-all-root";
 			historyCommand.appendChild(refreshBtn);
 			contentViewport.appendChild(historyCommand);
 			state.refreshBtn = refreshBtn;
+            var updateCommand = document.createElement('div');
+            updateCommand.className = 'history-command update-command';
+            var currentVersion = document.createElement('p');
+            currentVersion.className = 'update-version';
+            currentVersion.textContent = L.currentVersion + ' ' + __DSH_FIND_ALL_VERSION__;
+            var updateBtn = document.createElement('button');
+            updateBtn.type = 'button'; updateBtn.className = 'check-update';
+            updateBtn.addEventListener('click', checkForUpdates);
+            var updateSource = document.createElement('p');
+            updateSource.className = 'feedback-privacy'; updateSource.textContent = L.updateSource;
+            updateSource.id = BAR_ID + '-update-source'; updateBtn.setAttribute('aria-describedby', updateSource.id);
+            var updateStatus = document.createElement('p');
+            updateStatus.className = 'update-status'; updateStatus.setAttribute('role', 'status');
+            updateStatus.setAttribute('aria-atomic', 'true');
+            var updateGuide = document.createElement('a');
+            updateGuide.className = 'feedback-issue'; updateGuide.textContent = L.updateGuide;
+            updateGuide.href = 'https://github.com/Ryuu-64/dsh-find-all#更新';
+            updateGuide.target = '_blank'; updateGuide.rel = 'noopener noreferrer';
+            updateGuide.hidden = true;
+            updateCommand.append(currentVersion, updateBtn, updateSource, updateStatus, updateGuide);
+            contentViewport.appendChild(updateCommand);
+            state.updateBtn = updateBtn; state.updateStatus = updateStatus; state.updateGuide = updateGuide;
+            renderUpdateCheck();
             var diagnosticCommand = document.createElement('div');
             diagnosticCommand.className = 'history-command diagnostic-command';
             var diagnosticBtn = button(L.copyDiagnostics, 'M9 5H5v16h12v-4M9 3h12v12H9z', copyDiagnostics);
@@ -2460,6 +2528,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
+            cancelUpdateCheck();
             closeAbout();
             cancelCountEdit(false);
             resetDiagnosticCopy();
@@ -2566,7 +2635,7 @@ var BAR_ID = "dsh-find-all-root";
                 function link(label, href) { return react.createElement('a', { href: href, target: '_blank', rel: 'noopener noreferrer' }, label); }
                 var repository = 'https://github.com/Ryuu-64/dsh-find-all';
                 return react.createElement(ui.Modal, {
-                    open: true, onClose: requestClose, title: 'dsh-find-all · ' + __DSH_FIND_ALL_VERSION__,
+                    open: true, onClose: requestClose, title: 'dsh-find-all',
                     closeLabel: L.aboutClose, description: L.aboutDescription,
                     className: 'dsh-find-all-about', contentClassName: 'dsh-find-all-about-content'
                 }, react.createElement('div', { ref: details, className: 'dsh-find-all-about-details' },
@@ -2679,6 +2748,7 @@ var BAR_ID = "dsh-find-all-root";
 					if (state.announcement) state.announcement.remove();
 					state.announcement = state.returnBtn = state.dragHandle = state.positionControls = null;
                     state.diagnosticBtn = state.diagnosticFeedback = state.writeClipboard = null;
+                    state.updateBtn = state.updateStatus = state.updateGuide = state.updateResult = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
 					if (style) style.remove();
 					state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;

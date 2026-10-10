@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Add a localized About dialog using the Host Modal, with the installed version, author, explicit QQ-group copying, project links, upstream credits, and license notices.
+- Show the running plugin version and a manual public-npm latest check in search options, with bounded requests, explicit failure states, and update instructions. No automatic installation or restart.
+
+- Add a localized About dialog using the Host Modal, with the author, explicit QQ-group copying, project links, upstream credits, and license notices.
 
 - Add a fixed GitHub feedback link next to diagnostic copying, with public-submission guidance and no automatic data transfer.
 - Let the result count temporarily edit a match number, with strict bounds, Enter-only navigation, accessible keyboard controls, and cancellation when result identities change.

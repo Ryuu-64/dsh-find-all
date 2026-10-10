@@ -204,13 +204,16 @@ var BAR_ID = "dsh-find-all-root";
 
 		function cssText() {
 			return "" +
-				"#" + BAR_ID + "{--dsh-find-all-max-width:600px;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
+				"#" + BAR_ID + "{--dsh-find-all-max-width:600px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
 				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
 				"#" + BAR_ID + ":before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
-				"#" + BAR_ID + " .controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}" +
-				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 160px;min-width:0;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
+				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
+				"#" + BAR_ID + " .secondary-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}" +
+				"#" + BAR_ID + " .scope-controls,#" + BAR_ID + " .navigation-controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;flex:none}" +
+				"#" + BAR_ID + " .secondary-controls [data-find-all-return]{margin-left:auto}" +
+				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
-				"#" + BAR_ID + " .count{min-width:52px;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
+				"#" + BAR_ID + " .count{flex:0 1 auto;min-width:44px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
 				"#" + BAR_ID + " .status{width:100%;color:var(--dsw-alias-label-tertiary);font:12px/1.25 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
 				"#" + BAR_ID + " .status:empty{display:none}" +
 				"#" + BAR_ID + " .position-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
@@ -218,23 +221,26 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " button.drag-handle{touch-action:none;user-select:none;cursor:grab;flex:none}" +
 				"#" + BAR_ID + "[data-dragging] button.drag-handle{cursor:grabbing}" +
 				"#" + BAR_ID + " .status[data-busy]{cursor:pointer;color:var(--dsw-alias-state-business-primary)}" +
-				"#" + BAR_ID + " .scope,#" + BAR_ID + " .content-filter{width:auto;padding:0 9px;color:var(--dsw-alias-label-secondary);font:12px/1 var(--dsw-font-family);background:0 0;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;white-space:nowrap}" +
+				"#" + BAR_ID + " .scope,#" + BAR_ID + " .content-filter{flex:none;gap:4px;width:auto;padding:0 9px;color:var(--dsw-alias-label-secondary);font:12px/1 var(--dsw-font-family);background:0 0;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;white-space:nowrap}" +
 				"#" + BAR_ID + " .scope[data-whole]{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .content-filter[aria-expanded=true]{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .content-filter[data-filtered]:after{content:\"\";flex:none;width:5px;height:5px;margin-left:6px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}" +
-				"#" + BAR_ID + " .content-panel{box-sizing:border-box;width:100%;margin:2px 0 0;padding:8px 10px 9px;color:var(--dsw-alias-label-primary);font:12px/1.35 var(--dsw-font-family);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-base)}" +
-				"#" + BAR_ID + " .content-panel[hidden]{display:none}" +
-				"#" + BAR_ID + " .content-panel legend{padding:0 4px;color:var(--dsw-alias-label-secondary);font-weight:600}" +
-				"#" + BAR_ID + " .content-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px 14px}" +
-				"#" + BAR_ID + " .content-option{min-width:0;align-items:flex-start;gap:7px;display:flex;cursor:pointer}" +
-				"#" + BAR_ID + " .content-option input{appearance:auto;accent-color:var(--dsw-alias-state-business-primary);flex:none;width:14px;height:14px;margin:1px 0 0}" +
-				"#" + BAR_ID + " .content-reset{height:24px;margin-top:8px;padding:0 7px;font:12px/1 var(--dsw-font-family)}" +
-				"#" + BAR_ID + " button{height:26px;min-width:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;align-items:center;justify-content:center;display:inline-flex}" +
-				"#" + BAR_ID + " button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}" +
-				"#" + BAR_ID + " button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}" +
+				"#" + BAR_ID + "-content-panel{position:fixed;z-index:2147483001;box-sizing:border-box;min-width:0;width:360px;max-width:calc(100vw - 16px);margin:0;padding:8px 10px 9px;overflow:auto;box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2));color:var(--dsw-alias-label-primary);font:12px/1.35 var(--dsw-font-family);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-base)}" +
+				"#" + BAR_ID + "-content-panel[hidden]{display:none}" +
+				"#" + BAR_ID + "-content-panel legend{padding:0 4px;color:var(--dsw-alias-label-secondary);font-weight:600}" +
+				"#" + BAR_ID + "-content-panel .content-options{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}" +
+				"#" + BAR_ID + "-content-panel .content-option{min-width:0;min-height:24px;align-items:center;gap:7px;display:flex;cursor:pointer}" +
+				"#" + BAR_ID + "-content-panel .content-option input{appearance:auto;accent-color:var(--dsw-alias-state-business-primary);flex:none;width:14px;height:14px;margin:1px 0 0}" +
+				"#" + BAR_ID + "-content-panel .content-reset{height:24px;margin-top:8px;padding:0 7px;font:12px/1 var(--dsw-font-family)}" +
+				"#" + BAR_ID + " button,#" + BAR_ID + "-content-panel button{flex:none;height:26px;min-width:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;align-items:center;justify-content:center;display:inline-flex}" +
+				"#" + BAR_ID + " button[hidden]{display:none}" +
+				"#" + BAR_ID + " button:hover,#" + BAR_ID + "-content-panel button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}" +
+				"#" + BAR_ID + " button:focus-visible,#" + BAR_ID + "-content-panel :focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}" +
 				"#" + BAR_ID + " button:disabled{opacity:.5;cursor:default}" +
 				"#" + BAR_ID + " [data-find-all-return][hidden]{display:none}" +
-				"#" + BAR_ID + " [data-find-all-return]{padding:0 8px;white-space:nowrap}" +
+				"#" + BAR_ID + " [data-find-all-return]{gap:4px;padding:0 8px;white-space:nowrap}" +
+				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
+				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .filter-label{display:none}#" + BAR_ID + " .content-filter{padding:0 6px}#" + BAR_ID + " .content-filter[data-filtered]:after{margin-left:2px}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
 				"::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
 				"::highlight(" + HL_CUR + "){background-color:#f5a623;color:#141414}";
@@ -884,9 +890,10 @@ var BAR_ID = "dsh-find-all-root";
 			var available = originValid(state.origin) && state.origin.navigated;
 			state.returnBtn.hidden = !state.restoring && !available;
 			state.returnBtn.disabled = !!state.restoring;
-			state.returnBtn.textContent = state.restoring ? L.returning : L.returnPosition;
-			state.returnBtn.setAttribute('aria-label', state.returnBtn.textContent);
-			state.returnBtn.title = state.returnBtn.textContent;
+			var label = state.restoring ? L.returning : L.returnPosition;
+			state.returnBtn.querySelector('.return-label').textContent = label;
+			state.returnBtn.setAttribute('aria-label', label);
+			state.returnBtn.title = label;
 		}
 
 		function cancelNavigation() {
@@ -963,9 +970,9 @@ var BAR_ID = "dsh-find-all-root";
 						if (state.jumpStatus !== null) {
 							var priorStatus = state.jumpStatus;
 							setStatus(priorStatus, false);
-						} else if(dataHit)historyStatus(); else setStatus(L.returnAvailable, false);
+						} else if(dataHit)historyStatus(); else setStatus("", false);
 						announceReturn = true;
-						// Return/status controls can wrap and grow the overlay. Verify
+						// The secondary row/status can change the overlay height. Verify
 						// the resulting layout before declaring the match visible.
 						state.navigationTimer = setTimeout(check, 0);
 						return;
@@ -1160,7 +1167,7 @@ var BAR_ID = "dsh-find-all-root";
 				state.restoring = null;
 				origin.navigated = false;
 				if (state.input) state.input.focus({ preventScroll: true });
-				setStatus(L.returned, false);
+				if (state.scope === "whole") historyStatus(); else setStatus("", false);
 				updateReturnButton();
 				if (state.announcement) state.announcement.textContent = L.returned;
 			} catch (error) { finishFailure('error'); }
@@ -1228,6 +1235,7 @@ var BAR_ID = "dsh-find-all-root";
 			var target = state.target, header = barAnchor(target), viewport = readingViewport(target);
 			if (!target || !header || !header.isConnected || !target.panel.isConnected || !viewport) {
 				state.bar.removeAttribute("data-positioned");
+				closeContentPanel();
 				return false;
 			}
 			var panel = target.panel.getBoundingClientRect(), headerRect = header.getBoundingClientRect();
@@ -1237,6 +1245,7 @@ var BAR_ID = "dsh-find-all-root";
 			var bottomEdge = Math.min(panel.bottom, viewport.bottom) - 8;
 			if (rightEdge <= leftEdge || bottomEdge <= topEdge) {
 				state.bar.removeAttribute("data-positioned");
+				closeContentPanel();
 				return false;
 			}
 			var dpr = window.devicePixelRatio || 1;
@@ -1260,6 +1269,7 @@ var BAR_ID = "dsh-find-all-root";
 			state.bar.style.setProperty("--dsh-find-all-bar-top", cssPixel(top));
 			state.bar.style.setProperty("--dsh-find-all-bar-right", cssPixel(window.innerWidth - left - box.width));
 			state.bar.setAttribute("data-positioned", "");
+			positionContentPanel();
 			return true;
 		}
 
@@ -1358,6 +1368,8 @@ var BAR_ID = "dsh-find-all-root";
 				if (composer) state.positionObserver.observe(composer);
 			}
 			state.positionObserver.observe(state.bar);
+			if (state.contentPanel) state.positionObserver.observe(state.contentPanel);
+			if (state.contentBtn) state.positionObserver.observe(state.contentBtn);
 			if (state.target.panel !== header) state.positionObserver.observe(state.target.panel);
 		}
 
@@ -1383,8 +1395,9 @@ var BAR_ID = "dsh-find-all-root";
             else if (!n) state.count.textContent = whole && (state.paging || state.scanBusy) ? "…" : whole && !state.scanComplete ? L.resultCount.replace("{n}", "0+") : "0/0";
             else if (state.index < 0) state.count.textContent = L.resultCount.replace("{n}", String(total) + suffix);
             else state.count.textContent = (state.index + 1) + "/" + total + suffix;
-            state.count.title = state.capped ? L.cap.replace("{n}", String(MAX_MATCHES)) : "";
-            state.count.setAttribute("aria-label", state.count.textContent + (state.capped ? "; " + state.count.title : ""));
+            var cap = state.capped ? L.cap.replace("{n}", String(MAX_MATCHES)) : "";
+            state.count.title = state.count.textContent + (cap ? "; " + cap : "");
+            state.count.setAttribute("aria-label", state.count.title);
         }
 
 		function setStatus(text, busy) {
@@ -1423,7 +1436,7 @@ var BAR_ID = "dsh-find-all-root";
 		function updateContentButton() {
 			if (!state.contentBtn) return;
 			var count = selectedContentCount();
-			state.contentBtn.textContent = L.contentButton;
+			state.contentBtn.querySelector('.filter-label').textContent = L.contentButton;
 			var label = L.contentButtonLabel.replace("{n}", String(count));
 			state.contentBtn.setAttribute("aria-label", label);
 			state.contentBtn.title = label;
@@ -1431,20 +1444,52 @@ var BAR_ID = "dsh-find-all-root";
 			else state.contentBtn.setAttribute("data-filtered", "1");
 		}
 
-		function closeContentPanel() {
+		// The filter is a body-level floating layer, so expanding it never changes
+		// the find bar's geometry or gets clipped by the bar's overflow container.
+		function positionContentPanel() {
+			var popup = state.contentPanel, trigger = state.contentBtn;
+			if (!popup || popup.hidden) return;
+			if (!trigger || !state.target) { closeContentPanel(); return; }
+			var viewport = readingViewport(state.target), header = barAnchor(state.target);
+			if (!viewport || !header || !state.bar.hasAttribute("data-positioned")) {
+				closeContentPanel(); return;
+			}
+			var bounds = state.target.panel.getBoundingClientRect(), anchor = trigger.getBoundingClientRect();
+			var leftEdge = Math.max(bounds.left, viewport.left) + 8;
+			var rightEdge = Math.min(bounds.right, viewport.right) - 8;
+			var topEdge = Math.max(bounds.top, viewport.top, header.getBoundingClientRect().bottom) + 8;
+			var bottomEdge = Math.min(bounds.bottom, viewport.bottom) - 8;
+			var width = Math.min(360, rightEdge - leftEdge);
+			var below = Math.max(0, bottomEdge - anchor.bottom - 6);
+			var above = Math.max(0, anchor.top - topEdge - 6);
+			if (width <= 0 || Math.max(below, above) <= 0) { closeContentPanel(); return; }
+			popup.style.width = width + "px";
+			// Prefer the trigger's lower edge. Near the panel's bottom, flip the
+			// layer above it and scroll its contents instead of moving the toolbar.
+			var desired = popup.scrollHeight + 2;
+			var opensAbove = below < Math.min(desired, 160) && above > below;
+			popup.style.maxHeight = (opensAbove ? above : below) + "px";
+			var box = popup.getBoundingClientRect();
+			popup.style.left = Math.max(leftEdge, Math.min(anchor.left, rightEdge - width)) + "px";
+			popup.style.top = (opensAbove ? anchor.top - 6 - box.height : anchor.bottom + 6) + "px";
+			popup.setAttribute("data-placement", opensAbove ? "top" : "bottom");
+		}
+
+		function closeContentPanel(restoreFocus) {
 			if (!state.contentPanel || state.contentPanel.hidden) return false;
 			state.contentPanel.hidden = true;
 			state.contentBtn?.setAttribute("aria-expanded", "false");
-			scheduleBarPosition();
+			if (restoreFocus && state.contentBtn?.isConnected) state.contentBtn.focus({ preventScroll: true });
 			return true;
 		}
 
 		function toggleContentPanel() {
 			if (!state.contentPanel) return;
-			var opening = state.contentPanel.hidden;
-			state.contentPanel.hidden = !opening;
-			state.contentBtn.setAttribute("aria-expanded", opening ? "true" : "false");
-			scheduleBarPosition();
+			if (closeContentPanel(true)) return;
+			state.contentPanel.hidden = false;
+			state.contentBtn.setAttribute("aria-expanded", "true");
+			positionContentPanel();
+			if (!state.contentPanel.hidden) state.contentInputs[CONTENT_TYPES[0]].focus({ preventScroll: true });
 		}
 
 		function contentTypeEnabled(type) {
@@ -1718,7 +1763,8 @@ var BAR_ID = "dsh-find-all-root";
             if(reset||state.scanQuery!==state.query){
                 cancelHistoryScan(false);state.scanQuery=state.query;state.scanCursor=0;state.hits=[];state.total=0;state.ranges=[];state.index=-1;state.capped=false;state.sourceNotice='';state.liveCount=0;paint();
             }
-            if(!state.query||!state.historySnapshot||state.scanCancelled){updateCount();return;}
+            if(!state.query){setStatus("",false);return;}
+            if(!state.historySnapshot||state.scanCancelled){updateCount();return;}
             if(state.scanBusy)return;
             var token=state.queryToken,target=state.target,query=state.query;
             var pattern=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -1872,6 +1918,7 @@ var BAR_ID = "dsh-find-all-root";
 				if (isOpen()) runSearch(false);
 				return;
 			}
+			closeContentPanel();
 			discardOrigin();
 			cancelPageIn();
 			stopObserver();
@@ -1943,6 +1990,12 @@ var BAR_ID = "dsh-find-all-root";
 			bar.setAttribute("role", "search");
 			var controls = document.createElement("div");
 			controls.className = "controls";
+			var secondary = document.createElement("div");
+			secondary.className = "secondary-controls";
+			var scopeControls = document.createElement("div");
+			scopeControls.className = "scope-controls";
+			var navigation = document.createElement("div");
+			navigation.className = "navigation-controls";
 
 			var input = document.createElement("input");
 			input.type = "text";
@@ -1959,6 +2012,10 @@ var BAR_ID = "dsh-find-all-root";
 			var contentBtn = document.createElement("button");
 			contentBtn.type = "button";
 			contentBtn.className = "content-filter";
+			contentBtn.appendChild(icon("M4 7h16M7 12h10M10 17h4", 14));
+			var filterLabel = document.createElement("span");
+			filterLabel.className = "filter-label";
+			contentBtn.appendChild(filterLabel);
 			contentBtn.setAttribute("aria-expanded", "false");
 			contentBtn.setAttribute("aria-controls", BAR_ID + "-content-panel");
 			contentBtn.addEventListener("click", toggleContentPanel);
@@ -1996,6 +2053,11 @@ var BAR_ID = "dsh-find-all-root";
 				contentSelectionChanged();
 			});
 			contentPanel.appendChild(resetContent);
+			contentPanel.addEventListener("keydown", function (event) {
+				if (event.key === "Tab" && event.shiftKey && event.target === contentInputs[CONTENT_TYPES[0]]) {
+					event.preventDefault(); closeContentPanel(true);
+				}
+			});
 
 			var count = document.createElement("span");
 			count.className = "count";
@@ -2017,22 +2079,28 @@ var BAR_ID = "dsh-find-all-root";
 
 			buildPositionControls(controls, bar);
 			controls.appendChild(input);
-			controls.appendChild(scopeBtn);
-			controls.appendChild(contentBtn);
+			scopeControls.appendChild(scopeBtn);
 			controls.appendChild(count);
             var refreshBtn=button(ZH?"重新读取最新会话历史":"Refresh saved history","M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2",function(){ if(state.scope!=="whole")return;cancelPageIn();cancelNavigation();state.history=null;state.historySnapshot=null;searchHistory(true);startPageIn(); });
-            state.refreshBtn=refreshBtn;controls.appendChild(refreshBtn);
-			controls.appendChild(button(L.prev, "m18 15-6-6-6 6", function () { goTo(-1); }));
-			controls.appendChild(button(L.next, "m6 9 6 6 6-6", function () { goTo(1); }));
+            state.refreshBtn=refreshBtn;scopeControls.appendChild(refreshBtn);
+			secondary.appendChild(scopeControls);
+			secondary.appendChild(contentBtn);
+			navigation.appendChild(button(L.prev, "m18 15-6-6-6 6", function () { goTo(-1); }));
+			navigation.appendChild(button(L.next, "m6 9 6 6 6-6", function () { goTo(1); }));
 			var returnBtn = document.createElement('button');
 			returnBtn.type = 'button'; returnBtn.setAttribute('data-find-all-return', '');
 			returnBtn.hidden = true;
+			returnBtn.appendChild(icon('M9 10H4l5-5M4 10h10a6 6 0 0 1 0 12h-3', 14));
+			var returnLabel = document.createElement('span');
+			returnLabel.className = 'return-label';
+			returnBtn.appendChild(returnLabel);
 			returnBtn.addEventListener('click', returnToOrigin);
 			state.returnBtn = returnBtn;
-			controls.appendChild(returnBtn);
-			controls.appendChild(button(L.close, "M18 6 6 18M6 6l12 12", close));
+			secondary.appendChild(returnBtn);
+			navigation.appendChild(button(L.close, "M18 6 6 18M6 6l12 12", close));
+			controls.appendChild(navigation);
 			bar.insertBefore(controls, bar.firstChild);
-			bar.appendChild(contentPanel);
+			bar.insertBefore(secondary, state.positionControls);
 			bar.appendChild(status);
 
 			state.bar = bar;
@@ -2046,6 +2114,7 @@ var BAR_ID = "dsh-find-all-root";
 			updateScopeButton();
 			updateContentButton();
 			document.body.appendChild(bar);
+			document.body.appendChild(contentPanel);
 			var announcement = document.createElement('span');
 			announcement.setAttribute('role', 'status'); announcement.setAttribute('aria-live', 'polite');
 			announcement.setAttribute('aria-atomic', 'true');
@@ -2148,7 +2217,7 @@ var BAR_ID = "dsh-find-all-root";
 			ctx.effect(function () {
 				injectCss();
 				var handler = createHandlers({
-					open: open, close: function () { if (!closeContentPanel()) close(); }, goTo: goTo, isOpen: isOpen,
+					open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
 					ownsKeys: function (event) {
 						var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
 						return !path.some(function (node) {
@@ -2158,7 +2227,9 @@ var BAR_ID = "dsh-find-all-root";
 					isBarInput: function (target) { return target === state.input; }
 				});
 				function focus(event) {
-					if (!state.bar || !state.bar.contains(event.target)) syncTarget(event.target);
+					var inContent = state.contentPanel && state.contentPanel.contains(event.target);
+					if (!inContent && !state.contentBtn?.contains(event.target)) closeContentPanel();
+					if (!inContent && (!state.bar || !state.bar.contains(event.target))) syncTarget(event.target);
 				}
 				function readingFocus(event) {
 					// Reader activity may refresh the registered main frame, but cannot
@@ -2194,6 +2265,7 @@ var BAR_ID = "dsh-find-all-root";
 					close();
 					state.query = "";
 					if (state.bar) state.bar.remove();
+					if (state.contentPanel) state.contentPanel.remove();
 					if (state.announcement) state.announcement.remove();
 					state.announcement = state.returnBtn = state.dragHandle = state.positionControls = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');

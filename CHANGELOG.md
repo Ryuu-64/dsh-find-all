@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.11
 
 - Match the Host’s filled three-dot options icon and show readable idle, searching, empty, and incomplete count states; only available results open match-number navigation.
 

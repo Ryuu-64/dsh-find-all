@@ -1,6 +1,6 @@
 {
   "name": "@ryuu-64/dsh-find-all",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Find messages in the current DeepSeek Harness (DSH) conversation with Ctrl+F / Cmd+F.",
   "type": "module",
   "license": "MIT",

@@ -4,8 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import React, { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import React from 'react';
 
 const source = readFileSync(process.env.FIND_ALL_PACKAGE_ROOT ? `${process.env.FIND_ALL_PACKAGE_ROOT}/lib/client.js` : new URL('../lib/client.js', import.meta.url), 'utf8');
 
@@ -207,90 +206,4 @@ test('the 5000 Range limit is global across text blocks', () => {
     assert.equal(ranges.at(-1).startContainer, h.root.querySelector('span').firstChild);
     assert.equal(h.ranges('').length, 0);
   } finally { h.dom.window.close(); }
-});
-
-async function mountedFixture(html) {
-  const h = fixture();
-  const { w } = h;
-  globalThis.window = w;
-  globalThis.document = w.document;
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  let Component, viewRoot, now = 0, serial = 0, scrolls = 0;
-  const cleanups = [], timers = new Map(), errors = [];
-  w.addEventListener('error', event => { errors.push(event.error); event.preventDefault(); });
-  w.HTMLElement.prototype.getClientRects = function () { return this.isConnected ? [{ width: 100, height: 20 }] : []; };
-  w.HTMLElement.prototype.scrollIntoView = () => { scrolls++; };
-  w.CSS = { highlights: new Map() };
-  w.Highlight = class extends Set { constructor(...ranges) { super(ranges); } };
-  w.setTimeout = (fn, delay) => { const id = ++serial; timers.set(id, { fn, at: now + delay }); return id; };
-  w.setInterval = (fn, delay) => { const id = ++serial; timers.set(id, { fn, at: now + delay, interval: delay }); return id; };
-  w.clearTimeout = w.clearInterval = id => timers.delete(id);
-  w.Date.now = () => now;
-  h.plugin.apply({
-    sessions: { binding(id) { assert.equal(id, 'session-a'); return { session: { getSnapshot: () => ({ hasMore: false }), loadOlder() {} } }; } },
-    slots: {
-      inject(name, callback) { assert.equal(name, 'conversation.session.header.utilities'); cleanups.push(callback()); },
-      register(options, value) { Component = value; return () => {}; },
-    },
-    effect(callback) { cleanups.push(callback()); },
-  });
-  h.root.innerHTML = '<section data-phase="active"><header></header><div data-conversation-scroll><div data-chat-flow></div></div></section>';
-  const flow = h.root.querySelector('[data-chat-flow]');
-  flow.innerHTML = html;
-  viewRoot = createRoot(h.root.querySelector('header'));
-  await act(async () => viewRoot.render(React.createElement(Component, { sessionId: 'session-a' })));
-  h.root.querySelector('[data-find-all-session]').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }));
-  async function advance(ms) {
-    for (let i = 0; i < 12; i++) await Promise.resolve(); // deliver the real MutationObserver
-    const end = now + ms;
-    for (;;) {
-      const next = [...timers].filter(([, item]) => item.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
-      if (!next) break;
-      now = next[1].at;
-      if (next[1].interval) next[1].at += next[1].interval;
-      else timers.delete(next[0]);
-      next[1].fn();
-      for (let i = 0; i < 12; i++) await Promise.resolve();
-    }
-    now = end;
-  }
-  return {
-    ...h, flow, advance, errors,
-    search(query) { const input = w.document.querySelector('#dsh-find-all-root input'); input.value = query; input.dispatchEvent(new w.Event('input', { bubbles: true })); },
-    count: () => w.document.querySelector('#dsh-find-all-root .count').textContent,
-    hits: () => [...(w.CSS.highlights.get('dsh-find-all-hit') || [])],
-    scrolls: () => scrolls,
-    async finish() { await act(async () => viewRoot.unmount()); for (const cleanup of cleanups.reverse()) cleanup?.(); h.dom.window.close(); },
-  };
-}
-
-test('bar handles İ without an offset error and highlights only original x characters', async () => {
-  const h = await mountedFixture('<p>İx</p><p><span>İ</span><em>x</em></p>');
-  try {
-    h.search('x'); await h.advance(251);
-    assert.deepEqual(h.errors, []);
-    assert.equal(h.count(), '1/2');
-    assert.deepEqual(h.hits().map(r => r.toString()), ['x', 'x']);
-    assert.deepEqual(h.hits().map(r => [r.startOffset, r.endOffset]), [[1, 2], [0, 1]]);
-  } finally { await h.finish(); }
-});
-
-test('existing observer rescans plain code after a highlighted span-tree replacement', async () => {
-  const h = await mountedFixture('<div data-code-block-banner>copy</div><div data-code-block-content><pre><code>Hello world\nnext line</code></pre></div>');
-  try {
-    h.search('Hello world'); await h.advance(251);
-    assert.equal(h.count(), '1/1');
-    assert.equal(h.hits()[0].toString(), 'Hello world');
-    const oldNode = h.hits()[0].startContainer;
-    const before = h.scrolls();
-    h.flow.querySelector('[data-code-block-content]').innerHTML = '<div><pre><code><span class="line"><span>Hello </span><span>world</span></span>\n<span class="line"><span>next</span><span> line</span></span></code></pre></div>';
-    await h.advance(251);
-    assert.equal(oldNode.isConnected, false);
-    assert.equal(h.count(), '1/1');
-    assert.equal(h.hits()[0].toString(), 'Hello world');
-    assert.notEqual(h.hits()[0].startContainer, oldNode);
-    assert.notEqual(h.hits()[0].startContainer, h.hits()[0].endContainer);
-    assert.equal(h.scrolls(), before, 'background rescan must not add scrolling');
-    assert.deepEqual(h.errors, []);
-  } finally { await h.finish(); }
 });

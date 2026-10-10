@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Search the current session through a fixed durable cursor, checking continuous event coverage instead of loading the entire Chat DOM.
+- Keep query scans separate from history reads, show cutoff and partial states, and retain loaded-only search when the full-history capability is unavailable.
+- Project text with the Host renderer and resolve matches to exact original-Chat message blocks on demand. Keep saved-but-unrendered fields explicit, and isolate image descriptions and live-tail counts.
+- Preserve keyboard navigation, movable find controls and return-to-reading-position behavior.
+
 ## 0.1.10
 
 - Keep the find bar below the conversation header and allow moving it within the conversation body with a drag handle or directional buttons.

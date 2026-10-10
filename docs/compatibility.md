@@ -1,4 +1,29 @@
-# Issue #1: compatibility acceptance
+# Full-session search compatibility
+
+The unreleased full-session path targets the official DSH `0.2.0-rc.2` contract at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). The historical matrix below describes the pre-existing loaded/DOM-paging implementation; it is not acceptance evidence for this data-search path.
+
+## Durable read and lifecycle
+
+The plugin subscribes through `ctx.remote.session.follow`, captures the first snapshot cursor, closes that subscription, and pages older records with the same `throughSeq`. Every page must be ordered, unique and dense, meet the preceding boundary, and collectively cover `0..T`. `SessionFace.hasMore` is never used as proof of complete history. Read coverage, text-projection coverage, query scanning and the 5000-result display limit are independent states.
+
+Remote services are acquired in a Cordis child dependency scope. Missing or withdrawn services disable full-session search without preventing the existing loaded-only mode from mounting. Query, acquisition and navigation generations are separate. Closing, scope/session changes and disposal cancel owned work; changing a query reuses the current session's text cache. No persistence, worker or alternate reader is installed.
+
+## Text and original-Chat positioning
+
+Assistant Markdown is projected through the Host's public `MarkdownText` component with the Host's React 18 runtime and a bundled React DOM server renderer. Each source is rendered once into an inert, unmounted template, converted to independent UTF-16 text blocks, and released. Generated code does not bundle React or request images. The single checked-in client bundle is reproducible with `npm run build`; `npm run check:build` rejects a stale artifact.
+
+Saved source identity is retained separately from renderer offsets. Navigation uses the selected session's `loadThrough`, validates the native semantic node and content part, opens only the corresponding native disclosures, and compares complete text-block sequences before making a Range. React replacement nodes are revalidated during settling. Capped process fades and the find bar are excluded from the readable area. If a boundary prevents scrolling clear of the bar, a temporary in-panel displacement preserves its saved manual position; cancellation and user movement end that displacement.
+
+Read, Diff, Search and supported terminal cards use validated first-party presentation data. Context follows the final RC2 Chat visibility filter: ordinary background context and system prompts are excluded; turn triggers and context containing tool changes use their native form and DOM markers. Saved but unrendered attempts/fields and Host display limits remain explicit navigation limitations. Authored image descriptions are independent saved-text results; images, OCR and attachment internals are excluded. Unknown required text types or unverified custom tool presentation report incomplete coverage rather than a false zero or complete count.
+
+## Build and verification scope
+
+The package version remains unchanged while the feature is under review. Packaging keeps the existing single classic-script client registration and introduces no required Host package. The final candidate must be verified with the bounded official-Host scenarios for data coverage, original-Chat landing, cancellation and return behavior; the prior release matrix is not automatically rerun or claimed.
+
+---
+
+## Historical loaded-mode acceptance
+
 
 This implementation follows the approved [Issue #1 plan](https://github.com/Ryuu-64/dsh-find-all/issues/1#issuecomment-5933617888), with the accepted release scope and unverified Desktop limits recorded in [PR #9](https://github.com/Ryuu-64/dsh-find-all/pull/9). This does not promise compatibility with untested or future hosts. Issues #2–#8 are outside this change.
 

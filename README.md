@@ -1,6 +1,6 @@
 # dsh-find-all
 
-DSH 的会话查找插件。按 **⌘F / Ctrl+F** 查找当前会话中的消息，跳到想看的地方。
+DeepSeek Harness（DSH）的当前会话查找插件。按 **⌘F / Ctrl+F** 查找消息，跳到想看的地方。
 
 ## 安装
 

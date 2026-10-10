@@ -4,12 +4,13 @@ import { toolPresentation, cardLabels } from "./tool-projection.js";
 const BLOCK = new Set('ADDRESS ARTICLE ASIDE BLOCKQUOTE DD DETAILS DIALOG DIV DL DT FIELDSET FIGCAPTION FIGURE FOOTER FORM H1 H2 H3 H4 H5 H6 HEADER HR LI MAIN NAV OL P PRE SECTION SUMMARY TABLE TBODY TD TFOOT TH THEAD TR UL'.split(' '));
 const imageAltClasses = new Set();
 const SKIP = 'script,style,noscript,svg,[data-code-block-banner],[data-clock],.sr-only,.katex-mathml,[data-find-projection-chrome]';
-export function collectProjectedBlocks(root) {
+export function collectProjectedBlocks(root, excluded) {
   const blocks = []; let text = '', segments = [];
   const flush = () => { if (segments.length) blocks.push({text,segments}); text='';segments=[]; };
   function visit(node, code = false) {
     if (node.nodeType === 3) { if(node.data) { segments.push({node,start:text.length,end:text.length+node.data.length});text+=node.data; } return; }
     if (node.nodeType !== 1 && node.nodeType !== 11) return;
+    if (node.nodeType === 1 && excluded?.(node)) { flush(); return; }
     if(node.nodeType===1&&(node.tagName==='IMG'||[...node.classList].some(name=>imageAltClasses.has(name)))){
       flush();const description=node.tagName==='IMG'?(node.getAttribute('alt')||''):node.textContent;
       if(description)blocks.push({text:description,segments:[],imageDescription:true});return;
@@ -26,7 +27,7 @@ export function collectProjectedBlocks(root) {
 export function rangeForBlock(block, start, end) {
   const first=block.segments.find(s=>start>=s.start&&start<s.end), last=block.segments.find(s=>end>s.start&&end<=s.end);
   if(!first||!last) return null;
-  const range=first.node.ownerDocument.createRange();range.setStart(first.node,start-first.start);range.setEnd(last.node,end-last.start);return range;
+  const range=first.node.ownerDocument.createRange();range.setStart(first.node,(first.nodeStart||0)+start-first.start);range.setEnd(last.node,(last.nodeStart||0)+end-last.start);return range;
 }
 const labels = {code:{copyLabel:'',copiedLabel:'',toolbarLabels:{codeLabel:'',wrapLabel:'',unwrapLabel:''}},footnotes:''};
 function readCard(source) {
@@ -39,6 +40,24 @@ function readCard(source) {
   if(!/^<path>[^\n]*<\/path>\n<type>file<\/type>\n<content>\n([\s\S]*)\n<\/content>$/u.test(source.raw))return null;
   return m;
 }
+function parsedArgs(source){try{const value=JSON.parse(source.callArguments);return value&&typeof value==='object'&&!Array.isArray(value)?value:null;}catch{return null;}}
+function linkLabel(url,title){if(typeof title==='string'&&title!=='')return title;try{return new URL(url).hostname||url;}catch{return url;}}
+function valueBlocks(values){
+  const seen=new Map();
+  return values.filter(value=>typeof value?.text==='string'&&value.text!=='').map((value,index)=>{
+    const key=(value.scope||'row')+'\0'+value.text,occurrence=seen.get(key)||0;seen.set(key,occurrence+1);
+    return {...value,index,occurrence,semanticValue:true};
+  });
+}
+function semanticSubstring(block,text){
+  const start=block.text.indexOf(text);
+  if(start<0||block.text.indexOf(text,start+1)>=0)return null;
+  const end=start+text.length,segments=block.segments.filter(segment=>segment.end>start&&segment.start<end).map(segment=>({
+    node:segment.node,start:Math.max(start,segment.start)-start,end:Math.min(end,segment.end)-start,
+    nodeStart:(segment.nodeStart||0)+Math.max(start,segment.start)-segment.start,
+  }));
+  return segments.length?{text,segments}:null;
+}
 export function createProjector(ui, react, document) {
   if(!ui.MarkdownText||typeof ui.projectUserText!=='function'||!/^18\./u.test(react.version||''))throw Error('Host text projection unavailable');
   // Lazy initialization keeps legacy loaded-only mode usable with older hosts.
@@ -50,8 +69,55 @@ export function createProjector(ui, react, document) {
   const altLeaves=[...probe.querySelectorAll('span')].filter(el=>el.textContent===probeText&&!el.children.length);
   if(altLeaves.length!==1||!altLeaves[0].classList.length)throw Error('Host image description projection unavailable');
   imageAltClasses.clear();for(const name of altLeaves[0].classList)imageAltClasses.add(name);
+  function markdownValues(text,scope='row'){
+    const fragment=render(react.createElement(ui.MarkdownText,{text,labels})),root=fragment.firstElementChild;
+    return root?collectProjectedBlocks(root).filter(block=>block.text!=='').map(block=>({text:block.text,scope})):[];
+  }
+  function semanticTool(source){
+    if(source.kind!=='tool-result'||source.firstTextSource===false||source.isError||source.isSubcall)return null;
+    const args=parsedArgs(source),name=source.toolName,values=[];
+    if(name==='web_search'&&args&&Array.isArray(args.queries)&&args.queries.length>0&&args.queries.every(query=>typeof query==='string'&&query.trim()!=='')&&source.meta&&typeof source.meta.truncated==='boolean'&&(source.meta.answer===undefined||typeof source.meta.answer==='string')&&Array.isArray(source.meta.sources)&&source.meta.sources.every(item=>item&&typeof item.url==='string')){
+      for(const query of args.queries)values.push({text:query,scope:'row'});
+      if(typeof source.meta.answer==='string')values.push(...markdownValues(source.meta.answer,'web'));
+      for(const item of source.meta.sources){
+        values.push({text:linkLabel(item.url,item.title),scope:'web'});
+        if(item.snippet)values.push({text:item.snippet,scope:'web'});
+        if(item.publishedAt)values.push({text:item.publishedAt,scope:'web'});
+      }
+      return {blocks:valueBlocks(values),mapping:'tool-values',errors:[]};
+    }
+    if(name==='web_fetch'&&args&&typeof args.url==='string'&&args.url.trim()!==''&&source.meta&&typeof source.meta.truncated==='boolean'&&typeof source.meta.url==='string'&&Number.isInteger(source.meta.statusCode)){
+      values.push({text:source.meta.url,scope:'web'},{text:String(source.meta.statusCode),scope:'web'});
+      return {blocks:valueBlocks(values),mapping:'tool-values',errors:[]};
+    }
+    if(name==='todo_write'&&args&&Array.isArray(args.todos)&&args.todos.every(todo=>todo&&typeof todo.content==='string'&&todo.content.trim()!==''&&['completed','in_progress','pending'].includes(todo.status))&&new Set(args.todos.map(todo=>todo.content.trim())).size===args.todos.length){
+      for(const todo of args.todos)values.push({text:todo.content.trim(),scope:'row'});
+      return {blocks:valueBlocks(values),mapping:'tool-values',errors:[]};
+    }
+    if(name==='subagent'&&args&&typeof args.prompt==='string'){
+      values.push({text:args.prompt,scope:'row'});
+      const started=/^started (?:background subagent job|subagent) (\S+)$/u.exec(source.raw);
+      if(started)values.push({text:started[1],scope:'row'});else values.push(...markdownValues(source.raw,'row'));
+      return {blocks:valueBlocks(values),mapping:'tool-values',errors:[]};
+    }
+    if(name==='list_agents'){
+      if(source.raw==='(no subagents)')return {blocks:[],mapping:'tool-values',errors:[]};
+      for(const line of source.raw.split('\n')){
+        const match=/^(\S+) \[([^\]]+)\](?: parent=(\S+) depth=(\d+))?(?: — (.*))?$/u.exec(line);
+        if(!match)return {blocks:[],mapping:'tool-values',errors:[{code:'custom-tool-projection-unverified',message:'Agent list output has an unsupported display shape'}]};
+        // The badge localizes state labels, so only keep values whose exact
+        // text is rendered independently of the Host locale.
+        for(const text of [match[5],match[1],match[3],match[4]])if(text)values.push({text,scope:'row'});
+      }
+      return {blocks:valueBlocks(values),mapping:'tool-values',errors:[]};
+    }
+    return null;
+  }
   return function project(source) {
     if(typeof source.raw!=='string')return {blocks:[],errors:['missing-source-text']};
+    if(source.transcriptVisible===false)return {blocks:[],mapping:'stored',errors:[]};
+    const semantic=semanticTool(source);if(semantic)return semantic;
+    if(source.kind==='tool-result'&&source.firstTextSource===false&&['read','web_search','web_fetch','todo_write','subagent','list_agents'].includes(source.toolName))return {blocks:[],mapping:'stored',errors:[]};
     const read=readCard(source);
     if(read)return {blocks:read.lines.map((line,i)=>({text:line.text,index:i,lineNumber:line.number})),mapping:'read',errors:[]};
     const presentation=toolPresentation(source);
@@ -85,13 +151,14 @@ export function createProjector(ui, react, document) {
       const fragment=render(react.createElement('div',null,ui.projectUserText(source.raw,source.referenceLabels||[],source.skillNames||[],'skill')));
       return {blocks:collectProjectedBlocks(fragment).map((b,index)=>({text:b.text,index,...(b.imageDescription?{imageDescription:true}:{})})),mapping:'user',errors:[]};
     }
-    // Stored tool fields remain searchable even when a custom renderer does
-    // not expose the original field in Chat. Such hits must not jump by text.
+    // Unknown custom cards may transform or suppress stored fields. Never
+    // count text that cannot be tied to one rendered Chat range.
     let text=source.raw;
     if(source.kind==='tool-call'){try{text=JSON.stringify(JSON.parse(source.raw),null,2);}catch{}}
     const knownTools=new Set(['read','read_image','write','edit','apply_patch','str_replace_editor','grep','glob','bash','pwsh','terminal_send','terminal_create','terminal_read','terminal_kill','exec_command','write_stdin','run_code']);
-    const errors=source.hasUnknownToolPresentation&&!knownTools.has(source.toolName)?[{code:'custom-tool-projection-unverified',message:'Custom tool presentation contains unsupported text fields'}]:[];
-    return {blocks:[{text,index:0}],mapping:source.kind==='tool-result'?'tool-field':'stored',errors};
+    const custom=source.hasUnknownToolPresentation&&!knownTools.has(source.toolName);
+    const errors=custom?[{code:'custom-tool-projection-unverified',message:'Custom tool presentation contains unsupported text fields'}]:[];
+    return {blocks:custom?[]:[{text,index:0}],mapping:source.kind==='tool-result'?'tool-field':'stored',errors};
   };
 }
 
@@ -108,16 +175,17 @@ function collectToolBlocks(root,kind,source){
   if(kind==='terminal'){
     let authoredCommand=true;
     if(source?.toolName==='terminal_send'){try{authoredCommand=JSON.parse(source.callArguments).text!=='';}catch{}}
-    return [...root.querySelectorAll('div,span')].filter(el=>authoredCommand&&el.tagName==='SPAN'&&hasClassEnd(el,'_command')||el.tagName==='DIV'&&hasClassEnd(el,'_line')).flatMap(el=>collectProjectedBlocks(el));
+    const blocks=[...root.querySelectorAll('div,span')].filter(el=>authoredCommand&&el.tagName==='SPAN'&&hasClassEnd(el,'_command')||el.tagName==='DIV'&&hasClassEnd(el,'_line')).flatMap(el=>collectProjectedBlocks(el));
+    const status=[...root.querySelectorAll('span')].find(el=>hasClassEnd(el,'_status'));
+    const marker=/\n\[exit code: (\d+)\]$/u.exec(source.raw)||/\n\[killed by signal: ([^\]\n]+)\]$/u.exec(source.raw);
+    if(status&&marker){const projected=collectProjectedBlocks(status)[0],semantic=projected&&semanticSubstring(projected,marker[1]);if(semantic)blocks.push(semantic);}
+    return blocks;
   }
   if(kind==='search'){
     const blocks=[];
     for(const element of root.querySelectorAll('div,span')){
       if(hasClassEnd(element,'_filePath'))blocks.push(...collectProjectedBlocks(element));
-      else if(element.tagName==='DIV'&&hasClassEnd(element,'_line')){
-        // Number prefixes remain part of the Host's independent result line.
-        blocks.push(...collectProjectedBlocks(element));
-      }
+      else if(element.tagName==='DIV'&&hasClassEnd(element,'_line'))blocks.push(...collectProjectedBlocks(element,child=>hasClassEnd(child,'_lineNumber')));
     }
     return blocks;
   }
@@ -203,6 +271,30 @@ export function mapProjectedDocument(source, node, rows) {
     const actual=collectToolBlocks(roots[0],source.cardKind,source),expected=source.blocks.filter(b=>!b.storedField);
     if(!sameBlocks(expected,actual))return {reason:'tool-card-not-expanded'};
     return {blocks:source.blocks.map((b,i)=>b.storedField?{text:b.text,segments:[]}:actual[i]),root:roots[0]};
+  }
+  if(source.mapping==='tool-values'){
+    const scoped={};
+    const roots=(scope)=>scoped[scope]??=(scope==='web'?[...new Set(rows.flatMap(row=>[...row.querySelectorAll('[data-web]')]))]:rows);
+    const mapped=[];
+    for(const saved of source.blocks){
+      const candidates=[];
+      for(const root of roots(saved.scope||'row'))for(const block of collectProjectedBlocks(root)){
+        let start=0;
+        while((start=block.text.indexOf(saved.text,start))>=0){
+          const end=start+saved.text.length;
+          const segments=block.segments.filter(segment=>segment.end>start&&segment.start<end).map(segment=>({
+            node:segment.node,start:Math.max(start,segment.start)-start,end:Math.min(end,segment.end)-start,
+            nodeStart:(segment.nodeStart||0)+Math.max(start,segment.start)-segment.start,
+          }));
+          if(segments.length)candidates.push({text:saved.text,segments});
+          start=end;
+        }
+      }
+      const actual=candidates[saved.occurrence||0];
+      if(!actual)return {reason:'tool-values-not-expanded'};
+      mapped.push(actual);
+    }
+    return {blocks:mapped};
   }
   if(source.mapping==='tool-field'){
     // A generic first-party output is its explicit ioText field, not a text

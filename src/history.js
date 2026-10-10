@@ -24,7 +24,7 @@ const NON_BODY_EVENTS = new Set([
 ]);
 const NON_TEXT_BLOCKS = new Set(["image", "file"]);
 const CONTEXT_LIFECYCLE = new Set(["agent/inbox/spliced", "turn/start", "step/start", "step/end", "turn/end"]);
-const TOOL_META_FIELDS = new Set(["path", "lang", "operation", "shape", "offset", "totalLines", "total", "truncated", "lines", "diffs", "paths", "files"]);
+const TOOL_META_FIELDS = new Set(["path", "lang", "operation", "shape", "offset", "totalLines", "total", "truncated", "lines", "diffs", "paths", "files", "answer", "sources", "url", "statusCode"]);
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -94,6 +94,19 @@ function toolMeta(meta) {
 		path: typeof file.path === "string" ? file.path : null,
 		matches: Array.isArray(file.matches) ? file.matches.map((match) => object(match) ? { lineNumber: Number.isSafeInteger(match.lineNumber) ? match.lineNumber : null, line: typeof match.line === "string" ? match.line : null } : null) : null,
 	} : null);
+	if (Object.hasOwn(meta, "answer")) out.answer = typeof meta.answer === "string" ? meta.answer : null;
+	if (typeof meta.url === "string") out.url = meta.url;
+	if (Number.isSafeInteger(meta.statusCode)) out.statusCode = meta.statusCode;
+	if (Array.isArray(meta.sources)) out.sources = meta.sources.map((source) => object(source)
+		&& typeof source.url === "string"
+		&& (source.title === undefined || typeof source.title === "string")
+		&& (source.snippet === undefined || typeof source.snippet === "string")
+		&& (source.publishedAt === undefined || typeof source.publishedAt === "string") ? {
+			url: source.url,
+			...(source.title === undefined ? {} : { title: source.title }),
+			...(source.snippet === undefined ? {} : { snippet: source.snippet }),
+			...(source.publishedAt === undefined ? {} : { publishedAt: source.publishedAt }),
+		} : null);
 	return Object.keys(out).length ? out : undefined;
 }
 
@@ -319,18 +332,24 @@ function extractEntry(event, sessionId, report) {
 		}
 	} else if (type === "agent/inbox/spliced") {
 		entry.inbox = projectInboxSplice(data, seq);
+	} else if (type === "command/run") {
+		entry.command = { commandId: requireString(data.commandId, "Command identity", seq), name: requireString(data.name, "Command name", seq) };
+	} else if (type === "command/done") {
+		entry.command = { commandId: requireString(data.commandId, "Command identity", seq), done: true };
 	} else if (type === "turn/end") {
 		if (data.reason?.kind === "error") unsupported("unsupported-body-event", "Turn error text is not yet projected");
-	} else if (["command/done", "compaction/summary"].includes(type)) {
+	} else if (type === "compaction/summary") {
 		unsupported("unsupported-body-event", `Visible ${type} text is not yet projected`);
 	} else if (!NON_BODY_EVENTS.has(type)) {
 		unsupported("unsupported-event", `Unrecognized durable event type: ${type}`);
 	}
-	return entry.sources.length || BOUNDARIES.has(type) || CONTEXT_LIFECYCLE.has(type) || type === "user/message" ? entry : null;
+	return entry.sources.length || entry.command || BOUNDARIES.has(type) || CONTEXT_LIFECYCLE.has(type) || type === "user/message" ? entry : null;
 }
 
-function resolveSources(entries) {
+function resolveSources(entries, report) {
 	const calls = new Map();
+	const commands = new Map();
+	const completedCalls = new Set();
 	const bySeq = new Map();
 	const sources = [];
 	const classifier = createContextClassifier();
@@ -344,6 +363,10 @@ function resolveSources(entries) {
 	};
 	for (const entry of entries) {
 		classifier.accept(entry);
+		if (entry.command?.done) {
+			const command = commands.get(entry.command.commandId);
+			if (command?.name !== "permission") report({ code: "unsupported-body-event", message: "Visible command/done text is not yet projected", seq: entry.seq });
+		} else if (entry.command) commands.set(entry.command.commandId, entry.command);
 		if (entry.context) {
             const isTrigger = entry.type === "user/message" && classifier.isTurnTrigger(entry.messageId);
             if (isTrigger || entry.contextVisible) {
@@ -380,6 +403,11 @@ function resolveSources(entries) {
 		source.toolName = call.toolName;
 		source.callArguments = call.callArguments;
 		source.callSeq = call.seq;
+		completedCalls.add(source.callId);
+	}
+	for (const source of sources) if (source.kind === "tool-call" && completedCalls.has(source.callId)) {
+		source.transcriptVisible = false;
+		source.unavailableReason = "superseded-by-result-card";
 	}
 	return sources.filter((source) => !source.inlineAssistant || !calls.has(source.callId));
 }
@@ -482,7 +510,7 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 			publish({ readComplete: true, coverageComplete: true, status: "projecting" });
 			const entries = pageEntries.reverse().flat();
 			pageEntries.length = 0;
-			const sources = resolveSources(entries);
+			const sources = resolveSources(entries, (issue) => coverageErrors.push(issue));
 			entries.length = 0;
 			const documents = [];
 			const errors = coverageErrors;

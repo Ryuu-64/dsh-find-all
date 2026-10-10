@@ -4,7 +4,7 @@
 const record=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const positive=x=>Number.isInteger(x)&&x>=1;
 const escalation=a=>(a.sandbox_permissions===undefined&&a.justification===undefined)||(['workspace-write','danger-full-access'].includes(a.sandbox_permissions)&&typeof a.justification==='string'&&a.justification.trim()!=='');
-export const cardLabels={copy:'',copied:'',codeLabel:'',wrapLabel:'',unwrapLabel:'',expand:()=>'',expandAria:()=>'',collapse:'',collapseAria:'',window:()=>'',pathsSummary:()=>'',matchesSummary:()=>'',noResults:'',running:'',failed:'',done:'',exitCode:()=>'',signal:()=>'',noExitCode:'',noOutput:''};
+export const cardLabels={copy:'',copied:'',codeLabel:'',wrapLabel:'',unwrapLabel:'',expand:()=>'',expandAria:()=>'',collapse:'',collapseAria:'',window:()=>'',pathsSummary:()=>'',matchesSummary:()=>'',noResults:'',running:'',failed:'',done:'',exitCode:(code)=>String(code),signal:(signal)=>String(signal),noExitCode:'',noOutput:''};
 function includeValid(s){if(typeof s!=='string'||!s.trim()||s.startsWith('!'))return false;let depth=0;for(const c of s){if(c==='{')depth++;else if(c==='}')depth=Math.max(0,depth-1);else if(c===','&&!depth)return false;}return true;}
 export function toolPresentation(source){
   if(source.kind!=='tool-result')return null;
@@ -38,9 +38,14 @@ export function toolPresentation(source){
       if(typeof a.command!=='string'||!a.command.trim()||typeof a.description!=='string'||!a.description.trim()||!escalation(a)||(a.workdir!==undefined&&typeof a.workdir!=='string')||(a.timeoutMs!==undefined&&(typeof a.timeoutMs!=='number'||!Number.isFinite(a.timeoutMs)||a.timeoutMs<=0))||(a.run_in_background!==undefined&&typeof a.run_in_background!=='boolean'))return null;
       command=a.command;
     }
-    let output=source.raw;
-    if(n!=='terminal_send')output=output.replace(/\n\[(?:killed by signal: [^\]\n]+|exit code: \d+)\]$/u,'');
-    return {kind:'terminal',props:{command,output,running:false},errors:[]};
+    let output=source.raw,exitCode,signal;
+    if(n!=='terminal_send'){
+      const killed=/\n\[killed by signal: ([^\]\n]+)\]$/u.exec(output),exited=/\n\[exit code: (\d+)\]$/u.exec(output);
+      if(killed){signal=killed[1];output=output.slice(0,killed.index);}
+      else if(exited){exitCode=Number(exited[1]);output=output.slice(0,exited.index);}
+      else exitCode=0;
+    }
+    return {kind:'terminal',props:{command,output,exitCode,signal,running:false},errors:[]};
   }
   return null;
 }

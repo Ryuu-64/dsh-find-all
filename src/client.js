@@ -2365,7 +2365,7 @@ var BAR_ID = "dsh-find-all-root";
             diagnosticFeedback.setAttribute('role', 'status');
             var feedbackIssue = document.createElement('a');
             feedbackIssue.className = 'feedback-issue'; feedbackIssue.textContent = L.feedbackIssue;
-            feedbackIssue.href = 'https://github.com/Ryuu-64/dsh-find-all/issues';
+            feedbackIssue.href = 'https://github.com/Ryuu-64/dsh-find-all/issues/new';
             feedbackIssue.target = '_blank'; feedbackIssue.rel = 'noopener noreferrer';
             feedbackIssue.appendChild(icon('M14 3h7v7M21 3l-9 9M10 5H5v14h14v-5', 14));
             var feedbackPrivacy = document.createElement('p');
@@ -2573,7 +2573,7 @@ var BAR_ID = "dsh-find-all-root";
                     react.createElement('p', null, L.aboutAuthor + ': ', link('Ryuu-64', 'https://github.com/Ryuu-64')),
                     react.createElement('section', null,
                         react.createElement('h3', null, L.aboutSupport),
-                        react.createElement('div', { className: 'dsh-find-all-about-links' }, link(L.feedbackIssue, repository + '/issues'), link(L.aboutRepository, repository)),
+                        react.createElement('div', { className: 'dsh-find-all-about-links' }, link(L.feedbackIssue, repository + '/issues/new'), link(L.aboutRepository, repository)),
                         react.createElement('p', { className: 'dsh-find-all-about-status' }, L.feedbackPrivacy),
                         react.createElement('div', { className: 'dsh-find-all-about-group' },
                             react.createElement('span', null, L.aboutGroup + ': 1129212995'),

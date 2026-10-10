@@ -1465,23 +1465,24 @@ var BAR_ID = "dsh-find-all-root";
 				closeContentPanel(); return;
 			}
 			var bounds = state.target.panel.getBoundingClientRect(), anchor = trigger.getBoundingClientRect();
+			var barBounds = state.bar.getBoundingClientRect(), gap = 4;
 			var leftEdge = Math.max(bounds.left, viewport.left) + 8;
 			var rightEdge = Math.min(bounds.right, viewport.right) - 8;
 			var topEdge = Math.max(bounds.top, viewport.top, header.getBoundingClientRect().bottom) + 8;
 			var bottomEdge = Math.min(bounds.bottom, viewport.bottom) - 8;
 			var width = Math.min(320, rightEdge - leftEdge);
-			var below = Math.max(0, bottomEdge - anchor.bottom - 6);
-			var above = Math.max(0, anchor.top - topEdge - 6);
+			var below = Math.max(0, bottomEdge - barBounds.bottom - gap);
+			var above = Math.max(0, barBounds.top - topEdge - gap);
 			if (width <= 0 || Math.max(below, above) <= 0) { closeContentPanel(); return; }
 			popup.style.width = width + "px";
-			// Prefer the trigger's lower edge. Near the panel's bottom, flip the
+			// Prefer the whole bar's lower edge. Near the panel's bottom, flip the
 			// layer above it and scroll its contents instead of moving the toolbar.
 			var desired = popup.querySelector('.content-viewport').scrollHeight + 2;
 			var opensAbove = below < Math.min(desired, 160) && above > below;
 			popup.style.maxHeight = (opensAbove ? above : below) + "px";
 			var box = popup.getBoundingClientRect();
 			popup.style.left = Math.max(leftEdge, Math.min(anchor.left, rightEdge - width)) + "px";
-			popup.style.top = (opensAbove ? anchor.top - 6 - box.height : anchor.bottom + 6) + "px";
+			popup.style.top = (opensAbove ? barBounds.top - gap - box.height : barBounds.bottom + gap) + "px";
 			popup.setAttribute("data-placement", opensAbove ? "top" : "bottom");
 		}
 

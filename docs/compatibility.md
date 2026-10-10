@@ -70,8 +70,8 @@ npm ci --ignore-scripts --legacy-peer-deps
 npm run check
 npm_config_cache=/tmp/find-all-npm-cache npm run verify:release
 npm pack --ignore-scripts --pack-destination /tmp/find-all-candidate
-# Extract this one tgz, retain its SHA-256, then test those bytes:
-FIND_ALL_PACKAGE_ROOT=/tmp/find-all-candidate/package node --test test/session-adapter.test.mjs
+# Extract this one tgz, retain its SHA-256, then verify its registration bytes:
+node scripts/check-client-registration.mjs /tmp/find-all-candidate/package
 ```
 
 `--legacy-peer-deps` here is only for isolated development test dependencies; it is not a host installation result or exemption. Test sessions must be synthetic, with no user data or model credentials. Do not change the artifact between version runs. Unknown future host versions need fresh regression evidence before changing support metadata.

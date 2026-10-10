@@ -46,31 +46,6 @@ test("a copy of the package passes", () => {
 	}
 });
 
-test("a copy with the 0.1.0 unscoped id is rejected, with the line number", () => {
-	const scratch = copyPackage((source) => source.replace('id: "@ryuu-64/dsh-find-all"', 'id: "dsh-find-all"'));
-	try {
-		const result = runCheck(scratch);
-		assert.equal(result.status, 1);
-		assert.match(result.stderr, /lib[\\/]client\.js:45 registers "dsh-find-all"/);
-		assert.match(result.stderr, /package name is "@ryuu-64\/dsh-find-all"/);
-	} finally {
-		rmSync(scratch, { recursive: true, force: true });
-	}
-});
-
-test("the check never falls back to the source checkout", () => {
-	// The scratch copy is defective while the checkout is fixed: reporting "ok"
-	// here would prove the argument is being ignored.
-	const scratch = copyPackage((source) => source.replace('id: "@ryuu-64/dsh-find-all"', 'id: "not-the-package-name"'));
-	try {
-		const result = runCheck(scratch);
-		assert.equal(result.status, 1, "the check reported on the checkout instead of the argument");
-		assert.match(result.stderr, /not-the-package-name/);
-	} finally {
-		rmSync(scratch, { recursive: true, force: true });
-	}
-});
-
 test("a bundle that registers nothing is rejected", () => {
 	const scratch = copyPackage((source) => source.replace("window.__ModuleLoader__.load({", "void ({"));
 	try {

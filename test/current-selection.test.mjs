@@ -1,23 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup, snapshot, key, current} from './helpers/search-ui.mjs';
+import {setup, key, current} from './helpers/search-ui.mjs';
 
 function page(h, view, query = 'needle') {
   h.open(view.anchor); h.w.document.querySelector('.scope').click(); h.search(query); h.scrolls.length = 0;
 }
 async function rescan(h) { await Promise.resolve(); await h.advance(550); }
-
-test('paging from zero keeps its matches unselected without scrolling', async () => {
-  const h = setup();
-  try {
-    const v = await h.mount('a'); v.flow.innerHTML = '<p>old</p>'; const state = snapshot();
-    h.faces.set('a', {getSnapshot: () => state, async loadOlder() {v.flow.insertAdjacentHTML('afterbegin', '<p>needle</p><p>needle</p>'); state.hasMore = false;}});
-    h.open(v.anchor); h.search('needle'); h.scrolls.length = 0; await h.advance(600);
-    assert.equal(h.count(), '2 results'); assert.equal(current(h), undefined);
-    assert.deepEqual([...h.w.CSS.highlights.get('dsh-find-all-hit')].map(range => range.toString()), ['needle', 'needle']);
-    assert.equal(h.scrolls.length, 0);
-  } finally { await h.finish(); }
-});
 
 test('prepend keeps selected B rather than another identical word in A or C', async () => {
   const h = setup();

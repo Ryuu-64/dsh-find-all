@@ -526,7 +526,7 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 				for (const error of localErrors) {
 					const issue = errorRecord(error, "projection-incomplete");
 					const key = issue.code + "\0" + issue.message;
-					if (!seenErrors.has(key)) errors.push({ ...issue, seq: source.seq });
+					if (!seenErrors.has(key)) errors.push({ ...issue, seq: source.seq, textKind: source.kind, ...(source.sourceKind === undefined ? {} : { messageSourceKind: source.sourceKind }) });
 					seenErrors.add(key);
 				}
 				documents.push({ ...source, blocks: projection.blocks,

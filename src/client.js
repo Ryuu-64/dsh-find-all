@@ -7,6 +7,8 @@ var BAR_ID = "dsh-find-all-root";
 		var HL_ALL = "dsh-find-all-hit";
 		var HL_CUR = "dsh-find-all-cur";
 		var MAX_MATCHES = 5000;
+		var CONTENT_TYPES = ["user", "assistant", "assistant-rich", "reasoning", "tool", "subagent", "context"];
+		var DEFAULT_CONTENT_TYPES = { user: true, assistant: true, "assistant-rich": true, reasoning: false, tool: false, subagent: false, context: false };
 		/** Safety cap on paged-in history: 400 pages x 50 messages. */
 		var MAX_PAGES = 400;
 		/** How long one page may take before the pager gives up on it. */
@@ -35,18 +37,23 @@ var BAR_ID = "dsh-find-all-root";
 			move: "拖动查找栏；点击展开移动按钮", moveLeft: "向左移动", moveRight: "向右移动", moveUp: "向上移动", moveDown: "向下移动", resetPosition: "恢复默认位置",
 			cap: "仅显示前 {n} 处匹配",
 			resultCount: "{n} 个结果",
+			contentButton: "筛选内容类型",
+			contentButtonLabel: "筛选内容类型；当前已选择 {n} 项",
+			contentLegend: "选择要搜索的内容类型",
+			contentReset: "恢复默认",
+			contentTypes: { user: "用户发送的消息", assistant: "助手最终回复", "assistant-rich": "最终回复中的代码、链接、引用和列表", reasoning: "思考过程", tool: "工具调用和工具结果", subagent: "子代理原始回传", context: "注入上下文" },
 			scopeWhole: "完整会话",
 			scopePage: "已加载内容",
-			scopeToPage: "按固定截点读取当前会话的已保存历史；只在跳转时加载原聊天。点击改为已加载内容",
-			scopeToWhole: "仅搜索当前会话中已加载的内容，不再加载更早内容。点击改为包含更早内容",
-			loading: "正在加载更早的历史… 已 {n} 页",
-			available: "已搜索当前可用历史；宿主未提供更早页，无法确认历史完整性",
-			capped: "搜索未完成：已到更早内容的加载上限（{n} 页），已保留找到的结果",
+			scopeToPage: "正在搜索完整对话。点击后只搜索当前已显示的内容",
+			scopeToWhole: "目前只搜索已显示的内容。点击后搜索完整对话",
+			loading: "正在搜索完整对话…",
+			available: "部分历史内容无法读取，搜索结果可能不完整。",
+			capped: "历史内容较多，搜索结果可能不完整。",
 			stopTip: "点击停止加载",
-			noService: "搜索未完成：会话接口不可用，已保留找到的结果",
+			noService: "暂时无法搜索完整对话，已显示当前找到的结果。",
 			noTarget: "当前主会话没有可搜索的聊天正文",
 			noRoot: "当前会话的搜索范围不可用",
-			incomplete: "搜索未完成，已保留找到的结果",
+			incomplete: "搜索未完成，已显示当前找到的结果。",
 			find: "查找会话",
 			returnPosition: "返回搜索前位置", returning: "正在返回…", returned: "已返回搜索前位置",
 			returnAvailable: "已跳到匹配；可返回搜索前位置",
@@ -66,18 +73,23 @@ var BAR_ID = "dsh-find-all-root";
 			move: "Drag find bar; click for move controls", moveLeft: "Move left", moveRight: "Move right", moveUp: "Move up", moveDown: "Move down", resetPosition: "Reset position",
 			cap: "Showing only the first {n} matches",
 			resultCount: "{n} results",
+			contentButton: "Filter content types",
+			contentButtonLabel: "Filter content types; {n} selected",
+			contentLegend: "Choose content types to search",
+			contentReset: "Reset to default",
+			contentTypes: { user: "User messages", assistant: "Assistant final replies", "assistant-rich": "Code, links, quotes, and lists in final replies", reasoning: "Reasoning", tool: "Tool calls and results", subagent: "Raw subagent returns", context: "Injected context" },
 			scopeWhole: "Whole conversation",
 			scopePage: "Loaded content",
-			scopeToPage: "Search saved session history at a fixed cutoff; load the original Chat only on navigation. Click for loaded content",
-			scopeToWhole: "Search only content already loaded in this conversation, without loading more. Click to include earlier content",
-			loading: "Loading earlier history… {n} pages",
-			available: "Searched currently available history; the host offers no earlier pages, so completeness cannot be confirmed",
-			capped: "History search incomplete: loading limit reached ({n} pages); partial results retained",
+			scopeToPage: "Searching the whole conversation. Click to search only content currently shown",
+			scopeToWhole: "Searching only content currently shown. Click to search the whole conversation",
+			loading: "Searching the whole conversation…",
+			available: "Some history could not be read, so results may be incomplete.",
+			capped: "This conversation is long, so results may be incomplete.",
 			stopTip: "Click to stop loading",
-			noService: "History search incomplete: session service unavailable; partial results retained",
+			noService: "The whole conversation cannot be searched right now. Showing the results found so far.",
 			noTarget: "No searchable chat content in the main conversation",
 			noRoot: "Search scope unavailable for this conversation",
-			incomplete: "History search incomplete; partial results retained",
+			incomplete: "Search did not finish. Showing the results found so far.",
 			find: "Find in conversation",
 			returnPosition: "Return to reading position", returning: "Returning…", returned: "Returned to reading position",
 			returnAvailable: "Moved to a match; return to the reading position is available",
@@ -196,8 +208,8 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
 				"#" + BAR_ID + ":before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
 				"#" + BAR_ID + " .controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}" +
-				"#" + BAR_ID + " input{box-sizing:border-box;flex:1 1 160px;min-width:0;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
-				"#" + BAR_ID + " input:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
+				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 160px;min-width:0;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
+				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .count{min-width:52px;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
 				"#" + BAR_ID + " .status{width:100%;color:var(--dsw-alias-label-tertiary);font:12px/1.25 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
 				"#" + BAR_ID + " .status:empty{display:none}" +
@@ -206,8 +218,17 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " button.drag-handle{touch-action:none;user-select:none;cursor:grab;flex:none}" +
 				"#" + BAR_ID + "[data-dragging] button.drag-handle{cursor:grabbing}" +
 				"#" + BAR_ID + " .status[data-busy]{cursor:pointer;color:var(--dsw-alias-state-business-primary)}" +
-				"#" + BAR_ID + " .scope{width:auto;padding:0 9px;color:var(--dsw-alias-label-secondary);font:12px/1 var(--dsw-font-family);background:0 0;border:1px solid var(--dsw-alias-border-l2);border-radius:999px}" +
+				"#" + BAR_ID + " .scope,#" + BAR_ID + " .content-filter{width:auto;padding:0 9px;color:var(--dsw-alias-label-secondary);font:12px/1 var(--dsw-font-family);background:0 0;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;white-space:nowrap}" +
 				"#" + BAR_ID + " .scope[data-whole]{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-state-business-primary)}" +
+				"#" + BAR_ID + " .content-filter[aria-expanded=true]{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-state-business-primary)}" +
+				"#" + BAR_ID + " .content-filter[data-filtered]:after{content:\"\";flex:none;width:5px;height:5px;margin-left:6px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}" +
+				"#" + BAR_ID + " .content-panel{box-sizing:border-box;width:100%;margin:2px 0 0;padding:8px 10px 9px;color:var(--dsw-alias-label-primary);font:12px/1.35 var(--dsw-font-family);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-base)}" +
+				"#" + BAR_ID + " .content-panel[hidden]{display:none}" +
+				"#" + BAR_ID + " .content-panel legend{padding:0 4px;color:var(--dsw-alias-label-secondary);font-weight:600}" +
+				"#" + BAR_ID + " .content-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px 14px}" +
+				"#" + BAR_ID + " .content-option{min-width:0;align-items:flex-start;gap:7px;display:flex;cursor:pointer}" +
+				"#" + BAR_ID + " .content-option input{appearance:auto;accent-color:var(--dsw-alias-state-business-primary);flex:none;width:14px;height:14px;margin:1px 0 0}" +
+				"#" + BAR_ID + " .content-reset{height:24px;margin-top:8px;padding:0 7px;font:12px/1 var(--dsw-font-family)}" +
 				"#" + BAR_ID + " button{height:26px;min-width:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;align-items:center;justify-content:center;display:inline-flex}" +
 				"#" + BAR_ID + " button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}" +
 				"#" + BAR_ID + " button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}" +
@@ -319,7 +340,7 @@ var BAR_ID = "dsh-find-all-root";
 		// Join inline Text nodes only within one structural block and DOM root.
 		// These snapshots live for one scan. Preserve every original code unit,
 		// including whitespace-only nodes and code newlines; never trim or pad.
-		function collectTextBlocks(root) {
+		function collectTextBlocks(root, classify) {
 			var blocks = [];
 			var legacyActions = legacyMessageActionRows(root);
 			var text = "";
@@ -332,7 +353,7 @@ var BAR_ID = "dsh-find-all-root";
 			function visit(node) {
 				if (node.nodeType === 3) {
 					if (node.data.length) {
-						segments.push({ node: node, start: text.length, end: text.length + node.data.length });
+						segments.push({ node: node, start: text.length, end: text.length + node.data.length, contentType: classify ? classify(node) : null });
 						text += node.data;
 					}
 					return;
@@ -355,16 +376,17 @@ var BAR_ID = "dsh-find-all-root";
 			return blocks;
 		}
 
-		function collectRanges(query, root) {
+		function collectRanges(query, root, classify, include) {
 			var ranges = [];
 			if (!query || !root || typeof document === "undefined") return ranges;
-			var blocks = collectTextBlocks(root);
+			var blocks = collectTextBlocks(root, classify);
 			for (var i = 0; i < blocks.length && ranges.length < MAX_MATCHES; i++) {
 				var block = blocks[i];
 				var matches = findMatches(block.text, query);
 				var start = 0, end = 0;
 				for (var j = 0; j < matches.length && ranges.length < MAX_MATCHES; j++) {
 					var match = matches[j];
+					if (include && block.segments.some(function (segment) { return segment.end > match.start && segment.start < match.end && !include(segment.contentType); })) continue;
 					// At a node junction, start at the following node and end at
 					// the preceding node. Non-overlapping matches move forwards.
 					while (match.start >= block.segments[start].end) start++;
@@ -1165,6 +1187,10 @@ var BAR_ID = "dsh-find-all-root";
 			count: null,
 			status: null,
 			scopeBtn: null,
+			contentBtn: null,
+			contentPanel: null,
+			contentInputs: null,
+			contentTypes: Object.assign({}, DEFAULT_CONTENT_TYPES),
 			query: "",
 			ranges: [],
 			index: -1,
@@ -1386,6 +1412,107 @@ var BAR_ID = "dsh-find-all-root";
 			else state.scopeBtn.removeAttribute("data-whole");
 		}
 
+		function selectedContentCount() {
+			return CONTENT_TYPES.filter(function (type) { return state.contentTypes[type] === true; }).length;
+		}
+
+		function contentSelectionIsDefault() {
+			return CONTENT_TYPES.every(function (type) { return state.contentTypes[type] === DEFAULT_CONTENT_TYPES[type]; });
+		}
+
+		function updateContentButton() {
+			if (!state.contentBtn) return;
+			var count = selectedContentCount();
+			state.contentBtn.textContent = L.contentButton;
+			var label = L.contentButtonLabel.replace("{n}", String(count));
+			state.contentBtn.setAttribute("aria-label", label);
+			state.contentBtn.title = label;
+			if (contentSelectionIsDefault()) state.contentBtn.removeAttribute("data-filtered");
+			else state.contentBtn.setAttribute("data-filtered", "1");
+		}
+
+		function closeContentPanel() {
+			if (!state.contentPanel || state.contentPanel.hidden) return false;
+			state.contentPanel.hidden = true;
+			state.contentBtn?.setAttribute("aria-expanded", "false");
+			scheduleBarPosition();
+			return true;
+		}
+
+		function toggleContentPanel() {
+			if (!state.contentPanel) return;
+			var opening = state.contentPanel.hidden;
+			state.contentPanel.hidden = !opening;
+			state.contentBtn.setAttribute("aria-expanded", opening ? "true" : "false");
+			scheduleBarPosition();
+		}
+
+		function contentTypeEnabled(type) {
+			return !!type && state.contentTypes[type] === true;
+		}
+
+		function sourceContentType(source) {
+			if (source.kind === "user") return "user";
+			if (source.kind === "assistant") return "assistant";
+			if (source.kind === "reasoning" || source.contentType === "reasoning") return "reasoning";
+			if (source.kind === "tool-call" || source.kind === "tool-result") return "tool";
+			if (source.kind === "context") return source.sourceKind === "agent-message" ? "subagent" : "context";
+			return null;
+		}
+
+		function contentMatchEnabled(source, block, start, end) {
+			var fallback = sourceContentType(source);
+			var parts = Array.isArray(block.contentParts) && block.contentParts.length ? block.contentParts : [{ start: 0, end: block.text.length, type: fallback }];
+			var cursor = start;
+			for (var i = 0; i < parts.length && cursor < end; i++) {
+				var part = parts[i];
+				if (part.end <= start || part.start >= end) continue;
+				if (part.start > cursor && !contentTypeEnabled(fallback)) return false;
+				if (!contentTypeEnabled(part.type)) return false;
+				cursor = Math.max(cursor, Math.min(end, part.end));
+			}
+			return cursor >= end || contentTypeEnabled(fallback);
+		}
+
+		function selectedHistoryErrors(snapshot) {
+			return (snapshot?.errors || []).filter(function (error) {
+				if (error.textKind === "assistant") return contentTypeEnabled("assistant") || contentTypeEnabled("assistant-rich");
+				return !error.textKind || contentTypeEnabled(sourceContentType({ kind: error.textKind, sourceKind: error.messageSourceKind }));
+			});
+		}
+
+		function selectedProjectionComplete(snapshot) {
+			return !!snapshot && snapshot.readComplete && (snapshot.status === "complete" || snapshot.status === "partial") && selectedHistoryErrors(snapshot).length === 0;
+		}
+
+		function assistantDomContentType(node, row) {
+			var semantic = node.parentElement?.closest('a,code,blockquote,li,[data-code-block-content],[data-footnotes],sup');
+			return semantic && row.contains(semantic) ? "assistant-rich" : "assistant";
+		}
+
+		function loadedContentType(node, store) {
+			var row = node.parentElement?.closest("[data-chat-node-key]");
+			if (!row || !state.target?.root.contains(row)) return null;
+			var kind = row.getAttribute("data-chat-flow-kind");
+			var part = row.getAttribute("data-chat-group-part");
+			if (kind === "user" || kind === "steering") return "user";
+			if (kind === "assistant-step") return part === "reasoning" ? "reasoning" : assistantDomContentType(node, row);
+			if (kind === "tool-call" || kind === "command") return "tool";
+			if (kind === "context" || kind === "turn-trigger") {
+				var semantic = store && typeof store.get === "function" ? store.get(row.getAttribute("data-chat-node-key")) : null;
+				return semantic?.data?.source?.kind === "agent-message" ? "subagent" : "context";
+			}
+			if (kind === "system-prompt") return "context";
+			return null;
+		}
+
+		function contentSelectionChanged() {
+			cancelReturn(L.returnCancelled); cancelNavigation();
+			state.selection = null; state.ranges = []; state.index = -1;
+			updateContentButton(); setStatus("", false); runSearch(false);
+			if (state.scope === "whole" && state.query) schedulePageIn();
+		}
+
 		function unavailableStatus() {
 			return state.target || (state.adapter && state.adapter.scopeUnavailable()) ? L.noRoot : L.noTarget;
 		}
@@ -1481,7 +1608,8 @@ var BAR_ID = "dsh-find-all-root";
 		function runSearch(keepIndex) {
             if (state.scope === "whole") { searchHistory(!keepIndex); return; }
 			var valid = state.adapter && state.adapter.valid(state.target);
-			state.ranges = valid ? collectRanges(state.query, state.target.root) : [];
+			var store = valid ? state.adapter.nodes(state.target) : null;
+			state.ranges = valid ? collectRanges(state.query, state.target.root, function (node) { return loadedContentType(node, store); }, contentTypeEnabled) : [];
 			if (!valid) setStatus(unavailableStatus(), false);
 			state.capped = state.ranges.length >= MAX_MATCHES;
 			var retained = keepIndex && valid ? retainedIndex(state.selection) : -1;
@@ -1550,17 +1678,19 @@ var BAR_ID = "dsh-find-all-root";
         function historyStatus() {
             if(state.scope!=="whole"||!state.status)return;
             var snapshot=state.historySnapshot;
+			var relevantErrors=selectedHistoryErrors(snapshot);
+			var projectionComplete=selectedProjectionComplete(snapshot);
             var text;
-            if(!state.projector)text=ZH?"完整会话搜索不可用：宿主没有所需文字渲染接口；仍可搜索已加载内容":"Whole-session search unavailable: Host text renderer is missing; loaded search remains available";
-            else if(!snapshot)text=state.query?(ZH?"正在读取已保存历史…":"Reading saved history…"):"";
-            else if(snapshot.status==='reading')text=(ZH?"正在读取已保存历史：":"Reading saved history: ")+snapshot.pages+(ZH?" 页，":" pages, ")+snapshot.eventsRead+(ZH?" 条事件":" events");
-            else if(snapshot.status==='projecting'||state.scanBusy)text=(ZH?"历史已读完；正在搜索文字…":"History read; scanning text…");
-            else if(snapshot.readComplete&&snapshot.status==='partial'&&!state.scanCancelled&&state.scanCursor>=snapshot.documents.length&&snapshot.errors?.length&&snapshot.errors.every(function(error){return error.code==='truncated-tool-output';}))text=ZH?"已搜索截至序号 "+snapshot.throughSeq+" 的已保存聊天文字；其中某些工具结果保存时已截断，未保存的部分无法搜索":"Searched saved chat text through #"+snapshot.throughSeq+"; some tool results were already truncated when saved. Unsaved output cannot be searched";
-            else if(!snapshot.readComplete||!snapshot.projectionComplete||!state.scanComplete)text=(ZH?"搜索未完成，保留已找到结果":"Search incomplete; partial results retained")+(snapshot.errors?.length?" ("+snapshot.errors[0].code+")":"");
-            else text=ZH?"已搜索截至序号 "+snapshot.throughSeq+" 的已保存聊天文字；之后的新内容请刷新":"Searched saved chat text through #"+snapshot.throughSeq+"; refresh for later saved content";
-            if(state.capped)text+=' · '+L.cap.replace('{n}',String(MAX_MATCHES));
-            if(state.sourceNotice)text+=' · '+state.sourceNotice;
-            if(state.liveCount)text+=' · '+(ZH?"实时未保存匹配 ":"Unsaved live matches: ")+state.liveCount+(state.liveCapped?"+":"")+(ZH?"（单列，不计入历史总数）":" (separate from saved total)");
+			if(!state.projector)text=ZH?'无法搜索完整对话，请选择“已加载内容”。':'The whole conversation cannot be searched. Choose “Loaded content”.';
+			else if(!snapshot)text=state.query?(ZH?'正在搜索完整对话…':'Searching the whole conversation…'):'';
+			else if(snapshot.status==='reading'||snapshot.status==='projecting'||state.scanBusy)text=ZH?'正在搜索完整对话…':'Searching the whole conversation…';
+			else if(snapshot.readComplete&&snapshot.status==='partial'&&!state.scanCancelled&&state.scanCursor>=snapshot.documents.length&&relevantErrors.length&&relevantErrors.every(function(error){return error.code==='truncated-tool-output';}))text=ZH?'部分内容没有完整保存，搜索结果可能不完整。':'Some content was not saved in full, so results may be incomplete.';
+			else if(!snapshot.readComplete||!projectionComplete||!state.scanComplete)text=L.incomplete;
+			else text='';
+			function add(part){if(part)text+=(text?' · ':'')+part;}
+			if(state.capped)add(L.cap.replace('{n}',String(MAX_MATCHES)));
+			add(state.sourceNotice);
+			if(state.liveCount)add((ZH?'当前正在生成的回复中另有 ':'The reply being generated contains ')+state.liveCount+(state.liveCapped?'+':'')+(ZH?' 个匹配。':' additional matches.'));
             setStatus(text,state.paging||state.scanBusy);
         }
         function startPageIn() {
@@ -1603,16 +1733,18 @@ var BAR_ID = "dsh-find-all-root";
                     var docs=state.historySnapshot.documents;
                     if(!source){
                         if(state.scanCursor>=docs.length){
-                            state.scanBusy=false;state.scanComplete=!!state.historySnapshot.projectionComplete;state.capped=state.total>MAX_MATCHES;
+							state.scanBusy=false;state.scanComplete=selectedProjectionComplete(state.historySnapshot);state.capped=state.total>MAX_MATCHES;
                             scanLiveCount();updateCount();historyStatus();return;
                         }
                         source=docs[state.scanCursor];blockIndex=0;matcher.lastIndex=0;
                     }
                     if(blockIndex>=source.blocks.length){source=null;state.scanCursor++;continue;}
-                    var block=source.blocks[blockIndex],match;
-                    while((match=matcher.exec(block.text))!==null){
-                        state.total++;
-                        if(state.hits.length<MAX_MATCHES)state.hits.push({source:source,blockIndex:blockIndex,start:match.index,end:match.index+match[0].length,text:match[0]});
+					var block=source.blocks[blockIndex],match;
+					while((match=matcher.exec(block.text))!==null){
+						if(contentMatchEnabled(source,block,match.index,match.index+match[0].length)){
+							state.total++;
+							if(state.hits.length<MAX_MATCHES)state.hits.push({source:source,blockIndex:blockIndex,start:match.index,end:match.index+match[0].length,text:match[0]});
+						}
                         if(++matches%256===0&&Date.now()-started>=10)break;
                     }
                     if(match!==null)break;
@@ -1633,7 +1765,10 @@ var BAR_ID = "dsh-find-all-root";
                     if(blocks[i].kind!=='text'&&blocks[i].kind!=='reasoning')continue;
                     try{
                         var projected=state.projector({kind:blocks[i].kind==='reasoning'?'reasoning':'assistant',format:'markdown',raw:blocks[i].text,streaming:true});
-                        for(var block of projected.blocks){var liveMatches=findMatches(block.text,state.query).length;state.liveCount+=liveMatches;if(liveMatches>=MAX_MATCHES)state.liveCapped=true;}
+						for(var block of projected.blocks){
+							var liveMatches=findMatches(block.text,state.query).filter(function(match){return contentMatchEnabled({kind:blocks[i].kind==='reasoning'?'reasoning':'assistant'},block,match.start,match.end);}).length;
+							state.liveCount+=liveMatches;if(liveMatches>=MAX_MATCHES)state.liveCapped=true;
+						}
                     }catch(error){}
                 }
             }
@@ -1672,12 +1807,12 @@ var BAR_ID = "dsh-find-all-root";
             state.index=state.index<0?(delta<0?n-1:0):((state.index+delta)%n+n)%n;
             state.ranges=[];paint();updateCount();
             var hit=state.hits[state.index],source=hit.source;
-            state.sourceNotice=(ZH?'来源序号 ':'Source #')+source.seq+' · '+source.kind+' · '+source.blocks[hit.blockIndex].text.slice(Math.max(0,hit.start-30),Math.min(hit.end+50,Math.max(0,hit.start-30)+160));
+			state.sourceNotice='';
             historyStatus();
-            if(source.blocks[hit.blockIndex].rendered===false||(source.blocks[hit.blockIndex].visibleChars!==undefined&&hit.end>source.blocks[hit.blockIndex].visibleChars)){state.sourceNotice+=(ZH?'；该已保存文字超出宿主显示上限，无法精确定位':' ; saved text is beyond the Host display limit; exact navigation unavailable');historyStatus();return;}
-            if(source.blocks[hit.blockIndex].imageDescription){state.sourceNotice+=(ZH?'；这是已保存的图片描述，不是图片内文字，无法生成正文高亮':' ; saved image description, not image text; no text highlight is available');historyStatus();return;}
+			if(source.blocks[hit.blockIndex].rendered===false||(source.blocks[hit.blockIndex].visibleChars!==undefined&&hit.end>source.blocks[hit.blockIndex].visibleChars)){state.sourceNotice=ZH?'已找到结果，但这部分内容未在对话中完整显示。':'A result was found, but this content is not fully shown in the conversation.';historyStatus();return;}
+			if(source.blocks[hit.blockIndex].imageDescription){state.sourceNotice=ZH?'在图片说明中找到结果，但无法在正文中高亮。':'A result was found in an image description, but it cannot be highlighted in the conversation.';historyStatus();return;}
             if(source.transcriptVisible===false||source.mapping==='stored'){
-                state.sourceNotice+=(ZH?'；该历史字段未在原聊天中展示，无法精确定位':'; this saved field is not exposed in the original Chat; exact navigation unavailable');historyStatus();return;
+				state.sourceNotice=ZH?'已找到结果，但它没有显示在对话正文中。':'A result was found, but it is not shown in the conversation.';historyStatus();return;
             }
             navigateHistoryHit(hit);
         }
@@ -1711,9 +1846,9 @@ var BAR_ID = "dsh-find-all-root";
                 }
                 if(current()){
                     state.historyNavigating=false;
-                    state.sourceNotice+=(ZH?'；未能验证原聊天的准确文字位置':' ; exact original-Chat text position could not be verified')+(mapped?.reason?' ('+mapped.reason+')':'');historyStatus();
+					state.sourceNotice=L.matchRevealFailed;historyStatus();
                 }
-            }catch(error){if(current()){state.historyNavigating=false;state.sourceNotice+=' · '+L.matchRevealFailed;historyStatus();}}
+			}catch(error){if(current()){state.historyNavigating=false;state.sourceNotice=L.matchRevealFailed;historyStatus();}}
         }
 
 		function syncTarget(target, passive) {
@@ -1795,6 +1930,7 @@ var BAR_ID = "dsh-find-all-root";
         }
         function toggleScope() {
             cancelReturn(L.returnCancelled); cancelNavigation(); cancelPageIn();
+			closeContentPanel();
             state.scope = state.scope === "whole" ? "page" : "whole";
             state.ranges=[];state.index=-1;state.selection=null;updateScopeButton();setStatus("",false);
             runSearch(false);
@@ -1810,6 +1946,7 @@ var BAR_ID = "dsh-find-all-root";
 
 			var input = document.createElement("input");
 			input.type = "text";
+			input.className = "query";
 			input.placeholder = L.placeholder;
 			input.setAttribute("aria-label", L.placeholder);
 			input.addEventListener("input", function () { onQueryInput(input); });
@@ -1818,6 +1955,47 @@ var BAR_ID = "dsh-find-all-root";
 			scopeBtn.type = "button";
 			scopeBtn.className = "scope";
 			scopeBtn.addEventListener("click", toggleScope);
+
+			var contentBtn = document.createElement("button");
+			contentBtn.type = "button";
+			contentBtn.className = "content-filter";
+			contentBtn.setAttribute("aria-expanded", "false");
+			contentBtn.setAttribute("aria-controls", BAR_ID + "-content-panel");
+			contentBtn.addEventListener("click", toggleContentPanel);
+
+			var contentPanel = document.createElement("fieldset");
+			contentPanel.id = BAR_ID + "-content-panel";
+			contentPanel.className = "content-panel";
+			contentPanel.hidden = true;
+			var legend = document.createElement("legend");
+			legend.textContent = L.contentLegend;
+			contentPanel.appendChild(legend);
+			var contentOptions = document.createElement("div");
+			contentOptions.className = "content-options";
+			var contentInputs = {};
+			CONTENT_TYPES.forEach(function (type) {
+				var option = document.createElement("label");
+				option.className = "content-option";
+				var checkbox = document.createElement("input");
+				checkbox.type = "checkbox";
+				checkbox.id = BAR_ID + "-content-" + type;
+				option.htmlFor = checkbox.id;
+				checkbox.checked = state.contentTypes[type] === true;
+				checkbox.addEventListener("change", function () { state.contentTypes[type] = checkbox.checked; contentSelectionChanged(); });
+				var label = document.createElement("span");
+				label.textContent = L.contentTypes[type];
+				option.appendChild(checkbox); option.appendChild(label); contentOptions.appendChild(option); contentInputs[type] = checkbox;
+			});
+			contentPanel.appendChild(contentOptions);
+			var resetContent = document.createElement("button");
+			resetContent.type = "button";
+			resetContent.className = "content-reset";
+			resetContent.textContent = L.contentReset;
+			resetContent.addEventListener("click", function () {
+				CONTENT_TYPES.forEach(function (type) { state.contentTypes[type] = DEFAULT_CONTENT_TYPES[type]; contentInputs[type].checked = DEFAULT_CONTENT_TYPES[type]; });
+				contentSelectionChanged();
+			});
+			contentPanel.appendChild(resetContent);
 
 			var count = document.createElement("span");
 			count.className = "count";
@@ -1840,6 +2018,7 @@ var BAR_ID = "dsh-find-all-root";
 			buildPositionControls(controls, bar);
 			controls.appendChild(input);
 			controls.appendChild(scopeBtn);
+			controls.appendChild(contentBtn);
 			controls.appendChild(count);
             var refreshBtn=button(ZH?"重新读取最新会话历史":"Refresh saved history","M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2",function(){ if(state.scope!=="whole")return;cancelPageIn();cancelNavigation();state.history=null;state.historySnapshot=null;searchHistory(true);startPageIn(); });
             state.refreshBtn=refreshBtn;controls.appendChild(refreshBtn);
@@ -1853,6 +2032,7 @@ var BAR_ID = "dsh-find-all-root";
 			controls.appendChild(returnBtn);
 			controls.appendChild(button(L.close, "M18 6 6 18M6 6l12 12", close));
 			bar.insertBefore(controls, bar.firstChild);
+			bar.appendChild(contentPanel);
 			bar.appendChild(status);
 
 			state.bar = bar;
@@ -1860,7 +2040,11 @@ var BAR_ID = "dsh-find-all-root";
 			state.count = count;
 			state.status = status;
 			state.scopeBtn = scopeBtn;
+			state.contentBtn = contentBtn;
+			state.contentPanel = contentPanel;
+			state.contentInputs = contentInputs;
 			updateScopeButton();
+			updateContentButton();
 			document.body.appendChild(bar);
 			var announcement = document.createElement('span');
 			announcement.setAttribute('role', 'status'); announcement.setAttribute('aria-live', 'polite');
@@ -1898,6 +2082,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
+			closeContentPanel();
 			discardOrigin();
 			cancelPageIn();
 			stopWatchingSession();
@@ -1963,7 +2148,7 @@ var BAR_ID = "dsh-find-all-root";
 			ctx.effect(function () {
 				injectCss();
 				var handler = createHandlers({
-					open: open, close: close, goTo: goTo, isOpen: isOpen,
+					open: open, close: function () { if (!closeContentPanel()) close(); }, goTo: goTo, isOpen: isOpen,
 					ownsKeys: function (event) {
 						var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
 						return !path.some(function (node) {
@@ -2013,7 +2198,7 @@ var BAR_ID = "dsh-find-all-root";
 					state.announcement = state.returnBtn = state.dragHandle = state.positionControls = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
 					if (style) style.remove();
-					state.bar = state.input = state.count = state.status = state.scopeBtn = null;
+					state.bar = state.input = state.count = state.status = state.scopeBtn = state.contentBtn = state.contentPanel = state.contentInputs = null;
 					state.adapter.clear();
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = null;
 				};

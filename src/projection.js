@@ -4,11 +4,26 @@ import { toolPresentation, cardLabels } from "./tool-projection.js";
 const BLOCK = new Set('ADDRESS ARTICLE ASIDE BLOCKQUOTE DD DETAILS DIALOG DIV DL DT FIELDSET FIGCAPTION FIGURE FOOTER FORM H1 H2 H3 H4 H5 H6 HEADER HR LI MAIN NAV OL P PRE SECTION SUMMARY TABLE TBODY TD TFOOT TH THEAD TR UL'.split(' '));
 const imageAltClasses = new Set();
 const SKIP = 'script,style,noscript,svg,[data-code-block-banner],[data-clock],.sr-only,.katex-mathml,[data-find-projection-chrome]';
-export function collectProjectedBlocks(root, excluded) {
+export function collectProjectedBlocks(root, excluded, classify) {
   const blocks = []; let text = '', segments = [];
-  const flush = () => { if (segments.length) blocks.push({text,segments}); text='';segments=[]; };
+  const flush = () => {
+    if (segments.length) {
+      const block={text,segments};
+      if(classify){
+        const contentParts=[];
+        for(const segment of segments){
+          const previous=contentParts.at(-1);
+          if(previous&&previous.type===segment.contentType&&previous.end===segment.start)previous.end=segment.end;
+          else contentParts.push({start:segment.start,end:segment.end,type:segment.contentType});
+        }
+        block.contentParts=contentParts;
+      }
+      blocks.push(block);
+    }
+    text='';segments=[];
+  };
   function visit(node, code = false) {
-    if (node.nodeType === 3) { if(node.data) { segments.push({node,start:text.length,end:text.length+node.data.length});text+=node.data; } return; }
+    if (node.nodeType === 3) { if(node.data) { segments.push({node,start:text.length,end:text.length+node.data.length,...(classify?{contentType:classify(node)}:{})});text+=node.data; } return; }
     if (node.nodeType !== 1 && node.nodeType !== 11) return;
     if (node.nodeType === 1 && excluded?.(node)) { flush(); return; }
     if(node.nodeType===1&&(node.tagName==='IMG'||[...node.classList].some(name=>imageAltClasses.has(name)))){
@@ -23,6 +38,11 @@ export function collectProjectedBlocks(root, excluded) {
     if (boundary) flush();
   }
   visit(root);flush();return blocks;
+}
+
+function assistantContentType(node){
+  const parent=node.parentElement;
+  return parent?.closest('a,code,blockquote,li,[data-code-block-content],[data-footnotes],sup')?'assistant-rich':'assistant';
 }
 export function rangeForBlock(block, start, end) {
   const first=block.segments.find(s=>start>=s.start&&start<s.end), last=block.segments.find(s=>end>s.start&&end<=s.end);
@@ -142,7 +162,7 @@ export function createProjector(ui, react, document) {
       const fragment=render(react.createElement(ui.MarkdownText,{text:source.raw,streaming:!!source.streaming,labels,variant:isReasoning?'compact':'body'}));
       const root=fragment.firstElementChild;
       if(!root)throw Error('Host renderer returned no text root');
-      const blocks=collectProjectedBlocks(root).map((b,index)=>({text:b.text,index,...(b.imageDescription?{imageDescription:true}:{})}));
+      const blocks=collectProjectedBlocks(root,undefined,isReasoning?undefined:assistantContentType).map((b,index)=>({text:b.text,index,...(b.contentParts?{contentParts:b.contentParts}:{}),...(b.imageDescription?{imageDescription:true}:{})}));
       // Images contribute only authored alt text, in independent description
       // blocks. They are not OCR and never acquire a fabricated DOM Range.
       return {blocks,mapping:'markdown',rootClass:root.classList[0],errors:[]};

@@ -4,6 +4,17 @@
 const record=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const positive=x=>Number.isInteger(x)&&x>=1;
 const escalation=a=>(a.sandbox_permissions===undefined&&a.justification===undefined)||(['workspace-write','danger-full-access'].includes(a.sandbox_permissions)&&typeof a.justification==='string'&&a.justification.trim()!=='');
+function searchRecovery(raw,tool,meta){
+  if(typeof raw!=='string'||!raw.endsWith(')'))return null;
+  const boundary=raw.lastIndexOf('\n\n(');
+  if(boundary<0)return null;
+  const footer=raw.slice(boundary+2);
+  if(tool==='glob'){
+    const shown=/^\(Showing (\d+) of (\d+) paths(?:[.,]|\s)/u.exec(footer);
+    return shown&&Number(shown[2])===meta.total?footer:null;
+  }
+  return /^\((?:Full grep result stored at: |The complete result could not be saved;)/u.test(footer)?footer:null;
+}
 export const cardLabels={copy:'',copied:'',codeLabel:'',wrapLabel:'',unwrapLabel:'',expand:()=>'',expandAria:()=>'',collapse:'',collapseAria:'',window:()=>'',pathsSummary:()=>'',matchesSummary:()=>'',noResults:'',running:'',failed:'',done:'',exitCode:(code)=>String(code),signal:(signal)=>String(signal),noExitCode:'',noOutput:''};
 function includeValid(s){if(typeof s!=='string'||!s.trim()||s.startsWith('!'))return false;let depth=0;for(const c of s){if(c==='{')depth++;else if(c==='}')depth=Math.max(0,depth-1);else if(c===','&&!depth)return false;}return true;}
 export function toolPresentation(source){
@@ -26,7 +37,8 @@ export function toolPresentation(source){
     let props;
     if(n==='grep'&&m.shape==='matches'&&Array.isArray(m.files)&&m.files.every(f=>record(f)&&typeof f.path==='string'&&Array.isArray(f.matches)&&f.matches.every(v=>record(v)&&positive(v.lineNumber)&&typeof v.line==='string')))props={kind:'matches',files:m.files,...common};
     if(n==='glob'&&m.shape==='paths'&&Array.isArray(m.paths)&&m.paths.every(p=>typeof p==='string'))props={kind:'paths',paths:m.paths,...common};
-    return props?{kind:'search',props,errors:m.truncated?[{code:'truncated-tool-output',message:'The saved search result explicitly omits matches'}]:[],recovery:m.truncated?(source.resultText??source.raw):null}:null;
+    const recovery=props&&m.truncated?searchRecovery(source.resultText??source.raw,n,m):null;
+    return props?{kind:'search',props,errors:m.truncated?[{code:'truncated-tool-output',message:'The saved search result explicitly omits matches'}]:[],recovery}:null;
   }
   if(!source.isError&&source.contentCount===1&&['bash','pwsh','terminal_send'].includes(n)){
     if(a.run_in_background===true||/ Full formatted result stored at: /u.test(source.raw))return null;

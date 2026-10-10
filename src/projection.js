@@ -131,7 +131,7 @@ export function createProjector(ui, react, document) {
       const bodyExpected=presentation.kind==='diff'?presentation.props.diffs.some(d=>d.path||d.oldText||d.newText):presentation.kind==='search'?(presentation.props.paths?.length||presentation.props.files?.length):presentation.props.command.split('\n').some(line=>line.length>0)||!!root&&[...root.querySelectorAll('div')].some(el=>hasClassEnd(el,'_output')&&el.textContent.length>0);
       const errors=[...presentation.errors];
       if(bodyExpected&&!blocks.some(b=>b.text.length))errors.push({code:'tool-projection-empty',message:'A nonempty native tool body could not be projected'});
-      if(presentation.recovery)blocks.push({text:presentation.recovery,index:blocks.length,storedField:true});
+      if(presentation.recovery)blocks.push({text:presentation.recovery,index:blocks.length,recovery:true});
       return {blocks,mapping:'tool-card',cardKind:presentation.kind,errors};
     }
     if(source.contextBlocks)return {blocks:source.contextBlocks,mapping:'context',errors:source.contextErrors||[]};
@@ -268,9 +268,20 @@ export function mapProjectedDocument(source, node, rows) {
   if(source.mapping==='tool-card'){
     const roots=[...new Set(rows.flatMap(row=>[...row.querySelectorAll('[data-'+source.cardKind+']')]))];
     if(roots.length!==1)return {reason:'tool-card-not-expanded'};
-    const actual=collectToolBlocks(roots[0],source.cardKind,source),expected=source.blocks.filter(b=>!b.storedField);
+    const actual=collectToolBlocks(roots[0],source.cardKind,source),expected=source.blocks.filter(b=>!b.recovery);
     if(!sameBlocks(expected,actual))return {reason:'tool-card-not-expanded'};
-    return {blocks:source.blocks.map((b,i)=>b.storedField?{text:b.text,segments:[]}:actual[i]),root:roots[0]};
+    const recovery=source.blocks.find(b=>b.recovery);
+    let recoveryBlock;
+    if(recovery){
+      const elements=[...new Set(rows.flatMap(row=>[...row.querySelectorAll('div')].filter(el=>hasClassEnd(el,'_searchRecovery'))))];
+      if(elements.length!==1)return {reason:'tool-card-not-expanded'};
+      const projected=collectProjectedBlocks(elements[0]);
+      if(projected.length!==1||(source.resultText??source.raw)!==projected[0].text)return {reason:'renderer-text-changed'};
+      recoveryBlock=semanticSubstring(projected[0],recovery.text);
+      if(!recoveryBlock)return {reason:'renderer-text-changed'};
+    }
+    let index=0;
+    return {blocks:source.blocks.map(b=>b.recovery?recoveryBlock:actual[index++]),root:roots[0]};
   }
   if(source.mapping==='tool-values'){
     const scoped={};

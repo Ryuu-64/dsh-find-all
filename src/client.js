@@ -1675,7 +1675,6 @@ var BAR_ID = "dsh-find-all-root";
             state.sourceNotice=(ZH?'来源序号 ':'Source #')+source.seq+' · '+source.kind+' · '+source.blocks[hit.blockIndex].text.slice(Math.max(0,hit.start-30),Math.min(hit.end+50,Math.max(0,hit.start-30)+160));
             historyStatus();
             if(source.blocks[hit.blockIndex].rendered===false||(source.blocks[hit.blockIndex].visibleChars!==undefined&&hit.end>source.blocks[hit.blockIndex].visibleChars)){state.sourceNotice+=(ZH?'；该已保存文字超出宿主显示上限，无法精确定位':' ; saved text is beyond the Host display limit; exact navigation unavailable');historyStatus();return;}
-            if(source.blocks[hit.blockIndex].storedField){state.sourceNotice+=(ZH?'；该保存字段未在当前卡片显示':' ; this saved field is not displayed in the current card');historyStatus();return;}
             if(source.blocks[hit.blockIndex].imageDescription){state.sourceNotice+=(ZH?'；这是已保存的图片描述，不是图片内文字，无法生成正文高亮':' ; saved image description, not image text; no text highlight is available');historyStatus();return;}
             if(source.transcriptVisible===false||source.mapping==='stored'){
                 state.sourceNotice+=(ZH?'；该历史字段未在原聊天中展示，无法精确定位':'; this saved field is not exposed in the original Chat; exact navigation unavailable');historyStatus();return;

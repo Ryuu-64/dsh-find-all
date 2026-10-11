@@ -10,7 +10,7 @@ const L = zh ? {
   emptyQuery: '输入关键词开始搜索。', invalid: '关键词最多 500 个字符，不能包含空字符。',
   pending: '正在搜索消息内容；已显示找到的标题。', unavailable: '仅搜索对话标题，消息内容搜索不可用。',
   stopped: '消息内容搜索已停止；仅显示标题结果。', failedList: '会话列表暂不可用，请重试。',
-  loading: '正在读取会话列表…', unsupported: '当前宿主缺少搜索对话所需的导航或列表能力。',
+  loading: '正在读取会话列表…', unsupported: '当前宿主缺少搜索对话所需的界面或服务。',
   noMatches: '未找到匹配的对话。', noTitles: '未找到匹配的标题；消息内容尚未搜索或不可用。',
   more: '还有更多候选对话，请缩小关键词。', retry: '重试', cancel: '停止搜索',
   titleMatch: '标题匹配', bodyMatch: '正文匹配', both: '标题及正文匹配', untitled: '未命名对话',
@@ -27,7 +27,7 @@ const L = zh ? {
   emptyQuery: 'Enter a query to search.', invalid: 'Use at most 500 characters, without null characters.',
   pending: 'Searching message content; matching titles are already shown.', unavailable: 'Searching titles only. Message content search is unavailable.',
   stopped: 'Message search stopped; showing title matches only.', failedList: 'Conversation list unavailable. Try again.',
-  loading: 'Loading conversation list…', unsupported: 'This Host lacks the navigation or list capabilities needed for conversation search.',
+  loading: 'Loading conversation list…', unsupported: 'This Host lacks the UI or service capabilities needed for conversation search.',
   noMatches: 'No matching conversations found.', noTitles: 'No matching titles. Message content has not been searched or is unavailable.',
   more: 'More candidate conversations exist. Refine your query.', retry: 'Retry', cancel: 'Stop search',
   titleMatch: 'Title match', bodyMatch: 'Message match', both: 'Title and message match', untitled: 'Untitled conversation',
@@ -51,7 +51,7 @@ function catalog(sessions, workspaces) {
   for (const id of list.ids) {
     const row = list.byId[id];
     if (!row || row.id !== id || row.origin === 'subagent' || row.blank || archived.has(id)) continue;
-    rows.push({ id, title: typeof row.title === 'string' ? row.title.trim() : '', updatedAt: Number.isFinite(row.updatedAt) ? row.updatedAt : 0, workspace: names.get(id) || '' });
+    rows.push({ id, title: typeof row.title === 'string' ? row.title.trim() : '', updatedAt: Number.isFinite(row.updatedAt) ? row.updatedAt : 0, workspace: names.get(id) || '', selected: row.retainedBy?.mainView > 0 });
   }
   return { status: 'ready', rows };
 }
@@ -137,7 +137,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     cancelHandoff(); focusOrigin = document.activeElement; bridge.closeFind();
     if (typeof seed === 'string' && seed !== query) { query = seed; scroll = 0; content = EMPTY; body = 'idle'; }
     open = true; notice = '';
-    if (!ui.Modal) { open = false; notice = L.unsupported; publish(); return; }
+    if (!ui.Modal || !ui.Input) { open = false; notice = L.unsupported; publish(); return; }
     watchLists();
     // A completed result is kept in memory for Back; fresh queries are searched.
     if (body !== 'ready') schedule(); else publish();
@@ -222,7 +222,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     };
     return h(ui.Modal, { open: true, title: L.title, closeLabel: L.close, description: L.scope, onClose: requestClose, className: 'dsh-find-all-conversations', contentClassName: 'dsh-find-all-conversations-content' },
       h('div', { ref: details, style: { display: 'grid', gap: 12, width: '100%', maxWidth: '100%' } },
-        h('input', { type: 'search', value: query, 'data-modal-autofocus': true, 'aria-label': L.title, placeholder: L.placeholder, onChange: event => change(event.target.value), style: { width: '100%', boxSizing: 'border-box', padding: 10, border: '1px solid var(--dsw-alias-border-l3, #888)', borderRadius: 8, background: 'transparent', color: 'inherit' } }),
+        h(ui.Input, { type: 'search', value: query, 'data-modal-autofocus': true, 'aria-label': L.title, placeholder: L.placeholder, onChange: event => change(event.target.value), className: 'dsh-find-all-conversations-input' }),
         h('div', { role: 'status', 'aria-live': 'polite', style: { fontSize: 13 } }, notice || status),
         h('div', { style: { display: 'flex', gap: 8 } },
           h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', onClick: () => {
@@ -231,11 +231,12 @@ export function installConversationSearch(ctx, react, ui, bridge) {
             if (typeof ctx.sessions.refresh === 'function') Promise.resolve().then(() => ctx.sessions.refresh()).catch(() => { if (mounted && open && epoch === generation && services === owner) { notice = L.failedList; publish(); } });
           } }, L.retry),
           body === 'pending' ? h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', onClick: () => { cancelRequest(); content = EMPTY; body = 'stopped'; publish(); } }, L.cancel) : null),
-        h('div', { ref: list, onScroll: event => { scroll = event.currentTarget.scrollTop; }, style: { maxHeight: 'min(52vh, 480px)', overflowY: 'auto', display: 'grid', gap: 8 } },
-          ...results.items.map(row => h('button', { key: row.id, type: 'button', onClick: () => launch(row), style: { textAlign: 'left', width: '100%', padding: 12, borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2, transparent)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l3, #888)', cursor: 'pointer', overflowWrap: 'anywhere' } },
-            h('strong', null, row.title || L.untitled),
-            h('div', { style: { fontSize: 12, opacity: 0.7, marginTop: 4 } }, [row.titleMatch ? row.bodyMatch ? L.both : L.titleMatch : L.bodyMatch, row.workspace, row.updatedAt ? new Date(row.updatedAt).toLocaleString() : ''].filter(Boolean).join(' · ')),
-            row.snippet ? h('p', { style: { margin: '8px 0 0', whiteSpace: 'pre-wrap' } }, row.snippet) : null)),
+        h('div', { ref: list, onScroll: event => { scroll = event.currentTarget.scrollTop; }, style: { maxHeight: 'min(52vh, 480px)', overflowY: 'auto', display: 'grid' } },
+          ...results.items.map(row => h('button', { key: row.id, type: 'button', onClick: () => launch(row), className: 'dsh-find-all-conversations-row', 'aria-current': row.selected ? 'true' : undefined },
+            h('span', { className: 'dsh-find-all-conversations-title', title: row.title || L.untitled }, row.title || L.untitled),
+            h('span', { className: 'dsh-find-all-conversations-meta' },
+              h('span', { className: 'dsh-find-all-conversations-info' }, [row.titleMatch ? row.bodyMatch ? L.both : L.titleMatch : L.bodyMatch, row.workspace, row.updatedAt ? new Date(row.updatedAt).toLocaleString() : ''].filter(Boolean).join(' · ')),
+              row.snippet ? h('span', { className: 'dsh-find-all-conversations-snippet', title: row.snippet }, row.snippet) : null))),
           data.status === 'ready' && query.trim() && body !== 'invalid' && results.items.length === 0 ? h('p', null, body === 'ready' ? L.noMatches : L.noTitles) : null),
         results.hasMore ? h('p', { role: 'status' }, L.more) : null,
         h('div', { style: { fontSize: 12, opacity: 0.7 } }, h('p', null, L.order), h('p', null, L.semantics), h('p', null, L.handoff))));

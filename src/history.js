@@ -521,6 +521,10 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 				const projection = await pending(project(source));
 				assertCurrent();
 				if (!object(projection) || !Array.isArray(projection.blocks) || projection.blocks.some((block) => !object(block) || typeof block.text !== "string")) throw failure("invalid-projection", "Text projection returned invalid blocks", source.seq);
+				const projectedSource = projection.source === undefined ? source : projection.source;
+				if (!object(projectedSource) || ["sessionId", "seq", "id", "kind", "contentIndex"].some((key) => projectedSource[key] !== source[key])) {
+					throw failure("invalid-projection", "Text projection changed durable source identity", source.seq);
+				}
 				const localErrors = [...(source.contextErrors ?? []), ...(Array.isArray(projection.errors) ? projection.errors : [])];
 				const seenErrors = new Set();
 				for (const error of localErrors) {
@@ -529,7 +533,7 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 					if (!seenErrors.has(key)) errors.push({ ...issue, seq: source.seq, textKind: source.kind, ...(source.sourceKind === undefined ? {} : { messageSourceKind: source.sourceKind }) });
 					seenErrors.add(key);
 				}
-				documents.push({ ...source, blocks: projection.blocks,
+				documents.push({ ...projectedSource, blocks: projection.blocks,
 					...(typeof projection.mapping === "string" ? { mapping: projection.mapping } : {}),
 					...(typeof projection.rootClass === "string" ? { rootClass: projection.rootClass } : {}),
 					...(typeof projection.cardKind === "string" ? { cardKind: projection.cardKind } : {}),

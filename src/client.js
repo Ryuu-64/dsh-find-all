@@ -3,6 +3,7 @@
 import { checkLatestVersion } from "./updates.js";
 import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
+import { createSearchContentService, SEARCH_CONTENT_SERVICE } from "./search-content.js";
 
 var BAR_ID = "dsh-find-all-root";
 		var HL_ALL = "dsh-find-all-hit";
@@ -402,7 +403,7 @@ var BAR_ID = "dsh-find-all-root";
 					return;
 				}
 				if (node.nodeType !== 1 && node.nodeType !== 11) return;
-				if (SKIP_TAGS[node.tagName] || node.id === BAR_ID || messageActionRow(node, legacyActions) || node.tagName === "BR") {
+				if (SKIP_TAGS[node.tagName] || node.id === BAR_ID || node.hasAttribute?.("data-find-projection-chrome") || messageActionRow(node, legacyActions) || node.tagName === "BR") {
 					// Excluded subtrees and br are hard boundaries, not empty text.
 					flush();
 					return;
@@ -1227,7 +1228,7 @@ var BAR_ID = "dsh-find-all-root";
             updateTask: null, updateResult: null, updateBtn: null, updateStatus: null, updateGuide: null,
             aboutAvailable: false, aboutViews: new Map(), aboutOwner: null, aboutEpoch: 0,
 			mounted: false, writeClipboard: null, diagnosticBtn: null, diagnosticFeedback: null, copyPending: false, copyEpoch: 0, lastFailure: null,
-            remote: null, history: null, historySnapshot: null, projector: null, hits: [], total: 0, queryToken: 0, scanTimer: 0, scanCursor: 0, scanCancelled: false, scanBusy: false, scanComplete: false, scanQuery: null, liveCount: 0, liveCapped: false, sourceNotice: "", refreshBtn: null,
+			remote: null, history: null, historySnapshot: null, projector: null, searchContent: null, hits: [], total: 0, queryToken: 0, scanTimer: 0, scanCursor: 0, scanCancelled: false, scanBusy: false, scanComplete: false, scanQuery: null, liveCount: 0, liveCapped: false, sourceNotice: "", refreshBtn: null,
 			adapter: null,
 			target: null,
 			settleTimer: 0,
@@ -2010,6 +2011,12 @@ var BAR_ID = "dsh-find-all-root";
             clearTimeout(state.pageTimer);
             state.pageTimer=setTimeout(function(){state.pageTimer=0;startPageIn();},150);
         }
+		function searchContentChanged() {
+			cancelPageIn();
+			state.history=null;state.historySnapshot=null;state.scanQuery=null;state.hits=[];state.total=0;state.ranges=[];state.index=-1;state.sourceNotice='';
+			paint();updateCount();
+			if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
+		}
         function historyStatus() {
             if(state.scope!=="whole"||!state.status)return;
             var snapshot=state.historySnapshot;
@@ -2042,7 +2049,8 @@ var BAR_ID = "dsh-find-all-root";
             }
             var token=++state.pageToken, errorCount=0;
             state.paging=true;state.sourceNotice='';state.historySnapshot=null;searchHistory(true);
-            state.history=createHistoryReader({remote:state.remote,sessionId:target.id,generation:token,project:state.projector,onUpdate:function(snapshot){
+			var project=state.searchContent?state.searchContent.createProjector(state.projector):state.projector;
+			state.history=createHistoryReader({remote:state.remote,sessionId:target.id,generation:token,project:project,onUpdate:function(snapshot){
                 if(token!==state.pageToken||state.target!==target||!isOpen()||state.scope!=="whole"||!state.adapter.valid(target))return;
                 state.historySnapshot=snapshot;state.paging=['reading','projecting','idle'].includes(snapshot.status);
                 if(snapshot.status!=='cancelled' && snapshot.errors.length>errorCount){
@@ -2172,7 +2180,7 @@ var BAR_ID = "dsh-find-all-root";
                     if(node){
                         if(!turnActivated&&hostNavigationReady(target,face)){turnActivated=activateLoadedTurn(target,store,String(source.turn||''));if(turnActivated){await pause();if(!current())return;}}
                         if(!current())return;
-                        var rows=sourceRows(target,node);mapped=mapProjectedDocument(source,node,rows);
+						var rows=sourceRows(target,node);mapped=mapProjectedDocument(source,node,rows,hit.blockIndex);
                         if(mapped.blocks){
                             var range=rangeForBlock(mapped.blocks[hit.blockIndex],hit.start,hit.end);
                             if(!range||range.toString()!==hit.text)break;
@@ -2601,6 +2609,8 @@ var BAR_ID = "dsh-find-all-root";
 			state.aboutAvailable = !!ui.Modal;
 			var SearchIcon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
 			state.ctx = ctx;
+			state.searchContent=createSearchContentService(searchContentChanged);
+			if(typeof ctx.provide==='function')ctx.provide(SEARCH_CONTENT_SERVICE,state.searchContent);
             state.writeClipboard = typeof ui.writeClipboard === "function" ? ui.writeClipboard : null;
             // A child dependency scope may remain pending on an older Host;
             // sessions/slots (and loaded-only search) keep running independently.
@@ -2793,7 +2803,7 @@ var BAR_ID = "dsh-find-all-root";
 					state.countState = state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
                     state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
 					state.adapter.clear();
-					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = null;
+					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = state.searchContent = null;
 				};
 			}, "find-all: browser lifecycle");
 		}

@@ -214,9 +214,9 @@ function collectToolBlocks(root,kind,source){
 
 function sameBlocks(expected,actual) {return expected.length===actual.length&&expected.every((b,i)=>b.text===actual[i].text);}
 function minimumCandidates(candidates) {return candidates.filter(x=>!candidates.some(y=>x!==y&&x.contains(y)));}
-/** Resolve by durable node + content identity + whole renderer block sequence.
- * Query ordinals are never used to pick a different DOM text occurrence. */
-export function mapProjectedDocument(source, node, rows) {
+/** Resolve by durable node and content identity. Navigation validates the
+ * requested block; a decoration elsewhere in the same reply cannot reject it. */
+export function mapProjectedDocument(source, node, rows, targetBlockIndex) {
   if(source.transcriptVisible===false)return {reason:source.unavailableReason||'not-rendered'};
   if(source.mapping==='markdown') {
     const reasoning=source.kind==='reasoning'||source.contentType==='reasoning';
@@ -224,7 +224,7 @@ export function mapProjectedDocument(source, node, rows) {
     const content=node.data?.blocks;
     if(!Array.isArray(content))return {reason:'node-content-unavailable'};
     const index=source.contentIndex;
-    if(content[index]?.kind!==kind||content[index]?.text!==source.raw)return {reason:'source-changed'};
+	if(content[index]?.kind!==kind||content[index]?.text!==(source.storedRaw??source.raw))return {reason:'source-changed'};
     const part=reasoning?'reasoning':'response';
     let scoped=rows.filter(row=>row.dataset.chatGroupPart===part);
     if(!scoped.length)scoped=rows.filter(row=>!row.dataset.chatGroupPart);
@@ -234,7 +234,14 @@ export function mapProjectedDocument(source, node, rows) {
     if(roots.length!==expected.length)return {reason:'renderer-not-expanded'};
     const root=roots[ordinal],blocks=collectProjectedBlocks(root);
     const savedText=source.blocks.filter(b=>!b.imageDescription),actualText=blocks.filter(b=>!b.imageDescription);
-    if(!sameBlocks(savedText,actualText))return {reason:'renderer-text-changed'};
+	if(Number.isInteger(targetBlockIndex)){
+	  const target=source.blocks[targetBlockIndex];
+	  if(!target)return {reason:'renderer-text-changed'};
+	  if(!target.imageDescription){
+		const ordinal=source.blocks.slice(0,targetBlockIndex+1).filter(block=>!block.imageDescription).length-1;
+		if(savedText.length!==actualText.length||actualText[ordinal]?.text!==target.text)return {reason:'renderer-text-changed'};
+	  }
+	}else if(!sameBlocks(savedText,actualText))return {reason:'renderer-text-changed'};
     let position=0;return {blocks:source.blocks.map(b=>b.imageDescription?{text:b.text,segments:[]}:actualText[position++]),root};
   }
   if(source.mapping==='read') {

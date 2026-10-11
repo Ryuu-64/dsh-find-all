@@ -1,3 +1,35 @@
+# Cross-conversation search
+
+The new entry targets the public DSH `0.2.0-rc.2` contract at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is an API implementation target, not a new compatibility or Desktop acceptance claim. The existing package version and peer range are unchanged.
+
+The root `sidebar.footer.action` entry uses the Host Modal and Button. It has no default shortcut and does not replace native Mod+K or current-conversation Ctrl/Cmd+F. A Cordis child dependency scope acquires `uiWorkspace`, `workspaces` and `layout`; their absence leaves current-conversation find mounted. No new Host module is imported or made a hard package dependency. The new surface reports missing capabilities rather than reading private state.
+
+## Search coverage and lifecycle
+
+Only `sessions.list.getSnapshot().ids` establishes catalog membership; `byId` alone may include retained children. Ready metadata, ordinary origin, nonblank state and the Workspace controller's complete archive set determine eligible rows. Workspace names are display metadata, not extra search fields. Pending/error lists do not mean an empty catalog. Only a user-requested Retry calls `sessions.refresh()`; opening the feature does not activate sessions or fetch every conversation's history.
+
+Titles use lowercase substring matching, sorted by descending `updatedAt`, with session ID as a stable tie-break. `sessions.search(query, signal)` supplies ranked message matches and real snippets. Title rows lead, message-only rows follow Host order, and duplicate session IDs receive their snippet in place. Both protocol errors (`ok: false`) and thrown failures retain title matching. Malformed success payloads fail closed. The Host wraps disabled providers and other provider failures as gateway errors, so the UI deliberately does not claim to know which cause occurred. The official default Web configuration has `session-query-sqlite.openAt: never`; the plugin does not alter it.
+
+The Host returns at most 20 conversations, a `hasMore` bit and snippets, without cursor, total, or message identity. Local merges also cap at 20 and explicitly ask for a narrower query when truncated. Counts of all matches and synthetic Next pages are not presented. Message search covers the Host's indexed current user/assistant surface, using word/phrase semantics rather than this plugin's substring search. Attachments, OCR, drafts, reasoning, interrupted attempts, subagent sessions and all compressed historical text are not promised. Plugin-provided custom presentation is not automatically indexed by the Host.
+
+Query changes, Close, Stop, connection reset and dependency withdrawal abort pending requests and invalidate an epoch. Response installation additionally checks the service generation, query and open state. Subscriptions are owned by the open surface; navigation watchers exist only during a pending handoff. Completed query/results/scroll position remain in memory for Return, and are released on unload. No browser persistence, external AI service or body-bearing diagnostic logging is added.
+
+## Navigation boundary
+
+A result is rechecked against current catalog and archive metadata before calling `uiWorkspace.openSession(id)`. The plugin passively checks `retainedBy.mainView` and `layout.panelInfo` while awaiting a uniquely registered, visible and valid main Chat anchor for exactly that ID. It does not call navigation mutation APIs merely to observe them. New navigation, trusted keyboard/pointer activity, Close, connection reset and unload invalidate the handoff. Opening with an explicit query bypasses selected-page-text seeding.
+
+The handoff does not guess a message from the snippet. It reuses the existing find reader, matching controls and return-to-reading-position behavior. If Chat is not available (including a selected non-Chat/Trajectory view), it stops after a bounded wait and asks the user to switch to Chat and retry. It does not scrape an alternative view. A zero result in the selected conversation scope explicitly explains the matching difference and preserves Return to search results.
+
+## Verification limits
+
+`npm run check:build`, source/bundle `node --check`, `npm run check:registration` and diff whitespace checks pass. The 17 existing checks in `text-matching.test.mjs`, `bundle-registration.test.mjs` and `client-registration-check.test.mjs` pass; no test files or test assertions were added. A bounded Node 24.19.0 / React 18 / jsdom exercise uses 28 synthetic catalog rows and controlled search responses to check title-only failure, 20-row cap, archive/child filtering, old-response suppression, query handoff, return, invalid input and zero remaining subscriptions after disposal. It does not measure real indexing/search performance or process a real history corpus.
+
+A separate isolated official RC2 Host started successfully with copies of pre-existing synthetic sessions and model providers disabled, but UI verification was blocked: the execution environment denied Chromium's local socket creation, and the provided cloud browser could not connect to that executor's localhost. No network or security settings were changed. The temporary Host was stopped and its generated URL token and overlay were removed.
+
+Real Host UI, SQLite matching and Electron Desktop acceptance remain unverified. They must still exercise message search enabled and disabled, Chinese/English/code-token boundaries, keyboard/modal geometry, exact-session handoff, return and interrupted navigation on the candidate artifact. Synthetic component results are not substitutes for those checks. The long historical release matrix is not rerun by this change.
+
+---
+
 # Full-session search compatibility
 
 The unreleased full-session path targets the official DSH `0.2.0-rc.2` contract at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). The historical matrix below describes the pre-existing loaded/DOM-paging implementation; it is not acceptance evidence for this data-search path.

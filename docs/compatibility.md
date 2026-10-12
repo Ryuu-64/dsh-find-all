@@ -1,6 +1,6 @@
-# Cross-conversation search
+# Full-text conversation search
 
-The full-body entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. Package version and peer ranges remain unchanged.
+The Full-text conversation search entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. Package version and peer ranges remain unchanged.
 
 ## Host and client contract
 

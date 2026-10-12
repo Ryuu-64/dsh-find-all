@@ -6,7 +6,7 @@ const PAGE_MATCH_TARGET = 20;
 const EMPTY = { items: [], cursor: null, scanned: 0, total: 0, failed: 0, skipped: 0, complete: false };
 const zh = typeof navigator !== 'undefined' && /^zh/i.test(navigator.language || '');
 const L = zh ? {
-  title: '搜索对话', close: '关闭搜索对话', placeholder: '搜索对话…',
+  title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
   scope: '所有工作区 · 未归档',
   scopeDetails: '搜索当前连接服务中、所有工作区的普通非空未归档对话；不包含子代理对话。',
   help: '搜索说明', shown: n => `${n}个对话`, page: n => `已显示${n}个对话 · 还有未搜索的对话`,
@@ -17,7 +17,7 @@ const L = zh ? {
   emptyQuery: '输入关键词开始搜索。', invalidShort: '请调整搜索关键词', invalid: '关键词最多 500 个字符，不能包含空字符。',
   pending: '正在扫描对话…', unavailable: '完整搜索服务不可用；请检查服务端扩展和连接后重试。已确认的结果保留。',
   stopped: '搜索已停止；保留已确认的结果，扫描尚未完成。', failedList: '会话列表暂不可用，请重试。',
-  loading: '正在读取会话列表…', unsupported: '当前宿主暂不支持对话搜索。',
+  loading: '正在读取会话列表…', unsupported: '当前宿主暂不支持对话全文搜索。',
   noMatches: '未找到匹配的对话。',
   more: '继续加载结果', titleOnly: '仅标题', progress: (n, total) => `已扫描 ${n} / ${total} 个对话`, partial: (failed, skipped) => `结果不完整：${failed} 个读取失败，${skipped} 个跳过。`, incomplete: '尚有对话未扫描。', retry: '重试', cancel: '停止搜索',
   untitled: '未命名对话',
@@ -27,7 +27,7 @@ const L = zh ? {
   chatNeeded: '未能接入该对话的聊天正文。请切换到 Chat／聊天视图，再从搜索结果重试。',
   interrupted: '已停止继续查找；可重新打开搜索结果。', back: '返回搜索结果',
 } : {
-  title: 'Search conversations', close: 'Close conversation search', placeholder: 'Search conversations…',
+  title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
   scope: 'All workspaces · Unarchived',
   scopeDetails: 'Searches ordinary, nonempty, unarchived conversations across all workspaces on the connected server. Subagent conversations are excluded.',
   help: 'Search help', shown: n => `${n} conversations`, page: n => `${n} conversations shown · More conversations remain unsearched`,
@@ -38,7 +38,7 @@ const L = zh ? {
   emptyQuery: 'Enter a query to search.', invalidShort: 'Adjust your search query', invalid: 'Use at most 500 characters, without null characters.',
   pending: 'Scanning conversations…', unavailable: 'Full search service unavailable. Check the server extension and connection, then retry. Confirmed results are kept.',
   stopped: 'Search stopped. Confirmed results are kept; the scan is incomplete.', failedList: 'Conversation list unavailable. Try again.',
-  loading: 'Loading conversation list…', unsupported: 'Conversation search is unsupported on this Host.',
+  loading: 'Loading conversation list…', unsupported: 'Full-text conversation search is unsupported on this Host.',
   noMatches: 'No matching conversations found.',
   more: 'Load more results', titleOnly: 'Titles only', progress: (n, total) => `${n} / ${total} conversations scanned`, partial: (failed, skipped) => `Incomplete results: ${failed} failed, ${skipped} skipped.`, incomplete: 'Some conversations remain unscanned.', retry: 'Retry', cancel: 'Stop search',
   untitled: 'Untitled conversation',
@@ -326,7 +326,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     return h(ui.Modal, { open: true, headless: true, title: L.title, onClose: requestClose, className: 'dsh-find-all-conversations' },
       h('div', { ref: details, className: 'dsh-find-all-conversations-layout' },
         h('div', { className: 'dsh-find-all-conversations-header' },
-          h(ui.Input, { type: 'search', value: query, 'data-modal-autofocus': true, 'aria-label': L.title, placeholder: L.placeholder,
+          h(ui.Input, { type: 'search', value: query, 'data-modal-autofocus': true, 'aria-label': L.title, placeholder: mode === 'title' ? L.titlePlaceholder : L.placeholder,
             icon: ui.IconSearchOutlineRegular ? h(ui.IconSearchOutlineRegular, { size: 16 }) : undefined,
             onChange: event => change(event.target.value), onKeyDown: event => {
               if (event.key !== 'Enter' || event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || event.repeat) return;

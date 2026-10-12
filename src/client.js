@@ -2535,7 +2535,7 @@ var BAR_ID = "dsh-find-all-root";
 			contentViewport.appendChild(historyCommand);
             var searchCommand = document.createElement('div'); searchCommand.className = 'history-command';
             var searchConversations = document.createElement('button'); searchConversations.type = 'button';
-            searchConversations.textContent = ZH ? '搜索对话' : 'Search conversations';
+            searchConversations.textContent = ZH ? '对话全文搜索' : 'Full-text conversation search';
             searchConversations.addEventListener('click', function () { state.conversationSearch?.open(state.query); });
             searchCommand.appendChild(searchConversations); contentViewport.appendChild(searchCommand);
 			state.refreshBtn = refreshBtn;

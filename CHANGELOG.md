@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Name the independent entry “对话全文搜索” / “Full-text conversation search”, and clarify title/body matching in the input while retaining the title-only filter.
+
 - Keep conversation search compact with the native headless Modal, an input-first header, stable search controls, independently scrolling two-line results, and a quiet completed-result count.
 
 - Search ordinary unarchived conversations by title and saved user/assistant body text by default, using public immutable Host reads even with the official default FTS provider disabled.

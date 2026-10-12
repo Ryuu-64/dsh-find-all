@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in archived conversation search with explicit Unarchive and open actions, current-state verification, and cancelled navigation when the search changes.
+
 - Name the independent entry “对话全文搜索” / “Full-text conversation search”, and clarify title/body matching in the input while retaining the title-only filter.
 
 - Keep conversation search compact with the native headless Modal, an input-first header, stable search controls, independently scrolling two-line results, and a quiet completed-result count.

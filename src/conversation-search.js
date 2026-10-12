@@ -1,14 +1,17 @@
 // Explicit, cancellable Host batches. No session activation until a row is opened.
 // Document-relative, like official session-log-export, for hosted subpaths.
 const ENDPOINT = "api/dsh-find-all/search";
-const SCOPE = "ordinary-unarchived";
+const DEFAULT_SCOPE = "ordinary-unarchived", ARCHIVED_SCOPE = "ordinary-including-archived";
 const PAGE_MATCH_TARGET = 20;
 const EMPTY = { items: [], cursor: null, scanned: 0, total: 0, failed: 0, skipped: 0, complete: false };
 const zh = typeof navigator !== 'undefined' && /^zh/i.test(navigator.language || '');
 const L = zh ? {
   title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
   scope: '搜索范围：所有工作区',
-  scopeDetails: '搜索当前连接服务中、所有工作区的普通非空未归档对话；不包含子代理对话。',
+  scopeDetails: '搜索当前连接服务中、所有工作区的普通非空对话；默认不含归档，可勾选包含归档；不包含子代理对话。',
+  includeArchived: '包含归档', archived: '已归档', restore: '取消归档并打开', restoring: '正在取消归档…',
+  restoreUnavailable: '当前宿主不支持取消归档。', restoreUnconfirmed: '未能确认取消归档，尚未打开；请稍后重试。',
+  restoredOpenFailed: '已取消归档，但未能打开对话。可返回结果重试。', restoredFindFailed: '已取消归档，但未能接入聊天正文查找。可返回结果重试。', archivedNow: '该对话已归档；请使用“取消归档并打开”。',
   help: '搜索说明', shown: n => `${n}个对话`, page: n => `已显示${n}个对话 · 还有未搜索的对话`,
   unavailableShort: '搜索服务暂不可用', stoppedShort: '搜索已停止', partialShort: '搜索结果不完整', noMatchesYet: '暂未找到匹配的对话',
   semantics: '字面子串匹配，不区分大小写；正文含原始 Markdown，不含思考或工具内容。',
@@ -29,7 +32,10 @@ const L = zh ? {
 } : {
   title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
   scope: 'Search scope: All workspaces',
-  scopeDetails: 'Searches ordinary, nonempty, unarchived conversations across all workspaces on the connected server. Subagent conversations are excluded.',
+  scopeDetails: 'Searches ordinary, nonempty conversations across all workspaces on the connected server. Archived conversations are excluded unless Include archived is checked. Subagent conversations are excluded.',
+  includeArchived: 'Include archived', archived: 'Archived', restore: 'Unarchive and open', restoring: 'Unarchiving…',
+  restoreUnavailable: 'This Host does not support unarchiving.', restoreUnconfirmed: 'Unarchiving could not be confirmed, so the conversation was not opened. Try again shortly.',
+  restoredOpenFailed: 'Unarchived, but the conversation could not be opened. Return to the results to retry.', restoredFindFailed: 'Unarchived, but chat text could not be reached for find. Return to the results to retry.', archivedNow: 'This conversation is archived. Use Unarchive and open.',
   help: 'Search help', shown: n => `${n} conversations`, page: n => `${n} conversations shown · More conversations remain unsearched`,
   unavailableShort: 'Search service unavailable', stoppedShort: 'Search stopped', partialShort: 'Search results are incomplete', noMatchesYet: 'No matching conversations yet',
   semantics: 'Case-insensitive literal substring search. Body text includes raw Markdown, but excludes reasoning and tool content.',
@@ -49,7 +55,7 @@ const L = zh ? {
   interrupted: 'Find handoff stopped. You can reopen the search results.', back: 'Back to search results',
 };
 
-function catalog(sessions, workspaces) {
+function catalog(sessions, workspaces, includeArchived = false) {
   const list = sessions?.list?.getSnapshot?.();
   const spaces = workspaces?.list?.getSnapshot?.();
   if (!list || !spaces || !Array.isArray(list.ids) || !list.byId || !Array.isArray(spaces.items) || !Array.isArray(spaces.archivedSessionIds)) return { status: 'unsupported', rows: [] };
@@ -61,15 +67,15 @@ function catalog(sessions, workspaces) {
   const rows = [];
   for (const id of list.ids) {
     const row = list.byId[id];
-    if (!row || row.id !== id || row.origin === 'subagent' || row.blank || archived.has(id)) continue;
-    rows.push({ id, title: typeof row.title === 'string' ? row.title.trim() : '', updatedAt: Number.isFinite(row.updatedAt) ? row.updatedAt : 0, workspace: names.get(id) || '', selected: row.retainedBy?.mainView > 0 });
+    if (!row || row.id !== id || row.origin === 'subagent' || row.blank || (!includeArchived && archived.has(id))) continue;
+    rows.push({ id, archived: archived.has(id), title: typeof row.title === 'string' ? row.title.trim() : '', updatedAt: Number.isFinite(row.updatedAt) ? row.updatedAt : 0, workspace: names.get(id) || '', selected: row.retainedBy?.mainView > 0 });
   }
   return { status: 'ready', rows };
 }
 
 function merge(rows, content) {
   const valid = new Map(rows.map(row => [row.id, row]));
-  return { ...content, items: content.items.filter(item => valid.has(item.sessionId)).map(item => ({ ...valid.get(item.sessionId), ...item })) };
+  return { ...content, items: content.items.filter(item => valid.has(item.sessionId)).map(item => ({ ...valid.get(item.sessionId), ...item, archived: valid.get(item.sessionId).archived })) };
 }
 
 function literalMatcher(query) {
@@ -90,14 +96,14 @@ function highlightedText(h, text, ranges) {
   parts.push(text.slice(cursor));
   return parts;
 }
-function searchValue(value, requestId, query) {
-  if (!value || value.version !== 1 || value.requestId !== requestId || !Array.isArray(value.items) ||
+function searchValue(value, requestId, query, scope) {
+  if (!value || value.version !== 1 || value.requestId !== requestId || value.scope !== scope || !Array.isArray(value.items) ||
       !(value.cursor === null || (typeof value.cursor === 'string' && value.cursor.length > 0)) ||
       typeof value.complete !== 'boolean' || value.complete !== (value.cursor === null) ||
       ['scanned', 'total', 'failed', 'skipped'].some(key => !Number.isSafeInteger(value[key]) || value[key] < 0) || value.scanned > value.total || (value.complete && value.scanned !== value.total)) return null;
   const items = [];
   for (const row of value.items) {
-    if (!row || typeof row.sessionId !== 'string' || typeof row.titleMatch !== 'boolean' || typeof row.bodyMatch !== 'boolean' ||
+    if (!row || typeof row.sessionId !== 'string' || typeof row.archived !== 'boolean' || typeof row.titleMatch !== 'boolean' || typeof row.bodyMatch !== 'boolean' ||
         !(row.titleMatch || row.bodyMatch) || (row.title !== undefined && typeof row.title !== 'string') || typeof row.snippet !== 'string' || !Array.isArray(row.ranges)) return null;
     let last = 0;
     for (const range of row.ranges) {
@@ -105,7 +111,7 @@ function searchValue(value, requestId, query) {
           range.end > row.snippet.length || !literalRanges(row.snippet.slice(range.start, range.end), query).some(match => match.start === 0 && match.end === range.end - range.start)) return null;
       last = range.end;
     }
-    items.push({ sessionId: row.sessionId, ...(row.title !== undefined ? { title: row.title } : {}), titleMatch: row.titleMatch, bodyMatch: row.bodyMatch, snippet: row.snippet, ranges: row.ranges });
+    items.push({ sessionId: row.sessionId, archived: row.archived, ...(row.title !== undefined ? { title: row.title } : {}), titleMatch: row.titleMatch, bodyMatch: row.bodyMatch, snippet: row.snippet, ranges: row.ranges });
   }
   return { items, cursor: value.cursor, scanned: value.scanned, total: value.total, failed: value.failed, skipped: value.skipped, complete: value.complete };
 }
@@ -113,14 +119,17 @@ function searchValue(value, requestId, query) {
 export function installConversationSearch(ctx, react, ui, bridge) {
   const h = react.createElement;
   let services = null, mounted = true, epoch = 0, request = null, timer = 0;
-  let scanId = null, mode = 'title-body';
+  let scanId = null, mode = 'title-body', includeArchived = false;
+  let restoreOperation = null, restoreFeedback = null;
+  const scope = () => includeArchived ? ARCHIVED_SCOPE : DEFAULT_SCOPE;
+  const invalidateRestoreNavigation = () => { if (restoreOperation) restoreOperation.navigate = false; restoreFeedback = null; };
   let open = false, query = '', body = 'idle', content = EMPTY, scroll = 0, notice = '', focusOrigin = null;
   let handoff = null, handoffTimer = 0, handoffStops = [], listStops = [], lastCatalogStatus = '';
   const listeners = new Set();
   let revision = 0;
   const publish = () => { revision++; for (const listener of listeners) listener(); };
   const currentCatalog = () => {
-    try { return services ? catalog(ctx.sessions, services.workspaces) : { status: 'unsupported', rows: [] }; }
+    try { return services ? catalog(ctx.sessions, services.workspaces, includeArchived) : { status: 'unsupported', rows: [] }; }
     catch (_) { return { status: 'failedList', rows: [] }; }
   };
   const cancelRequest = () => {
@@ -165,10 +174,10 @@ export function installConversationSearch(ctx, react, ui, bridge) {
   }
   async function scanBatch(next) {
     if (!mounted || !open || request || currentCatalog().status !== 'ready') return;
-    const q = query.trim(), searchMode = mode, owner = services, generation = epoch;
+    const q = query.trim(), searchMode = mode, searchScope = scope(), owner = services, generation = epoch;
     if (next && (!scanId || !content.cursor)) return;
     const controller = new AbortController(); request = controller;
-    const alive = () => mounted && open && services === owner && epoch === generation && request === controller && query.trim() === q && mode === searchMode && !controller.signal.aborted;
+    const alive = () => mounted && open && services === owner && epoch === generation && request === controller && query.trim() === q && mode === searchMode && scope() === searchScope && !controller.signal.aborted;
     const target = content.items.length + PAGE_MATCH_TARGET;
     body = 'pending'; publish();
     if (!alive()) return;
@@ -179,14 +188,14 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       let continuation = next;
       while (alive()) {
         const previousScanned = content.scanned, previousTotal = content.total;
-        const payload = { version: 1, action: continuation ? 'next' : 'start', requestId: id, query: q, mode: searchMode, scope: SCOPE,
+        const payload = { version: 1, action: continuation ? 'next' : 'start', requestId: id, query: q, mode: searchMode, scope: searchScope,
           ...(continuation ? { cursor: content.cursor } : { sessionIds: rows.map(row => row.id), catalog: rows.map(row => ({ id: row.id, title: row.title })) }) };
         const response = await fetch(ENDPOINT, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
         if (!alive()) return;
         if (!response.ok) throw new Error('Search unavailable');
         const raw = await response.json();
         if (!alive()) return;
-        const value = searchValue(raw, id, q);
+        const value = searchValue(raw, id, q, searchScope);
         if (!value || (continuation && value.total !== previousTotal) ||
             (value.scanned <= previousScanned && !(value.complete && value.total === 0 && !continuation)) ||
             (value.cursor !== null && seenCursors.has(value.cursor))) throw new Error('Invalid or non-progressing search response');
@@ -209,6 +218,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
   }
   function show(seed) {
     if (!mounted) return;
+    invalidateRestoreNavigation();
     cancelHandoff(); focusOrigin = document.activeElement; bridge.closeFind();
     if (typeof seed === 'string' && seed !== query) { query = seed; scroll = 0; content = EMPTY; body = 'idle'; }
     open = true; notice = '';
@@ -218,25 +228,29 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     if (body === 'idle' || body === 'pending') schedule(); else publish();
   }
   function dismiss() {
+    invalidateRestoreNavigation();
     const unfinished = body === 'pending' || (!content.complete && !!scanId);
     open = false; cancelRequest(); stopLists(); cancelHandoff();
     if (unfinished) body = 'stopped';
     publish();
   }
   function change(value) {
+    invalidateRestoreNavigation();
     query = value; scroll = 0; notice = ''; cancelHandoff(); schedule();
   }
-  function launch(row) {
+  function launch(row, restored = false) {
+    invalidateRestoreNavigation();
     const available = currentCatalog();
     if (!services || available.status !== 'ready' || !available.rows.some(item => item.id === row.id)) { notice = L.missing; publish(); return; }
+    if (available.rows.find(item => item.id === row.id).archived) { notice = L.archivedNow; publish(); return; }
     const owner = services, q = query.trim();
     dismiss(); bridge.closeFind(); notice = L.opening;
-    const task = { id: row.id, query: q, owner, started: Date.now() };
+    const task = { id: row.id, query: q, owner, started: Date.now(), restored };
     handoff = task;
     try {
       owner.uiWorkspace.openSession(row.id);
 
-    } catch (_) { cancelHandoff(L.openFailed); return; }
+    } catch (_) { cancelHandoff(restored ? L.restoredOpenFailed : L.openFailed); return; }
     function stillSelected() {
       try {
         const row = ctx.sessions.list.getSnapshot().byId[task.id];
@@ -249,15 +263,43 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     const attempt = () => {
       handoffTimer = 0;
       if (!mounted || handoff !== task || services !== owner) return;
-      if (!stillSelected()) { cancelHandoff(L.interrupted); return; }
+      if (!stillSelected()) { cancelHandoff(task.restored ? L.restoredOpenFailed : L.interrupted); return; }
       const current = currentCatalog();
-      if (current.status !== 'ready' || !current.rows.some(item => item.id === task.id)) { cancelHandoff(L.missing); return; }
+      if (current.status !== 'ready' || !current.rows.some(item => item.id === task.id && !item.archived)) { cancelHandoff(task.restored ? L.restoredOpenFailed : L.missing); return; }
       if (bridge.openFind(task.id, task.query)) { cancelHandoff(); return; }
-      if (Date.now() - task.started > 10000) { cancelHandoff(L.chatNeeded); return; }
+      if (Date.now() - task.started > 10000) { cancelHandoff(task.restored ? L.restoredFindFailed : L.chatNeeded); return; }
       handoffTimer = setTimeout(attempt, 100);
     };
     // Let the Host Modal unmount/restore focus before focusing the find input.
     handoffTimer = setTimeout(attempt, 0);
+  }
+  async function restoreAndOpen(row) {
+    if (restoreOperation) return;
+    cancelHandoff();
+    const owner = services, available = currentCatalog();
+    const latest = available.rows.find(item => item.id === row.id);
+    if (!owner || available.status !== 'ready' || !latest) { notice = L.missing; publish(); return; }
+    if (!latest.archived) { launch(latest); return; }
+    if (typeof owner.uiWorkspace.unarchiveSession !== 'function') { restoreFeedback = { id: row.id, text: L.restoreUnavailable }; publish(); return; }
+    const operation = { id: row.id, owner, navigate: true };
+    restoreOperation = operation; restoreFeedback = null; notice = ''; publish();
+    try {
+      await owner.uiWorkspace.unarchiveSession(row.id);
+      // The RPC cannot be aborted. A superseded successful reply also need not
+      // install its archive state, so only the latest ready snapshot permits open.
+      if (!mounted || services !== owner || !operation.navigate || !open) return;
+      const fresh = currentCatalog(), current = fresh.rows.find(item => item.id === row.id);
+      if (fresh.status !== 'ready' || !current || current.archived) {
+        restoreFeedback = { id: row.id, text: L.restoreUnconfirmed }; publish(); return;
+      }
+      launch(current, true);
+    } catch (_) {
+      if (mounted && services === owner && operation.navigate && open) {
+        restoreFeedback = { id: row.id, text: L.restoreUnconfirmed }; publish();
+      }
+    } finally {
+      if (restoreOperation === operation) { restoreOperation = null; if (mounted && services === owner) publish(); }
+    }
   }
   function Panel() {
     const details = react.useRef(null), list = react.useRef(null);
@@ -302,7 +344,9 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     const count = L.shown(results.items.length);
     const ready = data.status === 'ready' && body === 'ready';
     let announcement = '';
-    if (notice) announcement = notice;
+    if (restoreOperation?.navigate) announcement = L.restoring;
+    else if (restoreFeedback) announcement = restoreFeedback.text;
+    else if (notice) announcement = notice;
     else if (data.status === 'ready' && body === 'invalid') announcement = L.invalid;
     else if (pending) announcement = [progress || L.pending, partial].filter(Boolean).join(' · ');
     else if (ready && content.complete && !partial) announcement = count;
@@ -314,7 +358,9 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       const dialog = details.current?.closest('[role="dialog"]');
       if (dialog && Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"],[role="menu"]')).pop() === dialog) dismiss();
     };
-    const setTitleOnly = checked => { mode = checked ? 'title' : 'title-body'; scroll = 0; notice = ''; cancelHandoff(); schedule(); };
+    const setTitleOnly = checked => { invalidateRestoreNavigation(); mode = checked ? 'title' : 'title-body'; scroll = 0; notice = ''; cancelHandoff(); schedule(); };
+    const setIncludeArchived = checked => { invalidateRestoreNavigation(); includeArchived = checked; scroll = 0; notice = ''; cancelHandoff(); schedule(); };
+    const checkbox = (checked, onChange, label) => ui.Checkbox ? h(ui.Checkbox, { checked, onChange, label, className: 'dsh-find-all-conversations-title-only' }) : h('label', { className: 'dsh-find-all-conversations-title-only dsh-find-all-conversations-title-only-fallback' }, h('input', { type: 'checkbox', checked, onChange: event => onChange(event.target.checked) }), ' ', label);
     const actions = retryable || pending || content.cursor ? h('div', { className: 'dsh-find-all-conversations-actions' },
       retryable ? h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', onClick: () => {
         notice = ''; schedule();
@@ -330,21 +376,28 @@ export function installConversationSearch(ctx, react, ui, bridge) {
             icon: ui.IconSearchOutlineRegular ? h(ui.IconSearchOutlineRegular, { size: 16 }) : undefined,
             onChange: event => change(event.target.value), onKeyDown: event => {
               if (event.key !== 'Enter' || event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || event.repeat) return;
-              event.preventDefault(); notice = ''; cancelHandoff(); schedule();
+              event.preventDefault(); invalidateRestoreNavigation(); notice = ''; cancelHandoff(); schedule();
             }, className: 'dsh-find-all-conversations-input' }),
           h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', 'aria-label': L.close, title: L.close, onClick: requestClose, className: 'dsh-find-all-conversations-close' },
             ui.IconCloseOutlineRegular ? h(ui.IconCloseOutlineRegular, { size: 14 }) : '×')),
         h('div', { className: 'dsh-find-all-conversations-toolbar' },
           h('span', { className: 'dsh-find-all-conversations-scope' }, L.scope),
-          ui.Checkbox ? h(ui.Checkbox, { checked: mode === 'title', onChange: setTitleOnly, label: L.titleOnly, className: 'dsh-find-all-conversations-title-only' }) :
-            h('label', { className: 'dsh-find-all-conversations-title-only dsh-find-all-conversations-title-only-fallback' }, h('input', { type: 'checkbox', checked: mode === 'title', onChange: event => setTitleOnly(event.target.checked) }), ' ', L.titleOnly)),
+          h('div', { className: 'dsh-find-all-conversations-options' }, checkbox(mode === 'title', setTitleOnly, L.titleOnly), checkbox(includeArchived, setIncludeArchived, L.includeArchived))),
         h('div', { ref: list, onScroll: event => { scroll = event.currentTarget.scrollTop; }, className: 'dsh-find-all-conversations-list' },
           !results.items.length && emptyStatus ? h('div', { className: 'dsh-find-all-conversations-empty' }, emptyStatus) : null,
-          ...results.items.map(row => h('button', { key: row.id, type: 'button', onClick: () => launch(row), className: 'dsh-find-all-conversations-row', 'aria-current': row.selected ? 'true' : undefined },
-            h('span', { className: 'dsh-find-all-conversations-title', title: row.title || L.untitled }, row.titleMatch ? highlightedText(h, row.title, literalRanges(row.title, query)) : row.title || L.untitled),
-            h('span', { className: 'dsh-find-all-conversations-meta' },
+          ...results.items.map(row => {
+            const title = row.titleMatch ? highlightedText(h, row.title, literalRanges(row.title, query)) : row.title || L.untitled;
+            const titleNode = h('span', { className: 'dsh-find-all-conversations-title', title: row.title || L.untitled }, title);
+            const meta = h('span', { className: 'dsh-find-all-conversations-meta' },
               row.workspace ? h('span', { className: 'dsh-find-all-conversations-info', title: row.workspace }, row.workspace) : null,
-              row.snippet ? h('span', { className: 'dsh-find-all-conversations-snippet', title: row.snippet }, highlightedText(h, row.snippet, row.ranges)) : null)))),
+              row.snippet ? h('span', { className: 'dsh-find-all-conversations-snippet', title: row.snippet }, highlightedText(h, row.snippet, row.ranges)) : null);
+            const error = restoreFeedback?.id === row.id ? h('span', { className: 'dsh-find-all-conversations-row-error' }, restoreFeedback.text) : null;
+            if (!row.archived) return h('button', { key: row.id, type: 'button', onClick: () => launch(row), className: 'dsh-find-all-conversations-row', 'aria-current': row.selected ? 'true' : undefined }, titleNode, meta, error);
+            return h('div', { key: row.id, className: 'dsh-find-all-conversations-row dsh-find-all-conversations-archived-row' },
+              h('div', { className: 'dsh-find-all-conversations-row-heading' }, titleNode,
+                h('span', { className: 'dsh-find-all-conversations-archive-label' }, L.archived),
+                h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', className: 'dsh-find-all-conversations-restore', 'aria-disabled': !!restoreOperation, 'aria-label': `${L.restore}: ${row.title || L.untitled}`, onClick: () => restoreAndOpen(row) }, restoreOperation?.id === row.id ? L.restoring : L.restore)), meta, error);
+          })),
         h('div', { className: 'dsh-find-all-conversations-footer' },
           h('div', { className: 'dsh-find-all-conversations-status-actions' },
             h('div', { role: 'status', 'aria-live': 'polite', className: 'dsh-find-all-conversations-status' }, announcement), actions),
@@ -366,10 +419,11 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (typeof child.uiWorkspace?.openSession !== 'function' || typeof child.layout?.panelInfo?.subscribe !== 'function' || typeof child.layout?.panelInfo?.getSnapshot !== 'function' || typeof child.workspaces?.list?.subscribe !== 'function' || typeof ctx.sessions?.list?.subscribe !== 'function') return;
       const owner = { uiWorkspace: child.uiWorkspace, workspaces: child.workspaces, layout: child.layout };
       cancelRequest(); services = owner; content = EMPTY; body = 'idle'; watchLists(); if (open) schedule(); publish();
-      return () => { if (services !== owner) return; services = null; cancelRequest(); stopLists(); cancelHandoff(L.interrupted); content = EMPTY; body = 'idle'; publish(); };
+      return () => { if (services !== owner) return; invalidateRestoreNavigation(); services = null; cancelRequest(); stopLists(); cancelHandoff(L.interrupted); content = EMPTY; body = 'idle'; publish(); };
     });
   });
   if (typeof ctx.on === 'function') ctx.on('connection/reset', () => {
+    invalidateRestoreNavigation();
     cancelRequest(); cancelHandoff(L.interrupted); content = EMPTY; body = 'idle';
     if (open) { watchLists(); schedule(); } else publish();
   });
@@ -377,7 +431,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     function interrupt(event) { if (handoff && event.isTrusted) cancelHandoff(L.interrupted); }
     window.addEventListener('pointerdown', interrupt, true); window.addEventListener('keydown', interrupt, true);
     return () => {
-      mounted = false; open = false; cancelRequest(); stopLists(); cancelHandoff(); content = EMPTY; query = ''; listeners.clear();
+      invalidateRestoreNavigation(); mounted = false; open = false; cancelRequest(); stopLists(); cancelHandoff(); content = EMPTY; query = ''; listeners.clear();
       window.removeEventListener('pointerdown', interrupt, true); window.removeEventListener('keydown', interrupt, true);
     };
   });

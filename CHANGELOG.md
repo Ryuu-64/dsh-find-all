@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.12
 
 - Add opt-in archived conversation search with explicit Unarchive and open actions, current-state verification, and cancelled navigation when the search changes.
 

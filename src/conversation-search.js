@@ -7,7 +7,7 @@ const EMPTY = { items: [], cursor: null, scanned: 0, total: 0, failed: 0, skippe
 const zh = typeof navigator !== 'undefined' && /^zh/i.test(navigator.language || '');
 const L = zh ? {
   title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
-  scope: '所有工作区 · 未归档',
+  scope: '搜索范围：所有工作区',
   scopeDetails: '搜索当前连接服务中、所有工作区的普通非空未归档对话；不包含子代理对话。',
   help: '搜索说明', shown: n => `${n}个对话`, page: n => `已显示${n}个对话 · 还有未搜索的对话`,
   unavailableShort: '搜索服务暂不可用', stoppedShort: '搜索已停止', partialShort: '搜索结果不完整', noMatchesYet: '暂未找到匹配的对话',
@@ -28,7 +28,7 @@ const L = zh ? {
   interrupted: '已停止继续查找；可重新打开搜索结果。', back: '返回搜索结果',
 } : {
   title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
-  scope: 'All workspaces · Unarchived',
+  scope: 'Search scope: All workspaces',
   scopeDetails: 'Searches ordinary, nonempty, unarchived conversations across all workspaces on the connected server. Subagent conversations are excluded.',
   help: 'Search help', shown: n => `${n} conversations`, page: n => `${n} conversations shown · More conversations remain unsearched`,
   unavailableShort: 'Search service unavailable', stoppedShort: 'Search stopped', partialShort: 'Search results are incomplete', noMatchesYet: 'No matching conversations yet',

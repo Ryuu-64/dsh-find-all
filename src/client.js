@@ -1,5 +1,6 @@
 /*! dsh-find-all. Copyright (c) 2026 secyborg; Copyright (c) 2026 Ryuu-64. MIT.
  * Forked from secyborg/dsh-find-bar ce7eb75efe94d768127c5977c649ecd950a9356c. See LICENSE and NOTICE.md. */
+import { installConversationSearch } from "./conversation-search.js";
 import { checkLatestVersion } from "./updates.js";
 import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
@@ -279,6 +280,12 @@ var BAR_ID = "dsh-find-all-root";
 				"@container dsh-find-all (max-width:330px){#" + BAR_ID + " .controls{flex-wrap:wrap}#" + BAR_ID + " .navigation-controls{margin-left:auto}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
 				"#" + BAR_ID + "[data-about-open]{z-index:999;pointer-events:none}" +
+                ".dsh-find-all-conversations{width:min(760px,100%);max-height:100%;min-width:0;font-family:var(--dsw-font-family)}.dsh-find-all-conversations-content{min-height:0;min-width:0;overflow:auto}" +
+                // Match the Host's public Input and Workspace search-row visual tokens.
+                ".dsh-find-all-conversations-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-width:0;width:100%;max-width:100%}.dsh-find-all-conversations-list{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%;max-height:min(52vh,480px);overflow-y:auto;overflow-x:hidden}.dsh-find-all-conversations-status{margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}.dsh-find-all-conversations-status:empty{display:none}.dsh-find-all-conversations-actions{display:flex;gap:8px;flex-wrap:wrap}.dsh-find-all-conversations-help{min-width:0;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}.dsh-find-all-conversations-help p{margin:8px 0 0}.dsh-find-all-conversations-match{color:inherit;background:var(--dsw-alias-state-business-tertiary);font-weight:600}" +
+                ".dsh-find-all-conversations-input{min-width:0;box-sizing:border-box;width:100%}" +
+                ".dsh-find-all-conversations-row{display:flex;flex-direction:column;align-items:stretch;width:100%;min-width:0;max-width:100%;min-height:48px;box-sizing:border-box;border:none;border-radius:var(--dsw-radius-lg);padding:4px 8px;background:transparent;cursor:pointer;text-align:left;color:var(--dsw-alias-label-primary);font-family:inherit}.dsh-find-all-conversations-row:hover,.dsh-find-all-conversations-row[aria-current=true]{background:var(--dsw-alias-interactive-bg-hover)}.dsh-find-all-conversations-row:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}" +
+                ".dsh-find-all-conversations-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;font-weight:400}.dsh-find-all-conversations-meta{display:flex;align-items:center;gap:6px;min-width:0}.dsh-find-all-conversations-info,.dsh-find-all-conversations-snippet{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:17px}.dsh-find-all-conversations-info{flex:none;max-width:40%;color:var(--dsw-alias-label-tertiary)}.dsh-find-all-conversations-info:only-child{max-width:100%}.dsh-find-all-conversations-snippet{flex:1;min-width:0;color:var(--dsw-alias-label-secondary)}" +
                 ".dsh-find-all-about{max-height:100%;font-family:var(--dsw-font-family)}.dsh-find-all-about-content{min-height:0;overflow:auto}.dsh-find-all-about-details{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family);overflow-wrap:anywhere}.dsh-find-all-about-details p{margin:0}.dsh-find-all-about-details h3{margin:0 0 6px;font:500 13px/20px var(--dsw-font-family)}.dsh-find-all-about-details a{color:var(--dsw-alias-state-business-primary);text-underline-offset:3px}.dsh-find-all-about-links{display:flex;flex-wrap:wrap;gap:6px 16px}.dsh-find-all-about-group{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.dsh-find-all-about-status{color:var(--dsw-alias-label-secondary)}.dsh-find-all-about-details :focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}" +
                 "::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
 				"::highlight(" + HL_CUR + "){background-color:#f5a623;color:#141414}";
@@ -658,6 +665,10 @@ var BAR_ID = "dsh-find-all-root";
 					};
 				},
 				nodes: function (entry) { return entry && entry.registration.nodes; },
+                forSession: function (id) {
+                    var matches = Array.from(entries.values()).filter(function (entry) { return entry.id === id && shown(entry) && resolveScope(entry.anchor, id); });
+                    return matches.length === 1 ? choose(matches[0]) : null;
+                },
 				refresh: current,
 				select: function (target, previous) {
 					// Explicit registered main-frame interaction disambiguates future
@@ -1288,6 +1299,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		var state = {
 			ctx: null,
+            conversationSearch: null, crossSearch: null, crossSearchReturn: null, crossSearchHint: null,
             updateTask: null, updateResult: null, updateBtn: null, updateStatus: null, updateGuide: null,
             aboutAvailable: false, aboutViews: new Map(), aboutOwner: null, aboutEpoch: 0,
 			mounted: false, writeClipboard: null, diagnosticBtn: null, diagnosticFeedback: null, copyPending: false, copyEpoch: 0, lastFailure: null,
@@ -1614,6 +1626,14 @@ var BAR_ID = "dsh-find-all-root";
             state.countState.title = label;
             // The existing status region announces loading/failure details. Do not
             // announce the same progress twice, or turn the ordinary state into a button.
+            if (state.crossSearchReturn) {
+                var fromSearch = state.crossSearch && state.crossSearch.id === state.target?.id;
+                state.crossSearchReturn.hidden = !fromSearch;
+                state.crossSearchHint.hidden = !fromSearch;
+                state.crossSearchHint.textContent = fromSearch && complete && !n
+                    ? (ZH ? '此会话的当前搜索范围内未找到该关键词；跨对话匹配规则可能不同。可返回搜索结果。' : 'No match in this conversation’s current search scope. Cross-conversation matching differs; you can return to the results.')
+                    : (ZH ? '正在此对话内查找。' : 'Finding in this conversation.');
+            }
             var announcement = !state.query || available || complete ? label : "";
             if (state.countLive && state.countLive.textContent !== announcement) state.countLive.textContent = announcement;
             if (state.countEdit) {
@@ -2509,6 +2529,11 @@ var BAR_ID = "dsh-find-all-root";
 			historyCommand.className = "history-command";
 			historyCommand.appendChild(refreshBtn);
 			contentViewport.appendChild(historyCommand);
+            var searchCommand = document.createElement('div'); searchCommand.className = 'history-command';
+            var searchConversations = document.createElement('button'); searchConversations.type = 'button';
+            searchConversations.textContent = ZH ? '搜索对话' : 'Search conversations';
+            searchConversations.addEventListener('click', function () { state.conversationSearch?.open(state.query); });
+            searchCommand.appendChild(searchConversations); contentViewport.appendChild(searchCommand);
 			state.refreshBtn = refreshBtn;
             var updateCommand = document.createElement('div');
             updateCommand.className = 'history-command update-command';
@@ -2590,6 +2615,14 @@ var BAR_ID = "dsh-find-all-root";
 			controls.appendChild(navigation);
 			bar.insertBefore(controls, bar.firstChild);
 			bar.appendChild(countHint); bar.appendChild(status); bar.appendChild(countLive);
+            var searchReturn = document.createElement('button'); searchReturn.type = 'button'; searchReturn.hidden = true;
+            searchReturn.textContent = ZH ? '返回搜索结果' : 'Back to search results';
+            searchReturn.style.cssText = 'align-self:flex-start;background:transparent;color:inherit;border:0;text-decoration:underline;cursor:pointer;font-size:12px';
+            searchReturn.addEventListener('click', function () { state.conversationSearch?.open(); });
+            var searchHint = document.createElement('span'); searchHint.hidden = true;
+            searchHint.style.cssText = 'font-size:12px;white-space:normal;max-width:420px';
+            state.crossSearchReturn = searchReturn; state.crossSearchHint = searchHint;
+            bar.append(searchHint, searchReturn);
 
 			state.bar = bar;
 			state.input = input;
@@ -2611,7 +2644,7 @@ var BAR_ID = "dsh-find-all-root";
 			document.body.appendChild(announcement);
 		}
 
-		function open(target) {
+		function open(target, seed) {
 			if (typeof document === "undefined" || document.body === null) return;
 			var wasOpen = isOpen();
 			syncTarget(target || document.activeElement, false);
@@ -2623,7 +2656,8 @@ var BAR_ID = "dsh-find-all-root";
 			if (state.announcement) state.announcement.textContent = "";
 			var selection = "";
 			try { selection = String(window.getSelection()).trim(); } catch (error) {}
-			if (state.target && selection && selection.length <= 200 && selection !== state.query) {
+            if (typeof seed === "string") state.query = seed;
+			if (typeof seed !== "string" && state.target && selection && selection.length <= 200 && selection !== state.query) {
 				state.query = selection;
 			}
 			state.input.value = state.query;
@@ -2639,6 +2673,8 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
+            state.conversationSearch?.cancelHandoff();
+            state.crossSearch = null;
             cancelUpdateCheck();
             closeAbout();
             cancelCountEdit(false);
@@ -2689,6 +2725,17 @@ var BAR_ID = "dsh-find-all-root";
 			state.adapter = createHostAdapter(ctx, function () {
 				if (isOpen()) syncTarget(null, true);
 			});
+            if (typeof ctx.inject === "function") state.conversationSearch = installConversationSearch(ctx, react, ui, {
+                closeFind: close,
+                openFind: function (sessionId, query) {
+                    if (!state.mounted || !state.adapter) return false;
+                    var target = state.adapter.forSession(sessionId);
+                    if (!target || !state.adapter.valid(target)) return false;
+                    state.crossSearch = { id: sessionId, query: query };
+                    open(target.anchor, query);
+                    return state.target?.id === sessionId;
+                }
+            });
             function AboutPanel() {
                 var copy = react.useState(''), copyStatus = copy[0], setCopyStatus = copy[1];
                 var details = react.useRef(null);
@@ -2807,7 +2854,7 @@ var BAR_ID = "dsh-find-all-root";
 					matchNumberKey: matchNumberKey,
                     open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
 					ownsKeys: function (event) {
-                        if (state.aboutOwner) return false;
+                        if (state.aboutOwner || state.conversationSearch?.isOpen()) return false;
 						var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
 						return !path.some(function (node) {
 							return node && node.closest && node.closest('dialog[open], [aria-modal="true"], .monaco-editor, .cm-editor, .CodeMirror');
@@ -2816,7 +2863,7 @@ var BAR_ID = "dsh-find-all-root";
 					isBarInput: function (target) { return target === state.input; }
 				});
 				function focus(event) {
-                    if (state.aboutOwner) return;
+                    if (state.aboutOwner || state.conversationSearch?.isOpen()) return;
                     if (state.countEdit && !state.countEditor.contains(event.target)) cancelCountEdit(false);
 					var inContent = state.contentPanel && state.contentPanel.contains(event.target);
 					if (!inContent && !state.contentBtn?.contains(event.target)) closeContentPanel();
@@ -2866,6 +2913,7 @@ var BAR_ID = "dsh-find-all-root";
 					if (style) style.remove();
 					state.countState = state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
                     state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
+                    state.conversationSearch = state.crossSearch = state.crossSearchReturn = state.crossSearchHint = null;
 					state.adapter.clear();
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = state.searchContent = null;
 				};

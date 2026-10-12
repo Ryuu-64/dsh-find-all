@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add a standalone Search conversations entry, with title matching across ordinary unarchived Host conversations and message snippets when the Host search service is available.
+- Keep title-only, failed, cancelled and truncated searches explicit; preserve the query and result-list position when opening a conversation and returning.
+- Hand the query to current-conversation find only after the correct main Chat is ready, without claiming an exact snippet-to-message jump.
+
 ## 0.1.11
 
 - Match the Host’s filled three-dot options icon and show readable idle, searching, empty, and incomplete count states; only available results open match-number navigation.

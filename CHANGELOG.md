@@ -2,9 +2,13 @@
 
 ## Unreleased
 
-- Add a standalone Search conversations entry, with title matching across ordinary unarchived Host conversations and message snippets when the Host search service is available.
-- Keep title-only, failed, cancelled and truncated searches explicit; preserve the query and result-list position when opening a conversation and returning.
-- Hand the query to current-conversation find only after the correct main Chat is ready, without claiming an exact snippet-to-message jump.
+- Keep conversation search compact with the native headless Modal, an input-first header, stable search controls, independently scrolling two-line results, and a quiet completed-result count.
+
+- Search ordinary unarchived conversations by title and saved user/assistant body text by default, using public immutable Host reads even with the official default FTS provider disabled.
+- Match Chinese short substrings, English and literal code with the same Unicode case-insensitive rule as in-conversation find; return real snippets and original-text highlight ranges.
+- Add title-only mode, bounded conversation batches, explicit continuation and progress, cancellation, and partial/read-failure states without allowing title matches to displace body results.
+- Preserve query and results when opening a conversation and returning. Keep the current-conversation find handoff without claiming an exact snippet-to-message jump.
+- Keep compaction-era append transcript text, exclude model-only replacements and superseded assistant retries, and avoid a persistent second index or body-bearing diagnostics.
 
 ## 0.1.11
 

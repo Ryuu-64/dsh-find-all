@@ -472,64 +472,93 @@ var BAR_ID = "dsh-find-all-root";
 			return null;
 		}
 
-		function scrollRangeWithin(range, scroll, viewport, bar) {
-			var rect = rangeRect(range);
-			if (!rect) return;
-			var current = scroll.scrollTop, maximum = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
-			var bands = [[viewport.top, viewport.bottom]];
-			if (bar && rect.right > bar.left && rect.left < bar.right && bar.bottom > viewport.top && bar.top < viewport.bottom) {
-				bands = [[viewport.top, Math.min(viewport.bottom, bar.top - 8)],
-					[Math.max(viewport.top, bar.bottom + 8), viewport.bottom]];
-			}
-			var best = null;
-			bands.forEach(function (band) {
-				if (band[1] <= band[0]) return;
-				var delta = rect.top < band[0] ? rect.top - band[0] :
-					rect.bottom > band[1] ? Math.min(rect.top - band[0], rect.bottom - band[1]) : 0;
-				delta = Math.max(0, Math.min(maximum, current + delta)) - current;
-				var shown = Math.max(0, Math.min(rect.bottom - delta, band[1]) - Math.max(rect.top - delta, band[0]));
-				// At either history boundary, prefer the region actually reachable
-				// after clamping rather than assuming the larger region is reachable.
-				if (!best || shown > best.shown || (shown === best.shown && Math.abs(delta) < Math.abs(best.delta))) best = { delta: delta, shown: shown };
-			});
-			var x = rect.left < viewport.left ? rect.left - viewport.left :
-				rect.right > viewport.right ? Math.min(rect.left - viewport.left, rect.right - viewport.right) : 0;
-			if ((best && best.delta) || x) {
-				try { scroll.scrollBy({ top: best ? best.delta : 0, left: x, behavior: "instant" }); } catch (error) {}
-			}
-		}
+        // Navigation anchors the first painted fragment, never a tall message or
+        // the envelope of a multiline match. Reading-origin geometry stays separate.
+        function matchAnchorRect(range) {
+            if (!range || !range.startContainer.isConnected || !range.endContainer.isConnected || typeof range.getClientRects !== 'function') return null;
+            for (var rect of range.getClientRects()) {
+                if (rect.width > 0 && rect.height > 0 && [rect.top, rect.bottom, rect.left, rect.right].every(Number.isFinite)) return rect;
+            }
+            return null;
+        }
 
-		function scrollToRange(range) {
-			var viewport = readingViewport(state.target);
-			if (!viewport || visibleMatchRect(range, viewport)) return;
-			// Reveal the exact Range, not its potentially very tall <pre>/<p>.
-			// Work from inner scroll clips outwards, without scrolling the window
-			// or unrelated panels. Re-read geometry after every scroll.
-			for (var node = range.startContainer.parentElement; node && node !== viewport.scroll; node = node.parentElement) {
-				var style = window.getComputedStyle(node);
-				var clipsY = /^(auto|scroll|hidden)$/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
-				var clipsX = /^(auto|scroll|hidden)$/.test(style.overflowX) && node.scrollWidth > node.clientWidth;
-				if (!clipsX && !clipsY) continue;
-				var box = node.getBoundingClientRect(), top = box.top + node.clientTop, left = box.left + node.clientLeft;
-				var rect = rangeRect(range);
-				if (!rect) return;
-				var clip = clippedViewport(node, viewport), local = verticalTextClip(node, style, box);
-				var safeTop = Math.max(local.top, clip.top), safeBottom = Math.min(local.bottom, clip.bottom);
-                // If this inner scroller is mostly outside the conversation,
-                // first reveal within its own unfaded band. The outer scroll
-                // then brings that band onscreen; a tiny intersection cannot
-                // fit a full line and must not pin the hit inside the fade.
-				var shown = safeBottom - safeTop >= rect.height - 1;
-				// A code scroller may still have room when the conversation is at
-				// its boundary. Let it avoid the overlay within its visible clip.
-				scrollRangeWithin(range, node, { top: clipsY ? (shown ? safeTop : local.top) : rect.top,
-					bottom: clipsY ? (shown ? safeBottom : local.bottom) : rect.bottom,
-					left: clipsX ? left : rect.left, right: clipsX ? left + node.clientWidth : rect.right },
-					clipsY && shown ? matchBarRect() : null);
-			}
-			viewport = readingViewport(state.target);
-			if (viewport && !visibleMatchRect(range, viewport)) scrollRangeWithin(range, viewport.scroll, viewport, matchBarRect());
-		}
+        function matchScrollPlan(range, scroll, viewport, bar, center) {
+            var rect = matchAnchorRect(range);
+            if (!rect) return null;
+            var current = scroll.scrollTop, maximum = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+            var bands = [[viewport.top, viewport.bottom]], margin = 0;
+            if (center) {
+                var lineHeight = window.getComputedStyle(range.startContainer.parentElement).lineHeight;
+                margin = /^\d+(?:\.\d+)?px$/.test(lineHeight) ? parseFloat(lineHeight) : rect.height;
+                if (!Number.isFinite(margin) || margin <= 0) margin = rect.height;
+            }
+            if (bar && rect.right > bar.left && rect.left < bar.right && bar.bottom > viewport.top && bar.top < viewport.bottom) {
+                bands = [[viewport.top, Math.min(viewport.bottom, bar.top - 8)],
+                    [Math.max(viewport.top, bar.bottom + 8), viewport.bottom]];
+            }
+            var best = null;
+            bands.forEach(function (band) {
+                if (band[1] <= band[0]) return;
+                var comfortable = rect.top >= band[0] + margin && rect.bottom <= band[1] - margin;
+                var delta = center ? (comfortable ? 0 : (rect.top + rect.bottom - band[0] - band[1]) / 2) :
+                    rect.top < band[0] ? rect.top - band[0] :
+                    rect.bottom > band[1] ? Math.min(rect.top - band[0], rect.bottom - band[1]) : 0;
+                delta = Math.max(0, Math.min(maximum, current + delta)) - current;
+                var shown = Math.max(0, Math.min(rect.bottom - delta, band[1]) - Math.max(rect.top - delta, band[0]));
+                var candidate = { delta: delta, shown: shown, comfortable: comfortable, top: band[0], bottom: band[1] };
+                // Keep a comfortable hit still; otherwise prefer the band that
+                // actually reveals it after clamping at either history boundary.
+                if (!best || (comfortable && !best.comfortable) || (comfortable === best.comfortable &&
+                    (shown > best.shown || (shown === best.shown && Math.abs(delta) < Math.abs(best.delta))))) best = candidate;
+            });
+            if (best) best.x = rect.left < viewport.left ? rect.left - viewport.left :
+                rect.right > viewport.right ? Math.min(rect.left - viewport.left, rect.right - viewport.right) : 0;
+            return best;
+        }
+
+        function scrollRangeWithin(range, scroll, viewport, bar, center) {
+            var plan = matchScrollPlan(range, scroll, viewport, bar, center);
+            if (plan && (Math.abs(plan.delta) > 1 || Math.abs(plan.x) > 1)) {
+                try { scroll.scrollBy({ top: plan.delta, left: plan.x, behavior: "instant" }); } catch (error) {}
+            }
+        }
+
+        function matchLanding(range, viewport) {
+            var rect = matchAnchorRect(range);
+            if (!viewport || !rect) return null;
+            var clip = clippedViewport(range.startContainer.parentElement, viewport), bar = matchBarRect();
+            var plan = matchScrollPlan(range, viewport.scroll, viewport, bar, true);
+            var readable = rect.top >= clip.top - 1 && rect.bottom <= clip.bottom + 1 &&
+                clip.right > clip.left && Math.min(rect.right, clip.right) - Math.max(rect.left, clip.left) >= Math.min(rect.width, clip.right - clip.left) - 1 &&
+                (!bar || rect.right <= bar.left || rect.left >= bar.right || rect.bottom <= bar.top || rect.top >= bar.bottom);
+            return { rect: rect, plan: plan, readable: readable,
+                settled: readable && plan && (plan.comfortable || Math.abs(plan.delta) <= 1) };
+        }
+
+        function scrollToRange(range) {
+            var viewport = readingViewport(state.target);
+            if (!viewport) return;
+            // Inner code/process clips keep nearest alignment and fade safety.
+            // Re-measure after each write; only the outer conversation centers.
+            for (var node = range.startContainer.parentElement; node && node !== viewport.scroll; node = node.parentElement) {
+                var style = window.getComputedStyle(node);
+                var clipsY = /^(auto|scroll|hidden)$/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
+                var clipsX = /^(auto|scroll|hidden)$/.test(style.overflowX) && node.scrollWidth > node.clientWidth;
+                if (!clipsX && !clipsY) continue;
+                var box = node.getBoundingClientRect(), left = box.left + node.clientLeft;
+                var rect = matchAnchorRect(range);
+                if (!rect) return;
+                var clip = clippedViewport(node, viewport), local = verticalTextClip(node, style, box);
+                var safeTop = Math.max(local.top, clip.top), safeBottom = Math.min(local.bottom, clip.bottom);
+                var shown = safeBottom - safeTop >= rect.height - 1;
+                scrollRangeWithin(range, node, { top: clipsY ? (shown ? safeTop : local.top) : rect.top,
+                    bottom: clipsY ? (shown ? safeBottom : local.bottom) : rect.bottom,
+                    left: clipsX ? left : rect.left, right: clipsX ? left + node.clientWidth : rect.right },
+                    clipsY && shown ? matchBarRect() : null, false);
+            }
+            viewport = readingViewport(state.target);
+            if (viewport) scrollRangeWithin(range, viewport.scroll, viewport, matchBarRect(), true);
+        }
 
 		//#region host adapter
 		// Official session-scoped header utility props supply identity. DOM selectors
@@ -669,7 +698,9 @@ var BAR_ID = "dsh-find-all-root";
 			return !target.root.querySelector(':scope > div:not([data-chat-anchor-key]):not([data-chat-group-key]) > button:disabled');
 		}
 
-		function activateLoadedTurn(target, store, preferredTurn) {
+        // Exact navigation distinguishes an absent virtualized control (null)
+        // from a present but unusable control or unknown adapter structure (false).
+		function activateLoadedTurn(target, store, preferredTurn, exactOnly) {
 			if (!store) return false;
 			var list = target.root.parentElement, chat = list && list.parentElement, frame = chat && chat.parentElement;
 			if (!frame || !target.panel.contains(frame)) return false;
@@ -677,23 +708,25 @@ var BAR_ID = "dsh-find-all-root";
 				var label = nav.getAttribute('aria-label');
 				return !target.root.contains(nav) && (label === 'Turn navigation' || label === '轮次导航');
 			});
+			if (!navs.length) return exactOnly ? null : false;
 			if (navs.length !== 1 || !visible(navs[0])) return false;
 			var loaded = new Set();
 			Array.prototype.forEach.call(target.root.querySelectorAll('[data-chat-anchor-key][data-chat-turn]'), function (row) {
 				var key = row.getAttribute('data-chat-node-key') || row.getAttribute('data-chat-anchor-key');
 				if (store.get(key)) loaded.add(row.getAttribute('data-chat-turn'));
 			});
-			var candidates = [];
+			var candidates = [], exactMounted = false;
 			Array.prototype.forEach.call(navs[0].querySelectorAll('button[data-index]'), function (button) {
 				// These exact loaded labels are locale-owned by the inspected host.
 				// The distinct "Load and jump" labels must never be activated here.
 				var match = /^(?:Jump to turn (\d+)|跳转到第 (\d+) 轮)$/.exec(button.getAttribute('aria-label') || '');
 				var turn = match && (match[1] || match[2]);
-				if (!turn || !loaded.has(turn) || button.disabled || button.getAttribute('aria-busy') === 'true' || !visible(button)) return;
+				if (turn === preferredTurn) exactMounted = true;
+				if (!turn || (exactOnly && turn !== preferredTurn) || !loaded.has(turn) || button.disabled || button.getAttribute('aria-busy') === 'true' || !visible(button)) return;
 				candidates.push({ button: button, rank: turn === preferredTurn ? 0 : button.getAttribute('aria-current') === 'true' ? 1 : 2 });
 			});
 			candidates.sort(function (a, b) { return a.rank - b.rank; });
-			if (!candidates.length) return false;
+			if (!candidates.length) return exactOnly && !exactMounted ? null : false;
 			candidates[0].button.click();
 			return true;
 		}
@@ -957,78 +990,108 @@ var BAR_ID = "dsh-find-all-root";
 			updateReturnButton();
 		}
 
-		function navigateToRange(range) {
-			cancelReturn(L.returnCancelled);
-			cancelNavigation();
-			var target = state.target, face = state.adapter && state.adapter.face(target);
-			if (state.scope !== "whole" && target && state.adapter.valid(target) && hostNavigationReady(target, face)) {
-				var row = range.startContainer.parentElement.closest('[data-chat-turn]');
-				activateLoadedTurn(target, state.adapter.nodes(target), row && row.getAttribute('data-chat-turn'));
-				if (state.target !== target || !state.adapter.valid(target) || state.adapter.face(target) !== face) return;
-			}
-			var origin = state.origin, token = state.navigationToken, started = Date.now();
-            var dataHit=state.scope === "whole" ? state.hits[state.index] : null;
-			var activated = new Set(), announceReturn = false;
-			function check() {
-				state.navigationTimer = 0;
-				if (token !== state.navigationToken || state.target !== target || !state.adapter.valid(target) || !isOpen()) return;
-				positionBar();
-				var viewport = readingViewport(target);
-				var current = state.ranges[state.index];
-                if(dataHit){
-                    var semanticNode=sourceNode(dataHit.source,state.adapter.nodes(target));
-                    if(semanticNode){
-                        var resolved=mapProjectedDocument(dataHit.source,semanticNode,sourceRows(target,semanticNode));
-                        if(resolved.blocks){
-                            current=rangeForBlock(resolved.blocks[dataHit.blockIndex],dataHit.start,dataHit.end);
-                            if(current&&current.toString()===dataHit.text){state.ranges[state.index]=current;paint();}else current=null;
-                        }else{current=null;expandSource(target,semanticNode,dataHit.source,activated);}
+        function navigateToRange(range) {
+            cancelReturn(L.returnCancelled);
+            cancelNavigation();
+            var target = state.target, face = state.adapter && state.adapter.face(target);
+            var origin = state.origin, token = state.navigationToken, queryToken = state.queryToken, query = state.query, started = Date.now();
+            var dataHit = state.scope === "whole" ? state.hits[state.index] : null;
+            var selection = state.selection, activated = new Set(), announceReturn = false, statusApplied = false;
+            var transferred = false, directAttempted = false, corrections = 0, previous = null, stable = 0;
+            function retry() { state.navigationTimer = setTimeout(check, 100); }
+            function fail() {
+                recordFailure('jump', 'render');
+                setStatus(L.matchRevealFailed, false);
+                if (state.announcement) state.announcement.textContent = L.matchRevealFailed;
+            }
+            function check() {
+                state.navigationTimer = 0;
+                if (token !== state.navigationToken || queryToken !== state.queryToken || query !== state.query ||
+                    state.target !== target || !state.adapter.valid(target) || state.adapter.face(target) !== face || !isOpen() ||
+                    (dataHit && state.hits[state.index] !== dataHit)) return;
+                if (Date.now() - started >= 1500) { fail(); return; }
+                // Readiness is only permission to try the loaded host action, not
+                // evidence of its landing. Unknown/loading hosts never get writes.
+                if (!face || !hostNavigationReady(target, face)) { previous = null; stable = 0; retry(); return; }
+                positionBar();
+                var current = state.ranges[state.index], store = state.adapter.nodes(target);
+                if (dataHit) {
+                    current = null;
+                    var semanticNode = sourceNode(dataHit.source, store);
+                    if (semanticNode) {
+                        var resolved = mapProjectedDocument(dataHit.source, semanticNode, sourceRows(target, semanticNode), dataHit.blockIndex);
+                        if (resolved.blocks) current = rangeForBlock(resolved.blocks[dataHit.blockIndex], dataHit.start, dataHit.end);
+                        else expandSource(target, semanticNode, dataHit.source, activated);
+                        if (current && current.toString() !== dataHit.text) current = null;
                     }
+                } else if (selection && selection.position && selection.block && selection.block.isConnected) {
+                    // Shiki may replace text nodes while preserving this semantic
+                    // block. Remap only unchanged text in that original block.
+                    var blocks = collectTextBlocks(selection.block);
+                    current = blocks.length === selection.texts.length && blocks.every(function (block, i) { return block.text === selection.texts[i]; }) ?
+                        rangeForBlock(blocks[selection.position.run], selection.position.start, selection.position.end) : null;
                 }
-                var attached = current && target.root.contains(current.startContainer);
-				// hidden=until-found uses content-visibility:hidden, so Chromium may
-				// report layout geometry for descendants that are not painted. Reveal
-				// the host-owned disclosure before trusting Range geometry.
-				var concealed = attached && hiddenUntilFoundAncestor(current.startContainer, target.root);
-				var geometry = attached && !concealed && rangeRect(current);
-				if (current && (!geometry || concealed)) revealMatchRange(target, current, activated);
-				if (geometry && !visibleMatchRect(current, viewport)) scrollToRange(current);
-                if(dataHit && geometry && !visibleMatchRect(current,viewport)){
-                    // At a scroll boundary the first line cannot move below the
-                    // overlay. Temporarily displace the bar, preserving the
-                    // user's manual position for the next query/navigation.
-                    state.avoidMatchRange=current;positionBar();
+                var attached = current && target.root.contains(current.startContainer) && target.root.contains(current.endContainer);
+                var concealed = attached && hiddenUntilFoundAncestor(current.startContainer, target.root);
+                var geometry = attached && !concealed && matchAnchorRect(current);
+                if (attached && (!geometry || concealed)) revealMatchRange(target, current, activated);
+                if (!geometry) { previous = null; stable = 0; retry(); return; }
+                state.ranges[state.index] = current; paint();
+                var viewport = readingViewport(target), landing = matchLanding(current, viewport);
+                if (!landing) { retry(); return; }
+                if (!transferred && !landing.settled) {
+                    var row = current.startContainer.parentElement.closest('[data-chat-turn]');
+                    var turn = row && row.getAttribute('data-chat-turn');
+                    if (directAttempted) { fail(); return; }
+                    var handoff = turn ? activateLoadedTurn(target, store, turn, true) : null;
+                    if (handoff === false) { retry(); return; }
+                    if (handoff === true) {
+                        transferred = true;
+                        // The native click may replace rows or move the viewport.
+                        // Resolve the source and geometry again next tick.
+                        previous = null; stable = 0; retry(); return;
+                    }
+                    // RC2 omits the rail for one turn and virtualizes its marks.
+                    // A missing exact control cannot prove an ownership handoff.
+                    // Try direct placement once; any reversal fails without a fight.
+                    directAttempted = true;
                 }
-				if (viewport && attached && !concealed && visibleMatchRect(current, viewport)) {
-					var firstNavigation = originValid(origin) && !origin.navigated;
+                if (!landing.settled) {
+                    // One initial placement plus one layout correction. Repeated
+                    // host reversals must fail rather than fight its scroll owner.
+                    if (corrections >= 2) { fail(); return; }
+                    corrections++;
+                    scrollToRange(current);
+                    viewport = readingViewport(target); landing = matchLanding(current, viewport);
+                    if (dataHit && landing && !landing.readable) {
+                        state.avoidMatchRange = current; positionBar();
+                        landing = matchLanding(current, readingViewport(target));
+                    }
+                    previous = null; stable = 0;
+                    retry(); return;
+                }
+                if (!statusApplied) {
+                    statusApplied = true;
+                    announceReturn = originValid(origin) && !origin.navigated;
                     if (originValid(origin)) origin.navigated = true;
-					updateReturnButton();
-					if (!firstNavigation && state.status && state.status.textContent === L.matchRevealFailed) setStatus("", false);
-					if (firstNavigation) {
-						if (state.jumpStatus !== null) {
-							var priorStatus = state.jumpStatus;
-							setStatus(priorStatus, false);
-						} else if(dataHit)historyStatus(); else setStatus("", false);
-						announceReturn = true;
-						// The secondary row/status can change the overlay height. Verify
-						// the resulting layout before declaring the match visible.
-						state.navigationTimer = setTimeout(check, 0);
-						return;
-					}
-					if(dataHit && Date.now()-started<700){state.navigationTimer=setTimeout(check,100);return;}
-                    if (announceReturn && state.announcement) state.announcement.textContent = L.returnAvailable;
-                    return;
-				}
-				if (Date.now() - started < 1500) {
-					state.navigationTimer = setTimeout(check, 100);
-					return;
-				}
-				recordFailure('jump', 'render');
-				setStatus(L.matchRevealFailed, false);
-				if (state.announcement) state.announcement.textContent = L.matchRevealFailed;
-			}
-			check();
-		}
+                    updateReturnButton();
+                    if (state.jumpStatus !== null) setStatus(state.jumpStatus, false);
+                    else if (dataHit) historyStatus();
+                    else if (state.status.textContent === L.matchRevealFailed || announceReturn) setStatus("", false);
+                    // Return/status rows change the overlay. Inspect that layout too.
+                    previous = null; stable = 0; retry(); return;
+                }
+                var sample = [landing.rect.top, landing.rect.bottom, landing.rect.left, landing.rect.right,
+                    viewport.scroll.scrollTop, landing.plan.top, landing.plan.bottom];
+                stable = previous && sample.every(function (value, i) { return Math.abs(value - previous[i]) <= 1; }) ? stable + 1 : 0;
+                previous = sample;
+                // This bounded observation verifies actual geometry; it is not a
+                // host completion API or a promise that later layout cannot change.
+                if (stable < 2) { retry(); return; }
+                if (announceReturn && state.announcement) state.announcement.textContent = L.returnAvailable;
+            }
+            check();
+        }
 
 		function focusWithoutScroll(element) {
 			if (!element || !element.isConnected || typeof element.focus !== "function") return;
@@ -1978,6 +2041,7 @@ var BAR_ID = "dsh-find-all-root";
 			if (state.paging) return;
 			clearTimeout(state.debounce);
 			state.debounce = setTimeout(function () {
+				if (state.scope === "page" && state.navigationTimer) { scheduleRescan(); return; }
 				if (isOpen()) runSearch(true);
 			}, 250);
 		}
@@ -2124,6 +2188,7 @@ var BAR_ID = "dsh-find-all-root";
             }
         }
         function sourceNode(source,store){
+            if(!store)return null;
             var found=store.values().filter(function(node){
                 if(source.kind==='user'||source.kind==='context')return node.data?.seq===source.seq;
                 if(source.callId)return node.kind==='tool-call'&&node.data?.root?.callId===(source.rootCallId||source.callId);
@@ -2174,12 +2239,11 @@ var BAR_ID = "dsh-find-all-root";
             try{
                 if(!sourceNode(source,store))await face.loadThrough(source.seq);
                 if(!current())return;
-                var started=Date.now(),mapped,node,turnActivated=false;
+                var started=Date.now(),mapped,node;
                 while(current()&&Date.now()-started<5000){
-                    node=sourceNode(source,store);
+                    store=state.adapter.nodes(target);node=sourceNode(source,store);
                     if(node){
-                        if(!turnActivated&&hostNavigationReady(target,face)){turnActivated=activateLoadedTurn(target,store,String(source.turn||''));if(turnActivated){await pause();if(!current())return;}}
-                        if(!current())return;
+                        if(!hostNavigationReady(target,face)){await pause();continue;}
 						var rows=sourceRows(target,node);mapped=mapProjectedDocument(source,node,rows,hit.blockIndex);
                         if(mapped.blocks){
                             var range=rangeForBlock(mapped.blocks[hit.blockIndex],hit.start,hit.end);

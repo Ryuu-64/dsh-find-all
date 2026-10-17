@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Match DSH floating-panel chrome by replacing the separate six-dot move button with a focusable, draggable title bar. Keep arrow-key movement and Home reset, place reset and close actions in the header, and align status text with the search field.
+
 ## 0.1.12
 
 - Add opt-in archived conversation search with explicit Unarchive and open actions, current-state verification, and cancelled navigation when the search changes.

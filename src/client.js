@@ -37,7 +37,7 @@ var BAR_ID = "dsh-find-all-root";
 			prev: "上一个匹配",
 			next: "下一个匹配",
 			close: "关闭查找",
-			move: "拖动查找栏；点击展开移动按钮", moveLeft: "向左移动", moveRight: "向右移动", moveUp: "向上移动", moveDown: "向下移动", resetPosition: "恢复默认位置",
+			findTitle: "当前对话查找", move: "拖动标题栏移动查找栏；方向键移动；Home 恢复默认位置", resetPosition: "恢复默认位置",
 			cap: "仅显示前 {n} 处匹配",
 			resultCount: "{n} 个结果",
             countReady: "待输入", countSearching: "搜索中", countEmpty: "无结果", countIncomplete: "未完成", countUnavailable: "不可用",
@@ -82,7 +82,7 @@ var BAR_ID = "dsh-find-all-root";
 			prev: "Previous match",
 			next: "Next match",
 			close: "Close find",
-			move: "Drag find bar; click for move controls", moveLeft: "Move left", moveRight: "Move right", moveUp: "Move up", moveDown: "Move down", resetPosition: "Reset position",
+			findTitle: "Find in conversation", move: "Drag the title bar to move the find bar; use arrow keys to move and Home to reset", resetPosition: "Reset position",
 			cap: "Showing only the first {n} matches",
 			resultCount: "{n} results",
             countReady: "Type to find", countSearching: "Searching", countEmpty: "No results", countIncomplete: "Incomplete", countUnavailable: "Unavailable",
@@ -230,19 +230,20 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "{--dsh-find-all-max-width:480px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
 				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
 				"#" + BAR_ID + ":before,#" + BAR_ID + "-content-panel:before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2)));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
+				"#" + BAR_ID + " .move-header{display:flex;align-items:center;gap:4px;min-width:0;min-height:28px;margin:-2px -4px 0;padding:0 2px 3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1);cursor:move;touch-action:none;user-select:none}" +
+				"#" + BAR_ID + " .move-header:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}" +
+				"#" + BAR_ID + " .move-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font:500 12px/18px var(--dsw-font-family)}" +
+				"#" + BAR_ID + " .move-actions{display:flex;align-items:center;gap:2px;flex:none}" +
+				"#" + BAR_ID + "[data-dragging] .move-header{cursor:grabbing}" +
 				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .count{box-sizing:border-box;flex:0 1 80px;width:80px;min-width:64px;max-width:96px;height:28px;line-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/28px var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
 				"#" + BAR_ID + " button.count{width:80px;min-width:64px;padding:0 4px;flex:0 1 80px}#" + BAR_ID + " .count[hidden],#" + BAR_ID + " .count-editor[hidden],#" + BAR_ID + " .count-hint[hidden]{display:none}" +
                 "#" + BAR_ID + " .count-editor{display:flex;align-items:center;gap:2px;flex:none;color:var(--dsw-alias-label-tertiary);font:12px/1 var(--dsw-font-family);font-variant-numeric:tabular-nums}#" + BAR_ID + " input.count-input{box-sizing:border-box;width:5.5ch;min-width:0;height:28px;padding:0 3px;text-align:right;font:inherit;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l4);border-radius:4px}#" + BAR_ID + " input.count-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}#" + BAR_ID + " input.count-input[aria-invalid=true]{border-color:var(--dsw-alias-state-error-primary,#c33)}" +
-                "#" + BAR_ID + " .count-hint{padding:2px 8px 0 32px;color:var(--dsw-alias-label-secondary);font:12px/1.5 var(--dsw-font-family);overflow-wrap:anywhere}#" + BAR_ID + " .count-hint[data-error]{color:var(--dsw-alias-state-error-primary,#c33)}" +
-                "#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px 32px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
+				"#" + BAR_ID + " .count-hint{padding:2px 8px 0;color:var(--dsw-alias-label-secondary);font:12px/1.5 var(--dsw-font-family);overflow-wrap:anywhere}#" + BAR_ID + " .count-hint[data-error]{color:var(--dsw-alias-state-error-primary,#c33)}" +
+				"#" + BAR_ID + " .status{box-sizing:border-box;width:100%;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:12px/1.5 var(--dsw-font-family);text-align:left;white-space:normal;overflow-wrap:anywhere}" +
 				"#" + BAR_ID + " .status:empty{display:none}" +
-				"#" + BAR_ID + " .position-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px}" +
-				"#" + BAR_ID + " .position-controls[hidden]{display:none}" +
-				"#" + BAR_ID + " button.drag-handle{touch-action:none;user-select:none;cursor:grab;flex:none}" +
-				"#" + BAR_ID + "[data-dragging] button.drag-handle{cursor:grabbing}" +
 				"#" + BAR_ID + " .status[data-busy]{cursor:pointer;color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .navigation-controls{display:flex;align-items:center;gap:4px;flex:none}" +
 				"#" + BAR_ID + " .content-filter{position:relative;width:28px;padding:0}" +
@@ -276,7 +277,7 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + " [data-find-all-return][hidden]{display:none}" +
 				"#" + BAR_ID + " [data-find-all-return]{gap:4px;padding:0 8px;white-space:nowrap}" +
 				"@container dsh-find-all (max-width:550px){#" + BAR_ID + " .return-label{display:none}#" + BAR_ID + " [data-find-all-return]{padding:0 6px}}" +
-				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count,#" + BAR_ID + " button.count{width:64px;min-width:64px;max-width:64px}#" + BAR_ID + " .status{padding-left:30px}}" +
+				"@container dsh-find-all (max-width:360px){#" + BAR_ID + " .controls,#" + BAR_ID + " .navigation-controls{gap:2px}#" + BAR_ID + " .count,#" + BAR_ID + " button.count{width:64px;min-width:64px;max-width:64px}}" +
 				"@container dsh-find-all (max-width:330px){#" + BAR_ID + " .controls{flex-wrap:wrap}#" + BAR_ID + " .navigation-controls{margin-left:auto}}" +
 				"#" + BAR_ID + " svg{pointer-events:none}" +
 				"#" + BAR_ID + "[data-about-open]{z-index:999;pointer-events:none}" +
@@ -1340,7 +1341,7 @@ var BAR_ID = "dsh-find-all-root";
 			jumpStatus: null,
 			positionObserver: null,
 			positionFrame: null,
-			positionOwner: null, manualPosition: null, drag: null, dragHandle: null, positionControls: null, suppressMoveClick: false
+			positionOwner: null, manualPosition: null, drag: null
 		};
 
         // Diagnostic output is built field by field. Never serialize host records,
@@ -1509,47 +1510,54 @@ var BAR_ID = "dsh-find-all-root";
 			scheduleBarPosition();
 		}
 
-		function buildPositionControls(controls, bar) {
-			var moves = document.createElement("div");
-			moves.className = "position-controls"; moves.id = BAR_ID + "-position"; moves.hidden = true;
-			var handle = button(L.move, "M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01", function (event) {
-				if (event.detail && state.suppressMoveClick) { state.suppressMoveClick = false; return; }
-				moves.hidden = !moves.hidden;
-				handle.setAttribute("aria-expanded", String(!moves.hidden));
-				scheduleBarPosition();
+		function buildMoveHeader(bar) {
+			var header = document.createElement("div");
+			header.className = "move-header";
+			header.tabIndex = 0;
+			header.setAttribute("role", "group");
+			header.setAttribute("aria-label", L.move);
+			header.title = L.move;
+			var title = document.createElement("span");
+			title.className = "move-title";
+			title.textContent = L.findTitle;
+			var actions = document.createElement("div");
+			actions.className = "move-actions";
+			var reset = button(L.resetPosition, "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
+			var closeBtn = button(L.close, "M18 6 6 18M6 6l12 12", close);
+			[reset, closeBtn].forEach(function (action) {
+				action.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
 			});
-			handle.className = "drag-handle";
-			handle.setAttribute("aria-expanded", "false"); handle.setAttribute("aria-controls", moves.id);
-			handle.addEventListener("pointerdown", function (event) {
-                state.avoidMatchRange=null;
+			actions.append(reset, closeBtn);
+			header.append(title, actions);
+			header.addEventListener("pointerdown", function (event) {
+				state.avoidMatchRange = null;
 				if (!event.isPrimary || event.button !== 0 || state.drag || !positionBar()) return;
-				state.suppressMoveClick = false;
-				try { handle.setPointerCapture(event.pointerId); } catch (error) { return; }
+				try { header.setPointerCapture(event.pointerId); } catch (error) { return; }
 				var box = state.bar.getBoundingClientRect();
-				state.drag = { id: event.pointerId, handle: handle, x: event.clientX, y: event.clientY, left: box.left, top: box.top };
-				// Dragging the handle must not steal focus/selection from the query.
+				state.drag = { id: event.pointerId, handle: header, x: event.clientX, y: event.clientY, left: box.left, top: box.top, moved: false };
+				// Dragging the title bar must not steal focus or selection from the query.
 				event.preventDefault();
 			});
-			handle.addEventListener("pointermove", function (event) {
+			header.addEventListener("pointermove", function (event) {
 				var drag = state.drag;
 				if (!drag || event.pointerId !== drag.id) return;
 				var x = event.clientX - drag.x, y = event.clientY - drag.y;
-				if (!state.suppressMoveClick && Math.abs(x) + Math.abs(y) < 4) return;
-				state.suppressMoveClick = true;
+				if (!drag.moved && Math.abs(x) + Math.abs(y) < 4) return;
+				drag.moved = true;
 				state.bar.setAttribute("data-dragging", "");
 				state.manualPosition = { left: drag.left + x, top: drag.top + y };
 				scheduleBarPosition();
 			});
-			["pointerup", "pointercancel", "lostpointercapture"].forEach(function (type) { handle.addEventListener(type, finishBarDrag); });
-			moves.appendChild(button(L.moveLeft, "m14 6-6 6 6 6", function () { moveBarBy(-32, 0); }));
-			moves.appendChild(button(L.moveRight, "m10 6 6 6-6 6", function () { moveBarBy(32, 0); }));
-			moves.appendChild(button(L.moveUp, "m6 14 6-6 6 6", function () { moveBarBy(0, -32); }));
-			moves.appendChild(button(L.moveDown, "m6 10 6 6 6-6", function () { moveBarBy(0, 32); }));
-			var reset = button(L.resetPosition, "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
-			moves.appendChild(reset);
-			state.dragHandle = handle; state.positionControls = moves;
-			controls.appendChild(handle);
-			bar.appendChild(moves);
+			["pointerup", "pointercancel", "lostpointercapture"].forEach(function (type) { header.addEventListener(type, finishBarDrag); });
+			header.addEventListener("keydown", function (event) {
+				if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+				if (event.key === " ") { event.preventDefault(); return; }
+				var movement = { ArrowLeft: [-32, 0], ArrowRight: [32, 0], ArrowUp: [0, -32], ArrowDown: [0, 32] }[event.key];
+				if (movement) { event.preventDefault(); moveBarBy(movement[0], movement[1]); }
+				else if (event.key === "Home") { event.preventDefault(); resetBarPosition(); }
+			});
+			bar.appendChild(header);
+			return closeBtn;
 		}
 
 		function scheduleBarPosition() {
@@ -2296,8 +2304,6 @@ var BAR_ID = "dsh-find-all-root";
 				var owner = state.positionOwner;
 				if (owner && (owner.id !== selected.id || owner.panel !== selected.panel)) {
 					resetBarPosition();
-					if (state.positionControls) state.positionControls.hidden = true;
-					if (state.dragHandle) state.dragHandle.setAttribute("aria-expanded", "false");
 				}
 				state.positionOwner = { id: selected.id, panel: selected.panel };
 			}
@@ -2399,6 +2405,7 @@ var BAR_ID = "dsh-find-all-root";
 			var bar = document.createElement("div");
 			bar.id = BAR_ID;
 			bar.setAttribute("role", "search");
+			var closeBtn = buildMoveHeader(bar);
 			var controls = document.createElement("div");
 			controls.className = "controls";
 			var navigation = document.createElement("div");
@@ -2518,7 +2525,6 @@ var BAR_ID = "dsh-find-all-root";
 				setStatus(L.incomplete, false);
 			});
 
-			buildPositionControls(controls, bar);
 			controls.appendChild(input);
 			controls.appendChild(countState); controls.appendChild(count); controls.appendChild(countEditor);
 			var refreshBtn = button(L.refreshHistory, "M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2", function () {
@@ -2606,8 +2612,6 @@ var BAR_ID = "dsh-find-all-root";
 			state.returnBtn = returnBtn;
 			navigation.appendChild(returnBtn);
 			navigation.appendChild(contentBtn);
-			var closeBtn = button(L.close, "M18 6 6 18M6 6l12 12", close);
-			navigation.appendChild(closeBtn);
 			// The portal follows its trigger in keyboard order without trapping focus.
 			contentPanel.addEventListener("keydown", function (event) {
 				if (event.key !== "Tab") return;
@@ -2618,7 +2622,7 @@ var BAR_ID = "dsh-find-all-root";
 				}
 			});
 			controls.appendChild(navigation);
-			bar.insertBefore(controls, bar.firstChild);
+			bar.appendChild(controls);
 			bar.appendChild(countHint); bar.appendChild(status); bar.appendChild(countLive);
             var searchReturn = document.createElement('button'); searchReturn.type = 'button'; searchReturn.hidden = true;
             searchReturn.textContent = ZH ? '返回搜索结果' : 'Back to search results';
@@ -2690,9 +2694,6 @@ var BAR_ID = "dsh-find-all-root";
 			stopWatchingSession();
 			stopBarPositioning();
 			state.manualPosition = state.positionOwner = null;
-			state.suppressMoveClick = false;
-			if (state.positionControls) state.positionControls.hidden = true;
-			if (state.dragHandle) state.dragHandle.setAttribute("aria-expanded", "false");
 			if (state.bar) { state.bar.style.display = "none"; state.bar.removeAttribute("data-positioned"); }
 			state.ranges = [];
             state.hits=[];state.total=0;state.scanQuery=null;
@@ -2911,7 +2912,7 @@ var BAR_ID = "dsh-find-all-root";
 					if (state.bar) state.bar.remove();
 					if (state.contentPanel) state.contentPanel.remove();
 					if (state.announcement) state.announcement.remove();
-					state.announcement = state.returnBtn = state.dragHandle = state.positionControls = null;
+					state.announcement = state.returnBtn = null;
                     state.diagnosticBtn = state.diagnosticFeedback = state.writeClipboard = null;
                     state.updateBtn = state.updateStatus = state.updateGuide = state.updateResult = null;
 					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');

@@ -37,7 +37,7 @@ var BAR_ID = "dsh-find-all-root";
 			prev: "上一个匹配",
 			next: "下一个匹配",
 			close: "关闭查找",
-			findTitle: "当前对话查找", move: "拖动标题栏移动查找栏；方向键移动；Home 恢复默认位置", resetPosition: "恢复默认位置",
+			findTitle: "当前对话查找", move: "拖动查找栏空白处移动；方向键移动；Home 恢复默认位置", resetPosition: "恢复默认位置",
 			cap: "仅显示前 {n} 处匹配",
 			resultCount: "{n} 个结果",
             countReady: "待输入", countSearching: "搜索中", countEmpty: "无结果", countIncomplete: "未完成", countUnavailable: "不可用",
@@ -82,7 +82,7 @@ var BAR_ID = "dsh-find-all-root";
 			prev: "Previous match",
 			next: "Next match",
 			close: "Close find",
-			findTitle: "Find in conversation", move: "Drag the title bar to move the find bar; use arrow keys to move and Home to reset", resetPosition: "Reset position",
+			findTitle: "Find in conversation", move: "Drag empty space in the find bar to move it; use arrow keys to move and Home to reset", resetPosition: "Reset position",
 			cap: "Showing only the first {n} matches",
 			resultCount: "{n} results",
             countReady: "Type to find", countSearching: "Searching", countEmpty: "No results", countIncomplete: "Incomplete", countUnavailable: "Unavailable",
@@ -230,12 +230,12 @@ var BAR_ID = "dsh-find-all-root";
 				"#" + BAR_ID + "{--dsh-find-all-max-width:480px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
 				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
 				"#" + BAR_ID + ":before,#" + BAR_ID + "-content-panel:before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2)));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
-				"#" + BAR_ID + " .move-header{display:flex;align-items:center;gap:4px;min-width:0;min-height:28px;margin:-2px -4px 0;padding:0 2px 3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1);cursor:move;touch-action:none;user-select:none}" +
+				"#" + BAR_ID + " .move-header{display:flex;align-items:center;gap:4px;min-width:0;min-height:28px;cursor:move}" +
 				"#" + BAR_ID + " .move-header:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}" +
-				"#" + BAR_ID + " .move-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font:500 12px/18px var(--dsw-font-family)}" +
+				"#" + BAR_ID + " .move-grip{flex:none;width:8px;align-self:stretch;touch-action:none;user-select:none}" +
 				"#" + BAR_ID + " .move-actions{display:flex;align-items:center;gap:2px;flex:none}" +
 				"#" + BAR_ID + "[data-dragging] .move-header{cursor:grabbing}" +
-				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
+				"#" + BAR_ID + " .controls{display:flex;flex:1;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
 				"#" + BAR_ID + " .count{box-sizing:border-box;flex:0 1 80px;width:80px;min-width:64px;max-width:96px;height:28px;line-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font:12px/28px var(--dsw-font-family);font-variant-numeric:tabular-nums;text-align:center}" +
@@ -1510,16 +1510,13 @@ var BAR_ID = "dsh-find-all-root";
 			scheduleBarPosition();
 		}
 
-		function buildMoveHeader(bar) {
+		function buildMoveHeader(bar, controls) {
 			var header = document.createElement("div");
 			header.className = "move-header";
 			header.tabIndex = 0;
 			header.setAttribute("role", "group");
 			header.setAttribute("aria-label", L.move);
 			header.title = L.move;
-			var title = document.createElement("span");
-			title.className = "move-title";
-			title.textContent = L.findTitle;
 			var actions = document.createElement("div");
 			actions.className = "move-actions";
 			var reset = button(L.resetPosition, "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
@@ -1528,14 +1525,18 @@ var BAR_ID = "dsh-find-all-root";
 				action.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
 			});
 			actions.append(reset, closeBtn);
-			header.append(title, actions);
+			var grip = document.createElement("span");
+			grip.className = "move-grip";
+			grip.setAttribute("aria-hidden", "true");
+			header.append(grip, controls, actions);
 			header.addEventListener("pointerdown", function (event) {
+				if (event.target.closest("input, button, select, textarea, a, [contenteditable]")) return;
 				state.avoidMatchRange = null;
 				if (!event.isPrimary || event.button !== 0 || state.drag || !positionBar()) return;
 				try { header.setPointerCapture(event.pointerId); } catch (error) { return; }
 				var box = state.bar.getBoundingClientRect();
 				state.drag = { id: event.pointerId, handle: header, x: event.clientX, y: event.clientY, left: box.left, top: box.top, moved: false };
-				// Dragging the title bar must not steal focus or selection from the query.
+				// Dragging empty chrome must not steal focus or selection from the query.
 				event.preventDefault();
 			});
 			header.addEventListener("pointermove", function (event) {
@@ -2405,9 +2406,10 @@ var BAR_ID = "dsh-find-all-root";
 			var bar = document.createElement("div");
 			bar.id = BAR_ID;
 			bar.setAttribute("role", "search");
-			var closeBtn = buildMoveHeader(bar);
+			bar.setAttribute("aria-label", L.findTitle);
 			var controls = document.createElement("div");
 			controls.className = "controls";
+			var closeBtn = buildMoveHeader(bar, controls);
 			var navigation = document.createElement("div");
 			navigation.className = "navigation-controls";
 
@@ -2622,7 +2624,6 @@ var BAR_ID = "dsh-find-all-root";
 				}
 			});
 			controls.appendChild(navigation);
-			bar.appendChild(controls);
 			bar.appendChild(countHint); bar.appendChild(status); bar.appendChild(countLive);
             var searchReturn = document.createElement('button'); searchReturn.type = 'button'; searchReturn.hidden = true;
             searchReturn.textContent = ZH ? '返回搜索结果' : 'Back to search results';

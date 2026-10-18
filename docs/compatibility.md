@@ -1,6 +1,16 @@
+# Current-conversation native docking candidate
+
+The current-conversation surface now requires the public `sidebarRightTabs.register`, `sidebar.right.pane.tab`, `useTabInfo`, `keepMounted`, `sidebarRight.mounted`, `tabsIn`, `focus` and occurrence-bound `tab.actions.openTab` capabilities. Official npm SDK packages first contain this combined contract at `0.1.7-alpha.1`; `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.6-alpha.1` and `0.1.6-alpha.2` do not. The sidebar peer lists the inspected published releases through `0.2.0-rc.2`. Older admission claims below are historical evidence for the previous overlay, not claims for this candidate. The obsolete `0.1.5-rc.2: compatible` manifest claim has been removed.
+
+API/source inspection is not runtime acceptance. This candidate's real browser acceptance uses official Web `0.2.0-rc.2`; older releases, future releases and Electron remain unverified. Existing full-history and cross-conversation data contracts have their separate limits below. There is no private dockkit import, root-slot replacement, host modification or mutual-plugin positioning.
+
+A visible existing tab is focused without opening another pane or expanding a collapsed dock; a hidden tab reopens through its own bound public action in its existing pane. Newer hosts may provide `revealOccurrence`, which is used when available; it is absent even from the published `0.2.0-rc.2` package and is not required. The host persists per-session layout and native float geometry; query/filter state lasts for the retained tab, not across a browser refresh. Hidden tabs cancel scanning, navigation, portals and highlights; returning reuses only their original session. Missing capabilities leave the header entry visibly disabled. Native fullscreen and free-floating panels can cover conversation text; this plugin does not promise arbitrary overlap avoidance.
+
+---
+
 # Full-text conversation search
 
-The Full-text conversation search entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. Package version and peer ranges remain unchanged.
+The Full-text conversation search entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. The package version and other pre-existing peer ranges remain unchanged; the native docking candidate above adds the sidebar peer requirement.
 
 ## Host and client contract
 

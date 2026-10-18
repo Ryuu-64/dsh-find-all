@@ -6,9 +6,11 @@ import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
 import { createSearchContentService, SEARCH_CONTENT_SERVICE } from "./search-content.js";
 
-var BAR_ID = "dsh-find-all-root";
-		var HL_ALL = "dsh-find-all-hit";
-		var HL_CUR = "dsh-find-all-cur";
+// Each native tab owns a complete search lifetime, including async cancellation.
+function createFindRuntime(instanceId) {
+var BAR_ID = "dsh-find-all-" + instanceId;
+		var HL_ALL = BAR_ID + "-hit";
+		var HL_CUR = BAR_ID + "-cur";
 		var MAX_MATCHES = 5000;
 		var CONTENT_TYPES = ["user", "assistant", "assistant-rich", "reasoning", "tool", "subagent", "context"];
 		var DEFAULT_CONTENT_TYPES = { user: true, assistant: true, "assistant-rich": true, reasoning: false, tool: false, subagent: false, context: false };
@@ -227,14 +229,8 @@ var BAR_ID = "dsh-find-all-root";
 
 		function cssText() {
 			return "" +
-				"#" + BAR_ID + "{--dsh-find-all-max-width:480px;container:dsh-find-all / inline-size;position:fixed;top:var(--dsh-find-all-bar-top);right:var(--dsh-find-all-bar-right);z-index:2147483000;visibility:hidden;isolation:isolate;box-sizing:border-box;align-items:stretch;gap:4px;padding:6px 8px;display:flex;flex-direction:column;width:min(var(--dsh-find-all-max-width),var(--dsh-find-all-panel-width));max-width:calc(100vw - 16px);max-height:var(--dsh-find-all-max-height);overflow:auto;background:transparent;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border:0;border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-panel,var(--dsw-shadow-lv2))}" +
-				"#" + BAR_ID + "[data-positioned]{visibility:visible}" +
-				"#" + BAR_ID + ":before,#" + BAR_ID + "-content-panel:before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2)));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
-				"#" + BAR_ID + " .move-header{display:flex;align-items:center;gap:4px;min-width:0;min-height:28px;margin:-2px -4px 0;padding:0 2px 3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1);cursor:move;touch-action:none;user-select:none}" +
-				"#" + BAR_ID + " .move-header:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px;border-radius:var(--dsw-radius-sm,6px)}" +
-				"#" + BAR_ID + " .move-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font:500 12px/18px var(--dsw-font-family)}" +
-				"#" + BAR_ID + " .move-actions{display:flex;align-items:center;gap:2px;flex:none}" +
-				"#" + BAR_ID + "[data-dragging] .move-header{cursor:grabbing}" +
+                "#" + BAR_ID + "{container:dsh-find-all / inline-size;position:relative;box-sizing:border-box;align-items:stretch;gap:4px;padding:8px;display:flex;flex-direction:column;width:100%;min-width:0;overflow:auto;color:var(--dsw-alias-label-primary)}" +
+                "#" + BAR_ID + "-content-panel:before{content:\"\";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2)));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%))}" +
 				"#" + BAR_ID + " .controls{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}" +
 				"#" + BAR_ID + " input.query{box-sizing:border-box;flex:1 1 0;min-width:64px;max-width:100%;width:auto;height:28px;color:var(--dsw-alias-label-primary);font:13px/1 var(--dsw-font-family);background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm,6px);outline:none;padding:0 8px}" +
 				"#" + BAR_ID + " input.query:focus-visible{border-color:var(--dsw-alias-state-business-primary)}" +
@@ -299,7 +295,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		function injectCss() {
 			if (typeof document === "undefined") return;
-			var tagId = "dsh-find-all/bar.css";
+			var tagId = BAR_ID + "/bar.css";
 			if (document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 				var tag = document.createElement("style");
 				tag.setAttribute("data-plugin-css", tagId);
@@ -1434,132 +1430,14 @@ var BAR_ID = "dsh-find-all-root";
             feedback.textContent = copied ? L.copiedDiagnostics : L.copyDiagnosticsFailed;
         }
 
-		function barAnchor(target) {
-			if (!target || !target.anchor || !target.panel || !target.anchor.closest) return null;
-			var header = target.anchor.closest('[data-conversation-header], header');
-			if (header && target.panel.contains(header)) return header;
-			// Older supported hosts may not expose the header data attribute. The
-			// registered utility still lives in the header's direct child of the panel.
-			var child = target.anchor;
-			while (child && child.parentElement && child.parentElement !== target.panel) child = child.parentElement;
-			return child && child.parentElement === target.panel ? child : null;
-		}
-
-		function positionBar() {
-			if (!isOpen() || !state.bar) return false;
-			var target = state.target, header = barAnchor(target), viewport = readingViewport(target);
-			if (!target || !header || !header.isConnected || !target.panel.isConnected || !viewport) {
-				state.bar.removeAttribute("data-positioned");
-				closeContentPanel();
-				return false;
-			}
-			var panel = target.panel.getBoundingClientRect(), headerRect = header.getBoundingClientRect();
-			var leftEdge = Math.max(panel.left, viewport.left) + 8;
-			var rightEdge = Math.min(panel.right, viewport.right) - 8;
-			var topEdge = Math.max(panel.top, viewport.top, headerRect.bottom) + 8;
-			var bottomEdge = Math.min(panel.bottom, viewport.bottom) - 8;
-			if (rightEdge <= leftEdge || bottomEdge <= topEdge) {
-				state.bar.removeAttribute("data-positioned");
-				closeContentPanel();
-				return false;
-			}
-			var dpr = window.devicePixelRatio || 1;
-			function cssPixel(value) { return Math.round(value * dpr) / dpr + "px"; }
-			// This is the only position writer, including pointer, resize, scroll
-			// and polling updates. Manual placement never falls back to the anchor.
-			state.bar.style.setProperty("--dsh-find-all-panel-width", cssPixel(rightEdge - leftEdge));
-			state.bar.style.setProperty("--dsh-find-all-max-height", cssPixel(bottomEdge - topEdge));
-			var box = state.bar.getBoundingClientRect(), manual = state.manualPosition;
-			var left = manual ? manual.left : rightEdge - box.width;
-			var top = manual ? manual.top : topEdge;
-			left = Math.max(leftEdge, Math.min(left, rightEdge - box.width));
-			top = Math.max(topEdge, Math.min(top, bottomEdge - box.height));
-			if (manual) { manual.left = left; manual.top = top; }
-            var avoid=state.avoidMatchRange&&rangeRect(state.avoidMatchRange);
-            if(avoid&&left<avoid.right&&left+box.width>avoid.left&&top<avoid.bottom&&top+box.height>avoid.top){
-                var choices=[{left:left,top:avoid.bottom+8},{left:left,top:avoid.top-box.height-8},{left:avoid.left-box.width-8,top:top},{left:avoid.right+8,top:top}].filter(function(p){return p.left>=leftEdge&&p.left+box.width<=rightEdge&&p.top>=topEdge&&p.top+box.height<=bottomEdge;});
-                choices.sort(function(a,b){return Math.abs(a.left-left)+Math.abs(a.top-top)-Math.abs(b.left-left)-Math.abs(b.top-top);});
-                if(choices.length){left=choices[0].left;top=choices[0].top;}
-            }
-			state.bar.style.setProperty("--dsh-find-all-bar-top", cssPixel(top));
-			state.bar.style.setProperty("--dsh-find-all-bar-right", cssPixel(window.innerWidth - left - box.width));
-			state.bar.setAttribute("data-positioned", "");
-			positionContentPanel();
-			return true;
-		}
-
-		function finishBarDrag(event) {
-			var drag = state.drag;
-			if (!drag || (event && event.pointerId !== drag.id)) return;
-			state.drag = null;
-			state.bar.removeAttribute("data-dragging");
-			try { if (drag.handle.hasPointerCapture(drag.id)) drag.handle.releasePointerCapture(drag.id); } catch (error) {}
-		}
-
-		function resetBarPosition() {
-			finishBarDrag();
-			state.manualPosition = null;state.avoidMatchRange=null;
-			scheduleBarPosition();
-		}
-
-		function moveBarBy(x, y) {
-            state.avoidMatchRange=null;
-			if (!positionBar()) return;
-			var box = state.bar.getBoundingClientRect();
-			state.manualPosition = { left: box.left + x, top: box.top + y };
-			scheduleBarPosition();
-		}
-
-		function buildMoveHeader(bar) {
-			var header = document.createElement("div");
-			header.className = "move-header";
-			header.tabIndex = 0;
-			header.setAttribute("role", "group");
-			header.setAttribute("aria-label", L.move);
-			header.title = L.move;
-			var title = document.createElement("span");
-			title.className = "move-title";
-			title.textContent = L.findTitle;
-			var actions = document.createElement("div");
-			actions.className = "move-actions";
-			var reset = button(L.resetPosition, "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
-			var closeBtn = button(L.close, "M18 6 6 18M6 6l12 12", close);
-			[reset, closeBtn].forEach(function (action) {
-				action.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
-			});
-			actions.append(reset, closeBtn);
-			header.append(title, actions);
-			header.addEventListener("pointerdown", function (event) {
-				state.avoidMatchRange = null;
-				if (!event.isPrimary || event.button !== 0 || state.drag || !positionBar()) return;
-				try { header.setPointerCapture(event.pointerId); } catch (error) { return; }
-				var box = state.bar.getBoundingClientRect();
-				state.drag = { id: event.pointerId, handle: header, x: event.clientX, y: event.clientY, left: box.left, top: box.top, moved: false };
-				// Dragging the title bar must not steal focus or selection from the query.
-				event.preventDefault();
-			});
-			header.addEventListener("pointermove", function (event) {
-				var drag = state.drag;
-				if (!drag || event.pointerId !== drag.id) return;
-				var x = event.clientX - drag.x, y = event.clientY - drag.y;
-				if (!drag.moved && Math.abs(x) + Math.abs(y) < 4) return;
-				drag.moved = true;
-				state.bar.setAttribute("data-dragging", "");
-				state.manualPosition = { left: drag.left + x, top: drag.top + y };
-				scheduleBarPosition();
-			});
-			["pointerup", "pointercancel", "lostpointercapture"].forEach(function (type) { header.addEventListener(type, finishBarDrag); });
-			header.addEventListener("keydown", function (event) {
-				if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-				if (event.key === " ") { event.preventDefault(); return; }
-				var movement = { ArrowLeft: [-32, 0], ArrowRight: [32, 0], ArrowUp: [0, -32], ArrowDown: [0, 32] }[event.key];
-				if (movement) { event.preventDefault(); moveBarBy(movement[0], movement[1]); }
-				else if (event.key === "Home") { event.preventDefault(); resetBarPosition(); }
-			});
-			bar.appendChild(header);
-			return closeBtn;
-		}
-
+        function positionBar() {
+            if (!isOpen()) return false;
+            state.bar.setAttribute("data-positioned", "");
+            positionContentPanel();
+            return true;
+        }
+        function finishBarDrag() {}
+        function resetBarPosition() {}
 		function scheduleBarPosition() {
 			if (!isOpen() || state.positionFrame !== null) return;
 			if (typeof requestAnimationFrame !== "function") { positionBar(); return; }
@@ -1576,24 +1454,14 @@ var BAR_ID = "dsh-find-all-root";
 			state.positionFrame = null;
 		}
 
-		function startBarPositioning() {
-			stopBarPositioning();
-			positionBar();
-			var header = barAnchor(state.target);
-			if (!header || typeof ResizeObserver === "undefined") return;
-			state.positionObserver = new ResizeObserver(scheduleBarPosition);
-			state.positionObserver.observe(header);
-			var viewport = readingViewport(state.target);
-			if (viewport) {
-				state.positionObserver.observe(viewport.scroll);
-				var composer = viewport.scroll.querySelector("[data-composer-seat]");
-				if (composer) state.positionObserver.observe(composer);
-			}
-			state.positionObserver.observe(state.bar);
-			if (state.contentPanel) state.positionObserver.observe(state.contentPanel);
-			if (state.contentBtn) state.positionObserver.observe(state.contentBtn);
-			if (state.target.panel !== header) state.positionObserver.observe(state.target.panel);
-		}
+        function startBarPositioning() {
+            stopBarPositioning();
+            positionBar();
+            if (typeof ResizeObserver === "undefined") return;
+            state.positionObserver = new ResizeObserver(scheduleBarPosition);
+            state.positionObserver.observe(state.bar);
+            state.positionObserver.observe(state.container);
+        }
 
 		function paint() {
 			if (!highlightsSupported()) return;
@@ -1763,16 +1631,11 @@ var BAR_ID = "dsh-find-all-root";
 			var popup = state.contentPanel, trigger = state.contentBtn;
 			if (!popup || popup.hidden) return;
 			if (!trigger || !state.target) { closeContentPanel(); return; }
-			var viewport = readingViewport(state.target), header = barAnchor(state.target);
-			if (!viewport || !header || !state.bar.hasAttribute("data-positioned")) {
-				closeContentPanel(); return;
-			}
-			var bounds = state.target.panel.getBoundingClientRect(), anchor = trigger.getBoundingClientRect();
-			var barBounds = state.bar.getBoundingClientRect(), gap = 4;
-			var leftEdge = Math.max(bounds.left, viewport.left) + 8;
-			var rightEdge = Math.min(bounds.right, viewport.right) - 8;
-			var topEdge = Math.max(bounds.top, viewport.top, header.getBoundingClientRect().bottom) + 8;
-			var bottomEdge = Math.min(bounds.bottom, viewport.bottom) - 8;
+            if (!isOpen()) { closeContentPanel(); return; }
+            var anchor = trigger.getBoundingClientRect();
+            var barBounds = state.bar.getBoundingClientRect(), gap = 4;
+            var leftEdge = 8, rightEdge = window.innerWidth - 8;
+            var topEdge = 8, bottomEdge = window.innerHeight - 8;
 			var width = Math.min(320, rightEdge - leftEdge);
 			var below = Math.max(0, bottomEdge - barBounds.bottom - gap);
 			var above = Math.max(0, barBounds.top - topEdge - gap);
@@ -1847,7 +1710,7 @@ var BAR_ID = "dsh-find-all-root";
         }
 
         function openAbout() {
-            var owner = state.target && state.aboutViews.get(state.target.anchor);
+            var owner = state.aboutView;
             if (!state.aboutAvailable || !owner || state.aboutOwner || !state.mounted) return;
             cancelCountEdit(false);
             cancelReturn(L.returnCancelled);
@@ -2299,7 +2162,7 @@ var BAR_ID = "dsh-find-all-root";
 
 		function syncTarget(target, passive) {
 			if (!state.adapter) return;
-			var selected = passive ? state.adapter.refresh(state.target) : state.adapter.select(target || document.activeElement, state.target);
+			var selected = state.active && state.sidebar.mounted.getSnapshot() === state.ownerSession ? state.adapter.forSession(state.ownerSession) : null;
 			if (selected) {
 				var owner = state.positionOwner;
 				if (owner && (owner.id !== selected.id || owner.panel !== selected.panel)) {
@@ -2405,7 +2268,7 @@ var BAR_ID = "dsh-find-all-root";
 			var bar = document.createElement("div");
 			bar.id = BAR_ID;
 			bar.setAttribute("role", "search");
-			var closeBtn = buildMoveHeader(bar);
+			var closeBtn; // Native tab chrome owns closing and movement.
 			var controls = document.createElement("div");
 			controls.className = "controls";
 			var navigation = document.createElement("div");
@@ -2618,7 +2481,7 @@ var BAR_ID = "dsh-find-all-root";
 				if (event.shiftKey && event.target === scopeInputs[state.scope]) {
 					event.preventDefault(); closeContentPanel(true);
 				} else if (!event.shiftKey && event.target === (aboutBtn.disabled ? feedbackIssue : aboutBtn)) {
-					event.preventDefault(); closeContentPanel(); closeBtn.focus({ preventScroll: true });
+					event.preventDefault(); closeContentPanel(); state.input.focus({ preventScroll: true });
 				}
 			});
 			controls.appendChild(navigation);
@@ -2643,7 +2506,7 @@ var BAR_ID = "dsh-find-all-root";
 			state.contentInputs = contentInputs;
 			updateScopeButton();
 			updateContentButton();
-			document.body.appendChild(bar);
+			state.container.appendChild(bar);
 			document.body.appendChild(contentPanel);
 			var announcement = document.createElement('span');
 			announcement.setAttribute('role', 'status'); announcement.setAttribute('aria-live', 'polite');
@@ -2653,8 +2516,8 @@ var BAR_ID = "dsh-find-all-root";
 			document.body.appendChild(announcement);
 		}
 
-		function open(target, seed) {
-			if (typeof document === "undefined" || document.body === null) return;
+		function open(target, seed, focus = true) {
+			if (!state.active || state.sidebar.mounted.getSnapshot() !== state.ownerSession || typeof document === "undefined" || document.body === null) return;
 			var wasOpen = isOpen();
 			syncTarget(target || document.activeElement, false);
 			if (!wasOpen) state.origin = captureReadingOrigin();
@@ -2666,12 +2529,21 @@ var BAR_ID = "dsh-find-all-root";
 			var selection = "";
 			try { selection = String(window.getSelection()).trim(); } catch (error) {}
             if (typeof seed === "string") state.query = seed;
-			if (typeof seed !== "string" && state.target && selection && selection.length <= 200 && selection !== state.query) {
+			if (focus && typeof seed !== "string" && state.target && selection && selection.length <= 200 && selection !== state.query) {
 				state.query = selection;
 			}
 			state.input.value = state.query;
-			state.input.focus();
-			state.input.select();
+			if (focus) {
+                // Retained native panes can still be inert during child layout effects.
+                // Focus after the host commits its presentation, and cancel on hide/new input.
+                cancelAnimationFrame(state.focusFrame);
+                state.focusFrame = requestAnimationFrame(() => {
+                    state.focusFrame = 0;
+                    if (isOpen() && !document.querySelector('dialog[open], [aria-modal="true"], [role="menu"]')) {
+                        state.input.focus(); state.input.select();
+                    }
+                });
+            }
 			runSearch(false);
 			if (!state.query && state.target && state.adapter && state.adapter.valid(state.target) && !state.origin) {
 				setStatus(L.originUnavailable, false);
@@ -2682,8 +2554,8 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function close() {
-            state.conversationSearch?.cancelHandoff();
-            state.crossSearch = null;
+            cancelAnimationFrame(state.focusFrame); state.focusFrame = 0;
+
             cancelUpdateCheck();
             closeAbout();
             cancelCountEdit(false);
@@ -2706,42 +2578,9 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function isOpen() {
-			return !!state.bar && state.bar.style.display !== "none";
+			return state.active === true && state.sidebar?.mounted.getSnapshot() === state.ownerSession && !!state.bar && state.bar.style.display !== "none";
 		}
 
-		function apply(ctx) {
-			var react = require("react");
-			var ui = require("@deepseek-ai/dsh-client-ui-primitives");
-			state.aboutAvailable = !!ui.Modal;
-			var SearchIcon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
-			state.ctx = ctx;
-			state.searchContent=createSearchContentService(searchContentChanged);
-			if(typeof ctx.provide==='function')ctx.provide(SEARCH_CONTENT_SERVICE,state.searchContent);
-            state.writeClipboard = typeof ui.writeClipboard === "function" ? ui.writeClipboard : null;
-            // A child dependency scope may remain pending on an older Host;
-            // sessions/slots (and loaded-only search) keep running independently.
-            if(typeof ctx.inject==='function')ctx.inject(['remote','remote.session'],function(remoteCtx){
-                remoteCtx.effect(function(){
-                    state.remote=remoteCtx.remote;
-                    if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
-                    return function(){cancelCountEdit(false);clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
-                });
-            });
-            try { state.projector=createProjector(ui,react,document); } catch(error) { state.projector=null; }
-			state.adapter = createHostAdapter(ctx, function () {
-				if (isOpen()) syncTarget(null, true);
-			});
-            if (typeof ctx.inject === "function") state.conversationSearch = installConversationSearch(ctx, react, ui, {
-                closeFind: close,
-                openFind: function (sessionId, query) {
-                    if (!state.mounted || !state.adapter) return false;
-                    var target = state.adapter.forSession(sessionId);
-                    if (!target || !state.adapter.valid(target)) return false;
-                    state.crossSearch = { id: sessionId, query: query };
-                    open(target.anchor, query);
-                    return state.target?.id === sessionId;
-                }
-            });
             function AboutPanel() {
                 var copy = react.useState(''), copyStatus = copy[0], setCopyStatus = copy[1];
                 var details = react.useRef(null);
@@ -2821,46 +2660,38 @@ var BAR_ID = "dsh-find-all-root";
                             link('secyborg/dsh-find-bar', 'https://github.com/secyborg/dsh-find-bar'),
                             link('MIT', repository + '/blob/main/LICENSE'), link(L.aboutNotices, repository + '/blob/main/NOTICE.md')))));
             }
-			function SessionFind(props) {
-				var anchor = react.useRef(null);
-                var about = react.useState(false);
-                react.useEffect(function () {
-                    var button = anchor.current && anchor.current.querySelector('button[data-find-all-session]');
-                    if (!button) return;
-                    var owner = { setOpen: about[1] };
-                    state.aboutViews.set(button, owner);
-                    return function () {
-                        state.aboutViews.delete(button);
-                        if (state.aboutOwner === owner) closeAbout();
-                    };
-                }, [props.sessionId]);
-				var nodes = typeof props.useChat === 'function' ? props.useChat(function (snapshot) { return snapshot.nodes; }) : null;
-				react.useEffect(function () {
-					if (!anchor.current || !props.sessionId) return;
-					// Older supported Button exports do not forward refs. Always
-					// register the real button rather than the sizing-neutral wrapper.
-					var button = anchor.current.querySelector("button[data-find-all-session]");
-					if (button) return state.adapter.mount(button, props.sessionId, nodes);
-				}, [props.sessionId, nodes]);
-				return react.createElement("span", { ref: anchor, style: { display: "inline-flex", flex: "none" } },
-					react.createElement(ui.Button, {
-					type: "button", size: "sm", variant: "ghost", title: L.find, "aria-label": L.find,
-					style: { flex: "none", width: 28, padding: 0, color: "var(--dsw-alias-label-secondary)" },
-					"data-find-all-session": props.sessionId,
-					onClick: function (event) { open(event.currentTarget); }
-				}, react.createElement(SearchIcon, { size: 15 })), about[0] ? react.createElement(AboutPanel) : null);
-			}
-			ctx.slots.inject("conversation.session.header.utilities", function () {
-				return ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all" }, SessionFind);
-			});
-			ctx.effect(function () {
+
+        var react, ui;
+        function configure(options) {
+            react = options.react; ui = options.ui;
+            Object.assign(state, options, { mounted: true, active: false, ctx: options.ctx, aboutAvailable: !!ui.Modal,
+                writeClipboard: typeof ui.writeClipboard === "function" ? ui.writeClipboard : null });
+            try { state.projector = createProjector(ui, react, document); } catch { state.projector = null; }
+            buildBar();
+            state.bar.style.display = "none";
+            var dispose = mountListeners();
+            return dispose;
+        }
+        function setVisible(active) {
+            if (active === state.active) return;
+            state.active = active;
+            if (active) open(null, undefined, false);
+            else close();
+        }
+        function setRemote(remote) {
+            if (state.remote === remote) return;
+            cancelPageIn(); state.remote = remote; state.history = null; state.historySnapshot = null;
+            if (isOpen()) { runSearch(false); if (state.query && state.scope === "whole") schedulePageIn(); }
+        }
+            function mountListeners() {
                 state.mounted = true;
 				injectCss();
 				var handler = createHandlers({
 					matchNumberKey: matchNumberKey,
-                    open: open, close: function () { if (!closeContentPanel(true)) close(); }, goTo: goTo, isOpen: isOpen,
+                    open: function () {}, close: function () { if (!closeContentPanel(true)) state.requestClose(); }, goTo: goTo, isOpen: isOpen,
 					ownsKeys: function (event) {
-                        if (state.aboutOwner || state.conversationSearch?.isOpen()) return false;
+                        if (document.querySelector('[role="menu"], dialog[open], [aria-modal="true"]')) return false;
+                        if (!isOpen() || !state.allowKeys() || state.aboutOwner || state.conversationSearch?.isOpen() || ((event.ctrlKey || event.metaKey) && /^f$/i.test(event.key))) return false;
 						var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
 						return !path.some(function (node) {
 							return node && node.closest && node.closest('dialog[open], [aria-modal="true"], .monaco-editor, .cm-editor, .CodeMirror');
@@ -2869,7 +2700,8 @@ var BAR_ID = "dsh-find-all-root";
 					isBarInput: function (target) { return target === state.input; }
 				});
 				function focus(event) {
-                    if (state.aboutOwner || state.conversationSearch?.isOpen()) return;
+                    if (event.type === "pointerdown") { cancelAnimationFrame(state.focusFrame); state.focusFrame = 0; }
+                    if (!isOpen() || state.aboutOwner || state.conversationSearch?.isOpen()) return;
                     if (state.countEdit && !state.countEditor.contains(event.target)) cancelCountEdit(false);
 					var inContent = state.contentPanel && state.contentPanel.contains(event.target);
 					if (!inContent && !state.contentBtn?.contains(event.target)) closeContentPanel();
@@ -2915,16 +2747,143 @@ var BAR_ID = "dsh-find-all-root";
 					state.announcement = state.returnBtn = null;
                     state.diagnosticBtn = state.diagnosticFeedback = state.writeClipboard = null;
                     state.updateBtn = state.updateStatus = state.updateGuide = state.updateResult = null;
-					var style = document.querySelector('style[data-plugin-css="dsh-find-all/bar.css"]');
+					var style = document.querySelector('style[data-plugin-css="' + BAR_ID + '/bar.css"]');
 					if (style) style.remove();
 					state.countState = state.countEditor = state.countInput = state.countTotal = state.countHint = state.countLive = null;
                     state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
                     state.conversationSearch = state.crossSearch = state.crossSearchReturn = state.crossSearchHint = null;
-					state.adapter.clear();
+
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = state.searchContent = null;
 				};
-			}, "find-all: browser lifecycle");
-		}
+            }
+        return { resolveScope, createHostAdapter, findIndices, findMatches, collectRanges, createHandlers, runPageIn,
+            configure, setVisible, setRemote, open, close, isOpen, state, AboutPanel, injectCss,
+            refreshTarget: () => { if (isOpen()) syncTarget(null, true); }, searchContentChanged };
+}
+
+const helpers = createFindRuntime("root");
+const { resolveScope, createHostAdapter, findIndices, findMatches, collectRanges, createHandlers, runPageIn } = helpers;
+const TAB_ID = "@ryuu-64/dsh-find-all/current-conversation";
+const TAB_KIND = "find-all.current-conversation";
+
+function apply(ctx) {
+    const react = require("react");
+    const ui = require("@deepseek-ai/dsh-client-ui-primitives");
+    const controllers = new Map(), pending = new Map();
+    let sidebar, remote, lastFocused;
+    const adapter = createHostAdapter(ctx, () => { for (const controller of controllers.values()) controller.refreshTarget(); });
+    const searchContent = createSearchContentService(() => { for (const controller of controllers.values()) controller.searchContentChanged(); });
+    if (typeof ctx.provide === "function") ctx.provide(SEARCH_CONTENT_SERVICE, searchContent);
+    let conversationSearch;
+    function reveal(sessionId, seed, fromSearch = false) {
+        if (!sidebar || sidebar.mounted.getSnapshot() !== sessionId) return false;
+        let tab = sidebar.tabsIn(sessionId).find(tab => tab.kind === TAB_KIND);
+        const request = { seed, crossSearch: fromSearch ? { id: sessionId, query: seed } : undefined };
+        // Native opens may synchronously commit a retained body's visibility.
+        // Publish its focus/seed request before that commit, not afterwards.
+        if (tab) pending.set(tab.id, request);
+        if (tab) {
+            const occurrence = sidebar.tabDomain.occurrence(sessionId, { id: tab.id });
+            if (typeof sidebar.revealOccurrence === "function") sidebar.revealOccurrence(occurrence);
+            else if (controllers.get(tab.id)?.isOpen()) sidebar.focus(tab.id);
+            else occurrence.tabActions.openTab(TAB_KIND);
+        }
+        else { sidebar.openTab(TAB_KIND); tab = sidebar.tabsIn(sessionId).find(tab => tab.kind === TAB_KIND); }
+        if (!tab) return false;
+        const controller = controllers.get(tab.id);
+        if (controller?.isOpen()) { pending.delete(tab.id); if (request.crossSearch !== undefined) controller.state.crossSearch = request.crossSearch; controller.open(null, seed); }
+        else pending.set(tab.id, request);
+        return true;
+    }
+    conversationSearch = installConversationSearch(ctx, react, ui, {
+        closeFind: () => { for (const controller of controllers.values()) if (controller.isOpen()) controller.state.requestClose(); },
+        openFind: (sessionId, query) => reveal(sessionId, query, true),
+    });
+    ctx.inject(["remote", "remote.session"], scope => scope.effect(() => {
+        remote = scope.remote;
+        for (const controller of controllers.values()) controller.setRemote(remote);
+        return () => { remote = null; for (const controller of controllers.values()) controller.setRemote(null); };
+    }));
+    function FindTab(props) {
+        const { tab } = props.useTabInfo();
+        const mounted = react.useSyncExternalStore(props.sidebar.mounted.subscribe, props.sidebar.mounted.getSnapshot);
+        const visible = tab.visible && mounted === props.sessionId;
+        const body = react.useRef(null), ref = react.useRef(null);
+        const about = react.useState(false);
+        if (!ref.current) ref.current = createFindRuntime(tab.id.replace(/[^a-zA-Z0-9_-]/g, "-"));
+        const controller = ref.current;
+        react.useLayoutEffect(() => {
+            const dispose = controller.configure({ ctx, react, ui, adapter, searchContent, conversationSearch, remote,
+                sidebar: props.sidebar, ownerSession: props.sessionId, container: body.current,
+                allowKeys: () => lastFocused === controller, requestClose: () => tab.actions.close(), aboutView: { setOpen: about[1] } });
+            controllers.set(tab.id, controller);
+            return () => { controllers.delete(tab.id); pending.delete(tab.id); dispose(); };
+        }, [controller, tab.id, props.sessionId, props.sidebar]);
+        react.useLayoutEffect(() => {
+            controller.setVisible(visible);
+            if (visible) {
+                lastFocused = controller;
+                const request = pending.get(tab.id);
+                if (request) { pending.delete(tab.id); if (request.crossSearch !== undefined) controller.state.crossSearch = request.crossSearch; controller.open(null, request.seed); }
+            }
+        }, [controller, visible, tab.navigation.revision]);
+        return react.createElement(react.Fragment, null,
+            react.createElement("div", { ref: body, "data-find-all-tab": props.sessionId,
+                onFocusCapture: () => { lastFocused = controller; },
+                style: { height: "100%", minHeight: 0, minWidth: 0, overflow: "auto" } }),
+            about[0] ? react.createElement(controller.AboutPanel) : null);
+    }
+    function SessionFind(props) {
+        const anchor = react.useRef(null);
+        const nodes = typeof props.useChat === "function" ? props.useChat(snapshot => snapshot.nodes) : null;
+        react.useEffect(() => {
+            const button = anchor.current?.querySelector("button[data-find-all-session]");
+            if (button && props.sessionId) return adapter.mount(button, props.sessionId, nodes);
+        }, [props.sessionId, nodes]);
+        const Icon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
+        return react.createElement("span", { ref: anchor, style: { display: "inline-flex", flex: "none" } },
+            react.createElement(ui.Button, { type: "button", size: "sm", variant: "ghost",
+                title: props.available ? helpers.state.label : ("当前宿主未提供会话工具停靠接口"),
+                "aria-label": props.available ? helpers.state.label : "当前宿主未提供会话工具停靠接口", disabled: !props.available,
+                "data-find-all-session": props.sessionId,
+                style: { flex: "none", width: 28, padding: 0, color: "var(--dsw-alias-label-secondary)" },
+                onClick: () => reveal(props.sessionId),
+            }, react.createElement(Icon, { size: 15 })));
+    }
+    // A capability failure is visible in the existing header entry; never create a second overlay renderer.
+    const capabilityListeners = new Set();
+    let available = false;
+    function Entry(props) {
+        const ready = react.useSyncExternalStore(fn => { capabilityListeners.add(fn); return () => capabilityListeners.delete(fn); }, () => available);
+        return react.createElement(SessionFind, { ...props, available: ready });
+    }
+    helpers.state.label = /^zh/i.test(navigator.language || "") ? "当前对话查找" : "Find in conversation";
+    ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all" }, Entry));
+    ctx.inject(["sidebarRight", "sidebarRightTabs"], scope => {
+        if (!["openTab", "tabsIn", "focus"].every(key => typeof scope.sidebarRight[key] === "function") || typeof scope.sidebarRight.mounted?.getSnapshot !== "function" || typeof scope.sidebarRight.mounted?.subscribe !== "function" || typeof scope.sidebarRight.tabDomain?.occurrence !== "function" || typeof scope.sidebarRightTabs.register !== "function") return;
+        scope.effect(() => scope.sidebarRightTabs.register({ id: TAB_ID, kind: TAB_KIND, keepMounted: true, title: () => helpers.state.label }));
+        scope.slots.inject("sidebar.right.pane.tab", () => scope.slots.register({ name: "sidebar.right.pane.tab", key: TAB_ID,
+            inject: () => ({ sidebar: scope.sidebarRight }),
+        }, FindTab));
+        scope.effect(() => { sidebar = scope.sidebarRight; available = true; capabilityListeners.forEach(fn => fn());
+            return () => { available = false; sidebar = null; capabilityListeners.forEach(fn => fn()); };
+        });
+    });
+    ctx.effect(() => {
+        helpers.injectCss();
+        function shortcut(event) {
+            if (event.defaultPrevented || event.isComposing || !(event.metaKey || event.ctrlKey) || !/^f$/i.test(event.key) || conversationSearch?.isOpen()) return;
+            if (document.querySelector('[role="menu"], dialog[open], [aria-modal="true"]') || event.target?.closest?.('.monaco-editor, .cm-editor, .CodeMirror')) return;
+            const target = adapter.select(event.target);
+            if (!target || !sidebar || sidebar.mounted.getSnapshot() !== target.id) return;
+            event.preventDefault(); event.stopPropagation();
+            const selected = String(window.getSelection()).trim();
+            reveal(target.id, selected && selected.length <= 200 ? selected : undefined);
+        }
+        window.addEventListener("keydown", shortcut, true);
+        return () => { window.removeEventListener("keydown", shortcut, true); adapter.clear(); pending.clear(); document.querySelector('style[data-plugin-css="dsh-find-all-root/bar.css"]')?.remove(); };
+    });
+}
 
 export { apply, resolveScope, createHostAdapter, findIndices, findMatches, collectRanges, createHandlers, runPageIn };
 export const inject = ["sessions", "slots"];

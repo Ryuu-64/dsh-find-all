@@ -2,13 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup, key, current} from './helpers/search-ui.mjs';
 
+let hostRowSerial = 0;
+const hostObservers = new WeakMap();
+function installHostRows(h) {
+  for (const flow of h.w.document.querySelectorAll('[data-chat-flow]')) {
+    const mark = () => {
+      for (const row of flow.children) {
+        if (!row.hasAttribute('data-chat-node-key')) row.setAttribute('data-chat-node-key', `selection-test-${++hostRowSerial}`);
+        if (!row.hasAttribute('data-chat-flow-kind')) row.setAttribute('data-chat-flow-kind', 'user');
+      }
+    };
+    mark();
+    if (!hostObservers.has(flow)) {
+      const observer = new h.w.MutationObserver(mark);
+      observer.observe(flow, {childList: true});
+      hostObservers.set(flow, observer);
+    }
+  }
+}
+
 function page(h, view, query = 'needle') {
+  installHostRows(h);
   h.open(view.anchor);
   h.w.document.querySelector('.content-filter').click();
   h.w.document.querySelector('input[name="dsh-find-all-root-scope"][value="page"]').click();
   h.search(query); h.scrolls.length = 0;
 }
-async function rescan(h) { await Promise.resolve(); await h.advance(550); }
+async function rescan(h) {
+  // Flush the Host's row commit before advancing past the bounded navigation
+  // attempt; the find observer deliberately defers rescans during navigation.
+  await h.advance(0);
+  await h.advance(2000);
+}
 
 test('prepend keeps selected B rather than another identical word in A or C', async () => {
   const h = setup();
@@ -59,7 +84,7 @@ test('deleted selection and replaced block clamp the old index instead of guessi
     assert.equal(h.count(), '2/2'); assert.equal(current(h).startContainer.data, 'C needle');
     v.flow.lastChild.outerHTML = '<p>C needle</p>'; v.flow.insertAdjacentHTML('afterbegin', '<p>first needle</p>'); await rescan(h);
     assert.equal(h.count(), '2/3'); assert.equal(current(h).startContainer.data, 'A needle');
-    v.flow.replaceChildren(); await rescan(h); assert.equal(h.count(), '0/0');
+    v.flow.replaceChildren(); await rescan(h); assert.equal(h.count(), 'No results');
   } finally { await h.finish(); }
 });
 

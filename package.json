@@ -1,6 +1,6 @@
 {
   "name": "@ryuu-64/dsh-find-all",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Find saved conversation text across DeepSeek Harness (DSH), with Ctrl+F / Cmd+F inside a conversation.",
   "type": "module",
   "license": "MIT",

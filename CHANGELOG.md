@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.13
 
-- Match DSH floating-panel chrome by replacing the separate six-dot move button with a focusable, draggable title bar. Keep arrow-key movement and Home reset, place reset and close actions in the header, and align status text with the search field.
+- Match DSH floating-panel chrome with a compact, title-free move surface instead of a separate six-dot button. Drag empty chrome without intercepting the search field or actions; keep arrow-key movement, Home reset, focus-ring tokens, and aligned status text.
+- Refresh the README with clearer installation, usage, troubleshooting, and real UI screenshots for both current-conversation and cross-conversation search.
 
 ## 0.1.12
 

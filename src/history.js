@@ -8,7 +8,7 @@ import { prepareContext, finishContext, projectInboxSplice, createContextClassif
 // maxMessages bounds messages, not bytes: a single event can still be large.
 
 const TEXT_TYPES = new Set(["text", "reasoning"]);
-const BOUNDARIES = new Set(["assistant/message", "tool/call", "tool/result", "llm/retry", "turn/end"]);
+const BOUNDARIES = new Set(["assistant/message", "tool/call", "tool/result", "llm/retry", "turn/end", "turn/start"]);
 // Explicit RC2 non-body vocabulary. Known is not synonymous with searchable:
 // other visible body schemas below are reported as coverage gaps, not skipped.
 const NON_BODY_EVENTS = new Set([
@@ -235,12 +235,15 @@ function extractEntry(event, sessionId, report) {
 			entry.sourceKind = sourceKind;
 			entry.referenceLabels = sourceKind === "session-reference" && Array.isArray(origin.references)
 				? [...new Set(origin.references.filter((ref) => object(ref) && typeof ref.label === "string" && ref.label).map((ref) => ref.label))] : [];
-			entry.skillName = sourceKind === "skill-invocation" && typeof origin.name === "string" ? origin.name : undefined;
+			entry.referenceFactsInvalid = sourceKind === "session-reference" && (!Array.isArray(origin.references) || origin.references.some(ref=>!object(ref)||typeof ref.label!=="string"||!ref.label));
+            entry.skillFactsInvalid = sourceKind === "skill-invocation" && (typeof origin.name!=="string"||!origin.name);
+            entry.skillName = sourceKind === "skill-invocation" && typeof origin.name === "string" ? origin.name : undefined;
 			if (type === "user/message" && sourceKind === "user") {
 				checkParts(content, new Set(["text"]));
 				add({ kind: "user", contentType: "text", messageId, sourceKind, contentIndex: 0,
 					raw: content.filter((part) => part?.type === "text").map((part) => requireString(part.text, "User text", seq)).join(""),
-					format: "plain", referenceLabels: [], skillNames: [], contentCount: content.length });
+					format: "plain", referenceLabels: [], skillNames: [], contentCount: content.length,
+                    contextErrors: content.some(part => part?.type !== "text") ? [{code:"user-attachment-unprojected",message:"User attachment or extra content is not projected"}] : [] });
 			} else {
 				entry.contextVisible = content.some((part) => part?.type === "tool-addition" || part?.type === "tool-removal");
 				entry.context = prepareContext(content, origin, entry.contextVisible);
@@ -355,11 +358,13 @@ function resolveSources(entries, report) {
 	const classifier = createContextClassifier();
 	let batchMessages = [];
 	let batchSkills = [];
+    let invalidBatchSkills=false;
 	const flush = () => {
 		const names = [...new Set(batchSkills)];
-		for (const source of batchMessages) source.skillNames = names;
+		for (const source of batchMessages) {source.skillNames = names;if(invalidBatchSkills)source.invalidUserFacts=true;}
 		batchMessages = [];
 		batchSkills = [];
+        invalidBatchSkills=false;
 	};
 	for (const entry of entries) {
 		classifier.accept(entry);
@@ -383,16 +388,18 @@ function resolveSources(entries, report) {
 			if (entry.sourceKind === "user") {
 				for (const source of entry.sources) { batchMessages.push(source); bySeq.set(source.seq, source); }
 			} else {
-				if (entry.referenceLabels?.length) {
+				if (entry.referenceLabels?.length || entry.referenceFactsInvalid) {
 					const previous = bySeq.get(entry.seq - 1);
-					if (previous) previous.referenceLabels = entry.referenceLabels;
+					if (previous) {previous.referenceLabels = entry.referenceLabels;if(entry.referenceFactsInvalid)previous.invalidUserFacts=true;}
 				}
 				if (entry.skillName) batchSkills.push(entry.skillName);
+                if(entry.skillFactsInvalid)invalidBatchSkills=true;
 			}
 		} else if (BOUNDARIES.has(entry.type)) flush();
 	}
 	flush();
 	for (const source of sources) {
+        if(source.kind === "user") source.userTextFacts = source.invalidUserFacts ? null : {sessionLabels: [...source.referenceLabels], skillNames: [...source.skillNames]};
 		if (source.kind !== "tool-result") continue;
 		const call = calls.get(source.callId);
 		if (!call) {
@@ -518,12 +525,17 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 				assertCurrent();
 				const source = sources[index];
 				if (sessionCwd !== undefined) source.sessionCwd = sessionCwd;
-				const projection = await pending(project(source));
+				let projection;
+                try { projection = await pending(project(source)); } catch(error) {
+                    assertCurrent();
+                    projection = {blocks:[],errors:[{code:"projection-failed",message:"The display projection failed for this source"}]};
+                }
 				assertCurrent();
-				if (!object(projection) || !Array.isArray(projection.blocks) || projection.blocks.some((block) => !object(block) || typeof block.text !== "string")) throw failure("invalid-projection", "Text projection returned invalid blocks", source.seq);
-				const projectedSource = projection.source === undefined ? source : projection.source;
-				if (!object(projectedSource) || ["sessionId", "seq", "id", "kind", "contentIndex"].some((key) => projectedSource[key] !== source[key])) {
-					throw failure("invalid-projection", "Text projection changed durable source identity", source.seq);
+				if (!object(projection) || !Array.isArray(projection.blocks) || projection.blocks.some((block) => !object(block) || typeof block.text !== "string")) projection={blocks:[],errors:[{code:"invalid-projection",message:"Text projection returned invalid blocks"}]};
+				let projectedSource = projection.source === undefined ? source : projection.source;
+				if (!object(projectedSource) || ["sessionId", "seq", "id", "kind", "contentIndex", "messageId", "turn", "step", "stepId"].some((key) => projectedSource[key] !== source[key])) {
+					projectedSource=source;
+                    projection={blocks:[],errors:[{code:"invalid-projection",message:"Text projection changed durable source identity"}]};
 				}
 				const localErrors = [...(source.contextErrors ?? []), ...(Array.isArray(projection.errors) ? projection.errors : [])];
 				const seenErrors = new Set();
@@ -535,6 +547,8 @@ export function createHistoryReader({ remote, sessionId, generation = 0, onUpdat
 				}
 				documents.push({ ...projectedSource, blocks: projection.blocks,
 					...(typeof projection.mapping === "string" ? { mapping: projection.mapping } : {}),
+                    ...(projection.defaultMasked === true ? {defaultMasked:true} : {}),
+                    ...(projection.userTextSemantics === "official-inline" ? {userTextSemantics:"official-inline"} : {}),
 					...(typeof projection.rootClass === "string" ? { rootClass: projection.rootClass } : {}),
 					...(typeof projection.cardKind === "string" ? { cardKind: projection.cardKind } : {}),
 				});

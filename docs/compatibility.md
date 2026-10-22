@@ -1,3 +1,26 @@
+# Issue 35: modern user-text projection
+
+The current-conversation whole-session path uses the retained Session's public `uiConversation.userText.createEvaluator()` when the legacy `ui.projectUserText` API is absent. It supplies the historical message's batch-derived session labels and skill names, not the current composer's facts. Official text/display, session/file/folder labels, command/skill names and default secret masks are projected without mounting hidden Chat rows. Unknown or malformed nodes, evaluator/renderer failures, missing capabilities and non-text user attachments produce explicit partial coverage. One failed source does not discard independent usable sources or fall back to its stored raw input.
+
+Secret-bearing user text is indexed in its default masked state. The find bar explains this policy. Clicking Show secret changes that message's current display, not the whole-history count; a masked result that no longer matches the live body cannot receive a fabricated highlight. Existing live highlights are revalidated and removed/rebound when their DOM changes. Search never clicks Show secret on the user's behalf. Loaded-content mode continues to describe only the currently rendered content, including text the user explicitly revealed.
+
+Session/store generations, evaluator registry revisions, cooperative search-content rules and observable relevant Slot/Factory changes invalidate the cached projection and pending navigation. Relevant durable content/facts changes also invalidate the cut. Navigation loads the durable sequence, resolves its original Chat row and validates the exact UTF-16 DOM Range before highlighting.
+
+The public Slot API exposes effective entries, not authenticated renderer provenance. Initial entries are a change baseline only. An already-installed custom replacement using an official key cannot be automatically recognized as custom. Such plugins must use the existing `ryuu.findAllSearchContent` cooperation contract for their changed text semantics; this implementation does not certify arbitrary third-party renderers. Detected subsequent winner changes and renderer errors become partial rather than silently assuming the original display. No third-party file-review plugin was installed for this verification.
+
+The historical host matrix below is not rerun automatically by these changes. New host compatibility requires separate real-host acceptance, not merely a wider peer range. The full-text search across conversations is a separate surface and retains its own documented raw/excerpt behavior; this change does not claim that surface masks secrets.
+
+
+## Verification status (2026-10-22)
+
+- `npm run check`: 196 tests passed. `npm run verify:release`: passed; the packed bundle matched the tested source build.
+- Official DSH `0.2.1-rc.2`, isolated Web profile: real Chat file labels, default masked secrets, Reveal-local highlight invalidation, remount recovery, 80-turn whole/loaded count differences, and offscreen user **and assistant** navigation/highlighting passed on the same candidate bundle. Only the disposable test copy added that exact peer version; production package version and peer ranges remain unchanged.
+- Current-build real-host regression on `0.2.0-rc.2` is **not completed**. The separate legacy runtime could not be restored because the official dependency source was unreachable. Unit coverage of the legacy path is not a substitute for that acceptance, nor a rerun of the historical host matrix.
+- Chromium previously showed `Aw Snap` error 9 during testing. Its cause was not established. The same tab later recovered and the outstanding assistant navigation passed; this does not claim a browser-crash fix.
+- The implementation is delivered for continued testing at the user's request, not as a claim of complete cross-version compatibility. Remaining checks are listed in [the test handoff](issue35-testing.md). No npm release is implied.
+
+---
+
 # Full-text conversation search
 
 The Full-text conversation search entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. Package version and peer ranges remain unchanged.

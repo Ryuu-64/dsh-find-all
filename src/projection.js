@@ -4,7 +4,7 @@ import { toolPresentation, cardLabels } from "./tool-projection.js";
 const BLOCK = new Set('ADDRESS ARTICLE ASIDE BLOCKQUOTE DD DETAILS DIALOG DIV DL DT FIELDSET FIGCAPTION FIGURE FOOTER FORM H1 H2 H3 H4 H5 H6 HEADER HR LI MAIN NAV OL P PRE SECTION SUMMARY TABLE TBODY TD TFOOT TH THEAD TR UL'.split(' '));
 const imageAltClasses = new Set();
 const SKIP = 'script,style,noscript,svg,[data-code-block-banner],[data-clock],.sr-only,.katex-mathml,[data-find-projection-chrome]';
-export function collectProjectedBlocks(root, excluded, classify) {
+export function collectProjectedBlocks(root, excluded, classify, options) {
   const blocks = []; let text = '', segments = [];
   const flush = () => {
     if (segments.length) {
@@ -30,6 +30,11 @@ export function collectProjectedBlocks(root, excluded, classify) {
       flush();const description=node.tagName==='IMG'?(node.getAttribute('alt')||''):node.textContent;
       if(description)blocks.push({text:description,segments:[],imageDescription:true});return;
     }
+    // Official modern user chips and secret toggles contain decorative SVGs
+    // inside an otherwise continuous text run. They are not text boundaries.
+    // Keep legacy/general projection and real BR/block boundaries unchanged.
+    if (options?.officialUserInline && node.nodeType === 1 && node.matches('svg[aria-hidden="true"]')
+      && node.closest('[data-ref-chip],[data-secret]')) return;
     if (node.nodeType === 1 && (node.matches(SKIP) || node.tagName === 'BR')) { flush(); return; }
     const codeRoot = node.nodeType === 1 && node.hasAttribute('data-code-block-content');
     const boundary = !code && (BLOCK.has(node.tagName) || node.nodeType === 11 || codeRoot);
@@ -78,8 +83,8 @@ function semanticSubstring(block,text){
   }));
   return segments.length?{text,segments}:null;
 }
-export function createProjector(ui, react, document) {
-  if(!ui.MarkdownText||typeof ui.projectUserText!=='function'||!/^18\./u.test(react.version||''))throw Error('Host text projection unavailable');
+export function createProjector(ui, react, document, projectUser) {
+  if(!ui.MarkdownText||!/^18\./u.test(react.version||''))throw Error('Host Markdown projection unavailable');
   // Lazy initialization keeps legacy loaded-only mode usable with older hosts.
   const {renderToStaticMarkup}=require('react-dom/server.browser');
   function render(element) { const template=document.createElement('template');template.innerHTML=renderToStaticMarkup(element);return template.content; }
@@ -168,6 +173,8 @@ export function createProjector(ui, react, document) {
       return {blocks,mapping:'markdown',rootClass:root.classList[0],errors:[]};
     }
     if(source.kind==='user'&&source.sourceKind==='user') {
+      if(typeof projectUser==='function')return projectUser(source);
+      if(typeof ui.projectUserText!=='function')return {blocks:[],mapping:'user',errors:[{code:'user-projection-unavailable',message:'Host user-text projection is unavailable; user text was not indexed'}]};
       const fragment=render(react.createElement('div',null,ui.projectUserText(source.raw,source.referenceLabels||[],source.skillNames||[],'skill')));
       return {blocks:collectProjectedBlocks(fragment).map((b,index)=>({text:b.text,index,...(b.imageDescription?{imageDescription:true}:{})})),mapping:'user',errors:[]};
     }
@@ -345,9 +352,12 @@ export function mapProjectedDocument(source, node, rows, targetBlockIndex) {
   }
   if(source.mapping==='user') {
     if(node.data?.seq!==source.seq)return {reason:'source-changed'};
-    const candidates=minimumCandidates([...new Set(rows.flatMap(row=>[...row.querySelectorAll('div')]))].filter(el=>sameBlocks(source.blocks,collectProjectedBlocks(el))));
+    if(source.messageId && node.data?.messageId && node.data.messageId!==source.messageId)return {reason:'source-changed'};
+    if(Array.isArray(node.data?.content) && node.data.content.filter(part=>part?.type==='text').map(part=>part.text).join('')!==(source.storedRaw??source.raw))return {reason:'source-changed'};
+    const collectUser=(root)=>collectProjectedBlocks(root,undefined,undefined,{officialUserInline:source.userTextSemantics==='official-inline'});
+    const candidates=minimumCandidates([...new Set(rows.flatMap(row=>[...row.querySelectorAll('div')]))].filter(el=>sameBlocks(source.blocks,collectUser(el))));
     if(candidates.length!==1)return {reason:'user-renderer-ambiguous'};
-    return {blocks:collectProjectedBlocks(candidates[0]),root:candidates[0]};
+    return {blocks:collectUser(candidates[0]),root:candidates[0]};
   }
   return {reason:'stored-field-not-rendered'};
 }

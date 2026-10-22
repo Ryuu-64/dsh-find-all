@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix modern whole-conversation user-text projection using official evaluator semantics and historical facts, with default secret masks and explicit partial coverage for unsupported content.
+- Invalidate stale projections and revalidate actual message ranges before navigation/highlighting; preserve the legacy projection path.
+- Document the verified modern Web scenarios and the still-pending legacy real-host regression. Package version and compatibility declarations are unchanged.
+
 ## 0.1.13
 
 - Match DSH floating-panel chrome with a compact, title-free move surface instead of a separate six-dot button. Drag empty chrome without intercepting the search field or actions; keep arrow-key movement, Home reset, focus-ring tokens, and aligned status text.

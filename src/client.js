@@ -2,8 +2,10 @@
  * Forked from secyborg/dsh-find-bar ce7eb75efe94d768127c5977c649ecd950a9356c. See LICENSE and NOTICE.md. */
 import { installConversationSearch } from "./conversation-search.js";
 import { checkLatestVersion } from "./updates.js";
+import { createHistoryRevisionTracker } from "./history-revision.js";
 import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
+import { createUserProjectionBinding } from "./user-projection-binding.js";
 import { createSearchContentService, SEARCH_CONTENT_SERVICE } from "./search-content.js";
 
 var BAR_ID = "dsh-find-all-root";
@@ -495,15 +497,19 @@ var BAR_ID = "dsh-find-all-root";
             return null;
         }
 
+        function matchLineMargin(range, rect) {
+            var lineHeight = window.getComputedStyle(range.startContainer.parentElement).lineHeight;
+            var margin = /^\d+(?:\.\d+)?px$/.test(lineHeight) ? parseFloat(lineHeight) : rect.height;
+            return Number.isFinite(margin) && margin > 0 ? margin : rect.height;
+        }
+
         function matchScrollPlan(range, scroll, viewport, bar, center) {
             var rect = matchAnchorRect(range);
             if (!rect) return null;
             var current = scroll.scrollTop, maximum = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
             var bands = [[viewport.top, viewport.bottom]], margin = 0;
             if (center) {
-                var lineHeight = window.getComputedStyle(range.startContainer.parentElement).lineHeight;
-                margin = /^\d+(?:\.\d+)?px$/.test(lineHeight) ? parseFloat(lineHeight) : rect.height;
-                if (!Number.isFinite(margin) || margin <= 0) margin = rect.height;
+                margin = matchLineMargin(range, rect);
             }
             if (bar && rect.right > bar.left && rect.left < bar.right && bar.bottom > viewport.top && bar.top < viewport.bottom) {
                 bands = [[viewport.top, Math.min(viewport.bottom, bar.top - 8)],
@@ -726,7 +732,12 @@ var BAR_ID = "dsh-find-all-root";
 				return !target.root.contains(nav) && (label === 'Turn navigation' || label === '轮次导航');
 			});
 			if (!navs.length) return exactOnly ? null : false;
-			if (navs.length !== 1 || !visible(navs[0])) return false;
+			if (navs.length !== 1) return false;
+            // Modern Chat hides the rail in narrow containers before its virtual
+            // marks mount. An empty hidden rail has no control to hand off to;
+            // preserve the existing one-shot direct-placement fallback. A real
+            // but hidden/disabled control is still unusable, never clicked.
+            if (!visible(navs[0])) return exactOnly && !navs[0].querySelector('button') ? null : false;
 			var loaded = new Set();
 			Array.prototype.forEach.call(target.root.querySelectorAll('[data-chat-anchor-key][data-chat-turn]'), function (row) {
 				var key = row.getAttribute('data-chat-node-key') || row.getAttribute('data-chat-anchor-key');
@@ -1014,11 +1025,13 @@ var BAR_ID = "dsh-find-all-root";
             var origin = state.origin, token = state.navigationToken, queryToken = state.queryToken, query = state.query, started = Date.now();
             var dataHit = state.scope === "whole" ? state.hits[state.index] : null;
             var selection = state.selection, activated = new Set(), announceReturn = false, statusApplied = false;
-            var transferred = false, directAttempted = false, corrections = 0, previous = null, stable = 0;
+            var transferred = false, directAttempted = false, corrections = 0, previous = null, stable = 0, navigationPhase="navigation-loading";
             function retry() { state.navigationTimer = setTimeout(check, 100); }
-            function fail() {
-                recordFailure('jump', 'render');
+            function fail(code) {
+                var reason=diagnosticCode(code || navigationPhase);
+                recordFailure('jump', reason);
                 setStatus(L.matchRevealFailed, false);
+                state.status.title=L.matchRevealFailed+' ('+reason+')';
                 if (state.announcement) state.announcement.textContent = L.matchRevealFailed;
             }
             function check() {
@@ -1052,16 +1065,16 @@ var BAR_ID = "dsh-find-all-root";
                 var concealed = attached && hiddenUntilFoundAncestor(current.startContainer, target.root);
                 var geometry = attached && !concealed && matchAnchorRect(current);
                 if (attached && (!geometry || concealed)) revealMatchRange(target, current, activated);
-                if (!geometry) { previous = null; stable = 0; retry(); return; }
+                if (!geometry) { navigationPhase="navigation-geometry"; previous = null; stable = 0; retry(); return; }
                 state.ranges[state.index] = current; paint();
                 var viewport = readingViewport(target), landing = matchLanding(current, viewport);
-                if (!landing) { retry(); return; }
+                if (!landing) { navigationPhase="navigation-viewport"; retry(); return; }
                 if (!transferred && !landing.settled) {
                     var row = current.startContainer.parentElement.closest('[data-chat-turn]');
                     var turn = row && row.getAttribute('data-chat-turn');
-                    if (directAttempted) { fail(); return; }
+                    if (directAttempted) { fail("navigation-reversed"); return; }
                     var handoff = turn ? activateLoadedTurn(target, store, turn, true) : null;
-                    if (handoff === false) { retry(); return; }
+                    if (handoff === false) { navigationPhase="navigation-control"; retry(); return; }
                     if (handoff === true) {
                         transferred = true;
                         // The native click may replace rows or move the viewport.
@@ -1076,7 +1089,7 @@ var BAR_ID = "dsh-find-all-root";
                 if (!landing.settled) {
                     // One initial placement plus one layout correction. Repeated
                     // host reversals must fail rather than fight its scroll owner.
-                    if (corrections >= 2) { fail(); return; }
+                    if (corrections >= 2) { fail("navigation-reversed"); return; }
                     corrections++;
                     scrollToRange(current);
                     viewport = readingViewport(target); landing = matchLanding(current, viewport);
@@ -1104,7 +1117,7 @@ var BAR_ID = "dsh-find-all-root";
                 previous = sample;
                 // This bounded observation verifies actual geometry; it is not a
                 // host completion API or a promise that later layout cannot change.
-                if (stable < 2) { retry(); return; }
+                if (stable < 2) { navigationPhase="navigation-settling"; retry(); return; }
                 if (announceReturn && state.announcement) state.announcement.textContent = L.returnAvailable;
             }
             check();
@@ -1366,6 +1379,22 @@ var BAR_ID = "dsh-find-all-root";
                 case 'tool-renderer-unavailable': return 'tool-renderer-unavailable';
                 case 'tool-projection-empty': return 'tool-projection-empty';
                 case 'custom-tool-projection-unverified': return 'custom-tool-projection-unverified';
+                case 'user-projection-unavailable': return 'user-projection-unavailable';
+                case 'user-session-unavailable': return 'user-session-unavailable';
+                case 'user-renderer-unavailable': return 'user-renderer-unavailable';
+                case 'user-transform-failed': return 'user-transform-failed';
+                case 'invalid-user-facts': return 'invalid-user-facts';
+                case 'invalid-user-projection': return 'invalid-user-projection';
+                case 'unsupported-user-node': return 'unsupported-user-node';
+                case 'user-attachment-unprojected': return 'user-attachment-unprojected';
+                case 'search-content-rule-failed': return 'search-content-rule-failed';
+                case 'projection-failed': return 'projection-failed';
+                case 'navigation-loading': return 'navigation-loading';
+                case 'navigation-geometry': return 'navigation-geometry';
+                case 'navigation-viewport': return 'navigation-viewport';
+                case 'navigation-control': return 'navigation-control';
+                case 'navigation-reversed': return 'navigation-reversed';
+                case 'navigation-settling': return 'navigation-settling';
                 case 'render': return 'render';
                 case 'position': return 'position';
                 case 'removed': return 'removed';
@@ -1393,7 +1422,8 @@ var BAR_ID = "dsh-find-all-root";
                     documents: diagnosticCount(snapshot && snapshot.documents.length), readComplete: snapshot ? snapshot.readComplete === true : null,
                     coverageComplete: snapshot ? snapshot.coverageComplete === true : null,
                     projectionComplete: snapshot ? snapshot.projectionComplete === true : null,
-                    selectedProjectionComplete: snapshot ? selectedProjectionComplete(snapshot) : null },
+                    selectedProjectionComplete: snapshot ? selectedProjectionComplete(snapshot) : null,
+                    projectionCodes: snapshot ? [...new Set(selectedHistoryErrors(snapshot).map(function(error){return diagnosticCode(error.code);}))] : [] },
                 scan: { busy: !!state.scanBusy, complete: !!state.scanComplete, cancelled: !!state.scanCancelled,
                     documents: state.scope === 'whole' ? diagnosticCount(state.scanCursor) : null, matches: diagnosticCount(state.scope === 'whole' ? state.total : state.ranges.length),
                     displayed: diagnosticCount(resultLength()), capped: !!state.capped, liveMatches: state.scope === 'whole' ? diagnosticCount(state.liveCount) : null, liveCapped: state.scope === 'whole' ? !!state.liveCapped : null },
@@ -1477,7 +1507,8 @@ var BAR_ID = "dsh-find-all-root";
 			if (manual) { manual.left = left; manual.top = top; }
             var avoid=state.avoidMatchRange&&rangeRect(state.avoidMatchRange);
             if(avoid&&left<avoid.right&&left+box.width>avoid.left&&top<avoid.bottom&&top+box.height>avoid.top){
-                var choices=[{left:left,top:avoid.bottom+8},{left:left,top:avoid.top-box.height-8},{left:avoid.left-box.width-8,top:top},{left:avoid.right+8,top:top}].filter(function(p){return p.left>=leftEdge&&p.left+box.width<=rightEdge&&p.top>=topEdge&&p.top+box.height<=bottomEdge;});
+                var verticalGap=8+matchLineMargin(state.avoidMatchRange,avoid);
+                var choices=[{left:left,top:avoid.bottom+verticalGap},{left:left,top:avoid.top-box.height-verticalGap},{left:avoid.left-box.width-8,top:top},{left:avoid.right+8,top:top}].filter(function(p){return p.left>=leftEdge&&p.left+box.width<=rightEdge&&p.top>=topEdge&&p.top+box.height<=bottomEdge;});
                 choices.sort(function(a,b){return Math.abs(a.left-left)+Math.abs(a.top-top)-Math.abs(b.left-left)-Math.abs(b.top-top);});
                 if(choices.length){left=choices[0].left;top=choices[0].top;}
             }
@@ -2069,6 +2100,18 @@ var BAR_ID = "dsh-find-all-root";
         }
 
 		function scheduleRescan() {
+            // Whole-history counts describe the default display policy, not the
+            // currently mounted/revealed DOM. Revalidate only live highlights.
+            if(state.scope === "whole" && state.ranges.some(Boolean)) {
+                var hit=state.hits[state.index],target=state.target,store=state.adapter?.nodes(target);
+                var node=hit&&sourceNode(hit.source,store),mapped=node&&mapProjectedDocument(hit.source,node,sourceRows(target,node),hit.blockIndex);
+                var range=mapped?.blocks&&rangeForBlock(mapped.blocks[hit.blockIndex],hit.start,hit.end);
+                if(!range || range.toString()!==hit.text) {
+                    cancelNavigation();state.ranges=[];paint();
+                    state.sourceNotice=ZH?'此消息的显示已变化，原高亮已清除；全文计数仍按默认显示计算。':'This message display changed; its highlight was cleared. Whole-history counts still use the default display.';
+                    historyStatus();
+                } else {state.ranges[state.index]=range;paint();}
+            }
             if (state.scope === "page") { state.pageDirty = true; cancelCountEdit(false); }
 			// While a page-in is running the pager rescans itself after every page;
 			// rescanning on each mutation as well would walk the whole DOM per row.
@@ -2110,8 +2153,9 @@ var BAR_ID = "dsh-find-all-root";
             state.pageTimer=setTimeout(function(){state.pageTimer=0;startPageIn();},150);
         }
 		function searchContentChanged() {
+            cancelNavigation();
 			cancelPageIn();
-			state.history=null;state.historySnapshot=null;state.scanQuery=null;state.hits=[];state.total=0;state.ranges=[];state.index=-1;state.sourceNotice='';
+			state.historyRevision=null;state.history=null;state.historySnapshot=null;state.scanQuery=null;state.hits=[];state.total=0;state.ranges=[];state.index=-1;state.sourceNotice='';
 			paint();updateCount();
 			if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
 		}
@@ -2129,9 +2173,13 @@ var BAR_ID = "dsh-find-all-root";
 			else text='';
 			function add(part){if(part)text+=(text?' · ':'')+part;}
 			if(state.capped)add(L.cap.replace('{n}',String(MAX_MATCHES)));
+			if(snapshot?.documents?.some(function(doc){return doc.defaultMasked && contentTypeEnabled(sourceContentType(doc));}))add(ZH?"全文计数使用默认遮挡文字；展开只改变当前消息显示。":"Whole-history counts use default masked text; revealing changes only the displayed message.");
 			add(state.sourceNotice);
 			if(state.liveCount)add((ZH?'当前正在生成的回复中另有 ':'The reply being generated contains ')+state.liveCount+(state.liveCapped?'+':'')+(ZH?' 个匹配。':' additional matches.'));
             setStatus(text,state.paging||state.scanBusy);
+            var errorCodes=[...new Set(relevantErrors.map(function(error){return diagnosticCode(error.code);}))].join(", ");
+            state.status.title=text+(errorCodes?" ("+errorCodes+")":"");
+
         }
         function startPageIn() {
             if(state.scope!=="whole"||!state.query||!isOpen())return;
@@ -2140,16 +2188,19 @@ var BAR_ID = "dsh-find-all-root";
             var remote=state.remote&&state.remote.session;
             if(!state.projector||!remote||typeof remote.follow!=='function'||typeof remote.page!=='function'){
                 recordFailure('capability', 'unsupported-host');
-                setStatus(ZH?"完整会话搜索不可用：宿主缺少完整历史接口。请切换到已加载内容":"Whole-session search unavailable: complete-history API missing. Switch to Loaded content",false);return;
+                setStatus(ZH?"完整会话搜索不可用：宿主缺少历史读取或文本投影能力。请切换到已加载内容":"Whole-session search unavailable: history or text projection capability missing. Switch to Loaded content",false);return;
             }
             if(state.history&&state.historySnapshot&&state.historySnapshot.sessionId===target.id&& !['cancelled','error'].includes(state.historySnapshot.status)){
                 searchHistory(false);return;
             }
             var token=++state.pageToken, errorCount=0;
+            var nodeStore=state.adapter.nodes(target);
+            var revision=nodeStore?createHistoryRevisionTracker(nodeStore):null;state.historyRevision=revision;
             state.paging=true;state.sourceNotice='';state.historySnapshot=null;searchHistory(true);
 			var project=state.searchContent?state.searchContent.createProjector(state.projector):state.projector;
 			state.history=createHistoryReader({remote:state.remote,sessionId:target.id,generation:token,project:project,onUpdate:function(snapshot){
                 if(token!==state.pageToken||state.target!==target||!isOpen()||state.scope!=="whole"||!state.adapter.valid(target))return;
+                if(revision?.check(state.adapter.nodes(target),snapshot)){searchContentChanged();return;}
                 state.historySnapshot=snapshot;state.paging=['reading','projecting','idle'].includes(snapshot.status);
                 if(snapshot.status!=='cancelled' && snapshot.errors.length>errorCount){
                     recordFailure(snapshot.readComplete?'projection':'history', snapshot.errors[snapshot.errors.length-1].code);
@@ -2266,7 +2317,7 @@ var BAR_ID = "dsh-find-all-root";
         async function navigateHistoryHit(hit){
             var target=state.target,source=hit.source,token=state.navigationToken,queryToken=state.queryToken;
             var face=state.adapter.face(target),store=state.adapter.nodes(target),activated=new Set();
-            function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face&&state.hits[state.index]===hit;}
+            function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face&&state.adapter.nodes(target)===store&&state.hits[state.index]===hit;}
             function pause(){return new Promise(resolve=>setTimeout(resolve,35));}
             if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus(L.matchRevealFailed,false);return;}
             state.historyNavigating=true;
@@ -2323,7 +2374,7 @@ var BAR_ID = "dsh-find-all-root";
 			discardOrigin();
 			cancelPageIn();
 			stopObserver();
-			if (!selected || !state.target || selected.id !== state.target.id) { state.history = null; state.historySnapshot = null; }
+			state.historyRevision=null;state.history = null; state.historySnapshot = null; // A new registration/store generation cannot reuse an old projection.
             state.target = selected;
 			state.sessionId = selected ? selected.id : null;
 			if (!isOpen()) return;
@@ -2334,10 +2385,14 @@ var BAR_ID = "dsh-find-all-root";
 			if (selected && state.scope === "whole" && state.query) schedulePageIn();
 		}
 
-		function watchSession() {
+		function checkHistoryContent() {
+            var snapshot=state.historySnapshot,store=state.adapter?.nodes(state.target);
+            if(state.scope==='whole'&&snapshot?.readComplete&&state.historyRevision?.check(store,snapshot))searchContentChanged();
+        }
+        function watchSession() {
 			clearInterval(state.sessionTimer);
 			state.sessionTimer = setInterval(function () {
-				if (isOpen()) syncTarget(null, true);
+				if (isOpen()) {syncTarget(null, true);checkHistoryContent();}
 			}, SESSION_POLL_MS);
 		}
 
@@ -2728,9 +2783,13 @@ var BAR_ID = "dsh-find-all-root";
                     return function(){cancelCountEdit(false);clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
                 });
             });
-            try { state.projector=createProjector(ui,react,document); } catch(error) { state.projector=null; }
+            try {
+                var userBinding=typeof ui.projectUserText === "function" ? null : createUserProjectionBinding(ctx,searchContentChanged);
+                state.projector=createProjector(ui,react,document,userBinding?.project);
+                if(userBinding)ctx.effect(function(){return function(){userBinding.dispose();};});
+            } catch(error) { state.projector=null; }
 			state.adapter = createHostAdapter(ctx, function () {
-				if (isOpen()) syncTarget(null, true);
+				if (isOpen()) {syncTarget(null, true);checkHistoryContent();}
 			});
             if (typeof ctx.inject === "function") state.conversationSearch = installConversationSearch(ctx, react, ui, {
                 closeFind: close,

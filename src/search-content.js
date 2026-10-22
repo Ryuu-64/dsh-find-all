@@ -31,18 +31,21 @@ export function createSearchContentService(onChange) {
 		},
 		createProjector(project) {
 			if (typeof project !== "function") throw new TypeError("Search content needs a text projector");
-			const rules = [...registrations.values()].map(({ createRule }) => createRule()).filter((rule) => typeof rule === "function");
+			let rules, ruleFailure = false;
+            try { rules = [...registrations.values()].map(({ createRule }) => createRule()); if(rules.some(rule=>typeof rule!=="function"))ruleFailure=true; } catch { ruleFailure=true; }
 			return async (source) => {
 				let current = { ...source };
+                if(ruleFailure)return {source,blocks:[],errors:[{code:"search-content-rule-failed",message:"Search content rule initialization failed"}]};
 				try {
 					for (const rule of rules) {
 						const patch = await rule(current);
 						if (patch === undefined || patch === null) continue;
 						if (!object(patch)) throw new TypeError("Search content rule returned an invalid change");
-						current = { ...current, ...patch };
+						if(["sessionId","seq","id","kind","contentIndex","messageId","turn","step","stepId"].some(key=>Object.hasOwn(patch,key)&&patch[key]!==source[key]))throw new TypeError("Search content rule changed durable identity");
+                        current = { ...current, ...patch };
 					}
 				} catch (error) {
-					return { source: current, blocks: [], errors: [{ code: "search-content-rule-failed", message: error instanceof Error ? error.message : String(error) }] };
+					return { source: current, blocks: [], errors: [{ code: "search-content-rule-failed", message: "Search content rule failed" }] };
 				}
 				const projection = await project(current);
 				return { ...projection, source: current };

@@ -14,7 +14,8 @@ export async function seedHistory(runtimeRequire, home, workspace, { sidebarChil
   const { Session, SessionId, SESSION_FORMAT_VERSION } = await load('@deepseek-ai/dsh-session');
   const { createUserMessage, createAssistantMessage, createSystemMessage } = await load('@deepseek-ai/dsh-llm');
   const { Context } = await load('@deepseek-ai/cordis');
-  const { default: Jsonl } = await load('@deepseek-ai/dsh-session-persistence-jsonl');
+  const jsonl = await load('@deepseek-ai/dsh-session-persistence-jsonl');
+  const Jsonl = jsonl.default ?? jsonl;
   const descriptor = sidebarChild ? (await load('@deepseek-ai/dsh-subagent')).snapshotSubagentDescriptor : null;
   const createdAt = Date.now() - 60_000;
   fs.mkdirSync(workspace, { recursive: true });

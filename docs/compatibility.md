@@ -1,5 +1,7 @@
 # Issue 35: modern user-text projection
 
+The package now admits official DSH `0.2.1-rc.2` through all four existing DSH peer ranges. Every previously listed release remains admitted; other `0.2.1` prereleases and future versions are not added. Normal installation needs no exact-version exemption. The current release's Web verification is recorded below; Electron Desktop acceptance remains unverified.
+
 The current-conversation whole-session path uses the retained Session's public `uiConversation.userText.createEvaluator()` when the legacy `ui.projectUserText` API is absent. It supplies the historical message's batch-derived session labels and skill names, not the current composer's facts. Official text/display, session/file/folder labels, command/skill names and default secret masks are projected without mounting hidden Chat rows. Unknown or malformed nodes, evaluator/renderer failures, missing capabilities and non-text user attachments produce explicit partial coverage. One failed source does not discard independent usable sources or fall back to its stored raw input.
 
 Secret-bearing user text is indexed in its default masked state. The find bar explains this policy. Clicking Show secret changes that message's current display, not the whole-history count; a masked result that no longer matches the live body cannot receive a fabricated highlight. Existing live highlights are revalidated and removed/rebound when their DOM changes. Search never clicks Show secret on the user's behalf. Loaded-content mode continues to describe only the currently rendered content, including text the user explicitly revealed.
@@ -14,16 +16,18 @@ The historical host matrix below is not rerun automatically by these changes. Ne
 ## Verification status (2026-10-22)
 
 - `npm run check`: 196 tests passed. `npm run verify:release`: passed; the packed bundle matched the tested source build.
-- Official DSH `0.2.1-rc.2`, isolated Web profile: real Chat file labels, default masked secrets, Reveal-local highlight invalidation, remount recovery, 80-turn whole/loaded count differences, and offscreen user **and assistant** navigation/highlighting passed on the same candidate bundle. Only the disposable test copy added that exact peer version; production package version and peer ranges remain unchanged.
-- Current-build real-host regression on `0.2.0-rc.2` is **not completed**. The separate legacy runtime could not be restored because the official dependency source was unreachable. Unit coverage of the legacy path is not a substitute for that acceptance, nor a rerun of the historical host matrix.
+- Official DSH `0.2.1-rc.2`, fresh isolated Web profile: the candidate with the expanded peer declarations installed through the normal CLI with no exemption. Real Chat file-label search, two default masked secrets, reveal-local highlight invalidation, second-hit navigation and remount masking passed. The hidden fake-key fragment had zero whole-history matches and one loaded-content match after manual reveal.
+- On that modern host, an 80-turn synthetic conversation initially rendered 25 user messages and 25 assistant replies. Loaded-content counts were 25 each; whole-history counts were 80 each and 160 for their shared prefix, while only 25 turns remained rendered. Independent offscreen navigation to user `001` and assistant `001` loaded the original rows, highlighted the exact query, and remained visible after settling. Query replacement, Close and A/B/A session switching during search passed, as did cross-conversation body search and its retained-query handoff. No page or console errors were recorded.
+- Official DSH `0.2.0-rc.2`, separate isolated Web profile: the unmodified `85e683b` artifact installed normally and passed the same 25/80/160 counts, independent earliest-user/assistant navigation, and query/Close/A/B/A cancellation checks. The prior dependency-download blocker is resolved for this run. The final expanded-declaration package also installed normally on both hosts; direct repository `seedHistory` preparation passed with both persistence-module export shapes.
+- Both Web runs used Windows, Chromium `141.0.7390.37`, a `1400×900` viewport, empty test profiles and completed synthetic messages without model calls. Their production client bundle was byte-identical: SHA-256 `01e6ed3470b4ea42281f1016b88ffdb02246dc9654274666ae978653ba02f0b9`. The support declaration changes no production JavaScript.
 - Chromium previously showed `Aw Snap` error 9 during testing. Its cause was not established. The same tab later recovered and the outstanding assistant navigation passed; this does not claim a browser-crash fix.
-- The implementation is delivered for continued testing at the user's request, not as a claim of complete cross-version compatibility. Remaining checks are listed in [the test handoff](issue35-testing.md). No npm release is implied.
+- Electron Desktop, the other historical host versions and arbitrary third-party renderer replacements were not revalidated by these runs. The repeatable scope and remaining Desktop check are listed in [the regression checklist](issue35-testing.md). No npm publication is implied.
 
 ---
 
 # Full-text conversation search
 
-The Full-text conversation search entry targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This is the implementation target, not a new claim that every historical peer version or Electron Desktop has passed acceptance. Package version and peer ranges remain unchanged.
+The Full-text conversation search entry's original contract targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This contract history does not claim that every historical peer version or Electron Desktop has passed acceptance. Current `0.2.1-rc.2` support and verification are recorded above.
 
 ## Host and client contract
 
@@ -138,7 +142,7 @@ Paging errors/stalls and manual stop retain rendered matches and explicitly labe
 2. **Actual Web runtime + synthetic sessions**: installation of the same packed artifact, real module loader/slot rendering, paging, multiple view transitions and the host-supported disable/re-enable lifecycle must be recorded for each target release. A browser fixture alone cannot pass this layer.
 3. **Target Electron Desktop smoke**: the same artifact must be checked on the target Desktop build/OS. Web or jsdom success does not pass this layer.
 
-Candidate releases: `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.6-alpha.1`, `0.1.6-alpha.2`, `0.1.7-alpha.1`, `0.1.7-alpha.2`, `0.1.7-rc.1`, `0.1.7-rc.2`, `0.2.0-rc.1`, `0.2.0-rc.2`.
+Historical scripted matrix targets: `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.6-alpha.1`, `0.1.6-alpha.2`, `0.1.7-alpha.1`, `0.1.7-alpha.2`, `0.1.7-rc.1`, `0.1.7-rc.2`, `0.2.0-rc.1`, `0.2.0-rc.2`. The separately verified `0.2.1-rc.2` Web run is recorded above; it does not rerun or expand that historical scripted matrix.
 
 The 2026-10-02 registry audit compared every published `@deepseek-ai/dsh` version with main's three peer requirements (`>=0.1.5-rc.2 <0.1.6-0 || >=0.1.6-0 <0.2.0-0`) using the official prerequisite rule. The original six-target sample accidentally excluded four releases that the old gate admitted: `0.1.6-alpha.1`, `0.1.7-alpha.1`, `0.1.7-alpha.2`, and `0.1.7-rc.1`. The ten-target candidate includes all currently published versions admitted by that old gate plus both current 0.2 release candidates. The user's Desktop 2.0.14 report identifies its bundled runtime as `0.1.7-rc.1`; Desktop marketing/version labels are not inferred to equal DSH runtime versions.
 

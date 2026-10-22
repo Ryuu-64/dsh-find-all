@@ -4,7 +4,8 @@
 
 - Fix modern whole-conversation user-text projection using official evaluator semantics and historical facts, with default secret masks and explicit partial coverage for unsupported content.
 - Invalidate stale projections and revalidate actual message ranges before navigation/highlighting; preserve the legacy projection path.
-- Document the verified modern Web scenarios and the still-pending legacy real-host regression. Package version and compatibility declarations are unchanged.
+- Add official DSH `0.2.1-rc.2` to all four DSH peer ranges so normal installation succeeds without a version exemption, while retaining every previously admitted host version.
+- Record isolated Web verification of the modern host and the completed `0.2.0-rc.2` regression. Electron Desktop acceptance remains separate.
 
 ## 0.1.13
 

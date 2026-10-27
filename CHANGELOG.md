@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.15
+
+- Based on `0.1.14`, with unchanged search logic; the generated bundle only updates its embedded version metadata.
+- Add exact DSH `0.2.1-rc.3` to all four existing peer requirements, retaining previous versions and excluding future releases. Search logic is unchanged; the generated bundle only updates its embedded version metadata.
+- Verify 0.1.15 installation and HTTP on exact rc.3. Native dot Linux Web search/highlighting, history paging, archive/restore, masked projections, lifecycle, and light/dark theme smoke passed on the patched 0.1.14 candidate with equivalent search logic. All 198 checks and release-artifact checks pass. Electron/Tauri and other host versions were not rerun.
+- Add declaration checks and a modern real-host acceptance harness; see `docs/rc3-compatibility.md` for actual results and unverified boundaries.
+
 ## 0.1.14
 
 - Fix modern whole-conversation user-text projection using official evaluator semantics and historical facts, with default secret masks and explicit partial coverage for unsupported content.

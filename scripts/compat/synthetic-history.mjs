@@ -160,7 +160,7 @@ export function setFixturePatch(home, queryPath, disabled = false, profile = 'we
   const patches = [
     // The official Web scaffold also disables background LLM title generation.
     { id: 'session-title-llm', disabled: true },
-    { id: 'session-query-sqlite', config: { path: queryPath, openAt: 'first-search' } },
+    ...(queryPath ? [{ id: 'session-query-sqlite', config: { path: queryPath, openAt: 'first-search' } }] : []),
     { id: 'find-all', disabled },
   ];
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(patches));

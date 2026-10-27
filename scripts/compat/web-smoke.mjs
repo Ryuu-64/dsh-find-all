@@ -10,6 +10,9 @@ import { chromium } from 'playwright';
 import { seedHistory, setFixturePatch, exerciseHistory, exerciseSidebarIsolation } from './synthetic-history.mjs';
 import { createRedactor, captureSafePage } from './evidence.mjs';
 import { npmCommand } from './npm-command.mjs';
+import { exerciseHostHttp } from './host-http.mjs';
+import { exerciseModernHistory, exerciseModernProjection } from './modern-history.mjs';
+import { seedModernProjection } from './modern-projection-fixture.mjs';
 import { exerciseFindButtonAppearance } from './find-button-appearance.mjs';
 const secrets = new Set();
 const redact = createRedactor(secrets);
@@ -22,11 +25,12 @@ const output = path.resolve(outputArg);
 fs.mkdirSync(output, { recursive: true });
 const hash = () => createHash('sha256').update(fs.readFileSync(artifact)).digest('hex');
 const artifactSha256 = hash();
-const run = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || '/tmp', 'find-all-web-'));
+const run = process.env.FIND_ALL_REUSE_RUN ? path.resolve(process.env.FIND_ALL_REUSE_RUN) : fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || '/tmp', 'find-all-web-'));
+console.log('Isolated acceptance directory:', run);
 const discovery = path.join(run, 'discovery');
 const runtime = path.join(run, 'runtime');
-const home = path.join(run, 'home');
-const workspace = path.join(run, 'workspace');
+const home = process.env.FIND_ALL_REUSE_RUN ? fs.mkdtempSync(path.join(run, 'home-')) : path.join(run, 'home');
+const workspace = path.join(home, 'workspace');
 const full = process.env.FIND_ALL_FULL_ACCEPTANCE === '1';
 const queryPath = path.join(run, 'content-index.sqlite');
 for (const dir of [discovery, runtime, home]) fs.mkdirSync(dir, { recursive: true });
@@ -39,6 +43,10 @@ for (const name of Object.keys(env)) {
 }
 Object.assign(env, {
   HOME: home,
+  XDG_DATA_HOME: path.join(home, '.local/share'),
+  XDG_CACHE_HOME: path.join(home, '.cache'),
+  XDG_CONFIG_HOME: path.join(home, '.config'),
+  PNPM_HOME: path.join(home, '.local/share/pnpm'),
   DSH_HOME: path.join(home, '.dsh'),
   DSH_AGENTS_HOME: path.join(home, '.agents'),
   DSH_BUNDLED_SKILL_DIR: path.join(home, '.bundled-skills'),
@@ -56,6 +64,7 @@ function npmInstall(dir, filename) {
 // Resolve the target's official dependency graph from metadata, without first
 // installing a drifting caret graph or relaxing its peers. Exact non-DSH peer
 // pins (e.g. Cordis Loader) are preserved as declared by the target packages.
+const reuseRuntime = !!process.env.FIND_ALL_REUSE_RUN && fs.existsSync(path.join(runtime, 'package-lock.json'));
 const seen = new Set(['@deepseek-ai/dsh']);
 let queue = ['@deepseek-ai/dsh'];
 // Each pin comes from vendor/*/package.json at that exact official release tag.
@@ -63,7 +72,7 @@ const vendorVersions = JSON.parse(fs.readFileSync(new URL('./vendor-versions.jso
 assert.ok(vendorVersions, 'vendor baseline must be researched for this target');
 const overrides = { ...vendorVersions };
 const manifests = {};
-while (queue.length) {
+while (!reuseRuntime && queue.length) {
   const batch = queue.splice(0, 12);
   const records = await Promise.all(batch.map(name => new Promise((resolve, reject) => {
     const npm = npmCommand(['view', `${name}@${version}`, '--json']);
@@ -93,9 +102,11 @@ while (queue.length) {
   }
 }
 manifest.overrides = overrides;
+if (!reuseRuntime) {
 fs.writeFileSync(path.join(output, 'target-manifests.json'), JSON.stringify(manifests, null, 2));
 fs.writeFileSync(path.join(runtime, 'package.json'), JSON.stringify(manifest));
 npmInstall(runtime, 'exact-install.log');
+}
 const runtimeRequire = createRequire(path.join(runtime, 'node_modules/@deepseek-ai/dsh/package.json'));
 const exactLockText = fs.readFileSync(path.join(runtime, 'package-lock.json'), 'utf8');
 fs.writeFileSync(path.join(output, 'runtime-lock.json'), exactLockText);
@@ -124,7 +135,10 @@ assert.equal(hash(), artifactSha256);
 let seeded;
 if (full) {
   seeded = await seedHistory(runtimeRequire, home, workspace, { sidebarChild: version === '0.2.0-rc.2' });
-  setFixturePatch(home, queryPath);
+  // Modern acceptance uses the plugin's public sessionQuery route; do not
+  // enable the host's separate optional SQLite full-text index.
+  if (version.startsWith('0.2.1-')) await seedModernProjection(runtimeRequire, home, workspace);
+  setFixturePatch(home, version.startsWith('0.2.1-') ? null : queryPath);
 }
 let serverLog = '';
 const server = spawn(process.execPath, [bin, '--profile', 'web', '--no-open', '--host', '127.0.0.1', '--port', '4195'], { cwd: full ? workspace : runtime, env });
@@ -154,7 +168,16 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   assert.ok(ready, 'host did not become HTTP-ready');
-  browser = await chromium.launch({ headless: true });
+  if (process.env.FIND_ALL_HTTP_ONLY === '1') {
+    report.httpEvidence = await exerciseHostHttp(url);
+    report.bootstrap = 'host-http-passed';
+  } else if (process.env.FIND_ALL_SERVER_ONLY === '1') {
+    fs.writeFileSync(path.join(output, 'local-test-url.txt'), url, { mode: 0o600 });
+    console.log('Official host ready for an existing browser; URL saved locally.');
+    await new Promise(resolve => { process.once('SIGINT', resolve); process.once('SIGTERM', resolve); });
+    report.bootstrap = 'manual-browser';
+  } else {
+  browser = await chromium.launch({ headless: true, env, ...(process.env.FIND_ALL_CHROMIUM_PATH ? { executablePath: process.env.FIND_ALL_CHROMIUM_PATH } : {}) });
   page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US' });
   // Keep only structural evidence of the first shortcut routing, never input
   // values, text, URLs or session contents. This distinguishes host auto-focus
@@ -183,26 +206,34 @@ try {
   await notice.waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await notice.waitFor({ state: 'hidden' });
-  // The observed keyless onboarding offers this explicit no-account path.
-  const configureLater = page.getByRole('button', { name: 'Configure later', exact: true });
-  await configureLater.waitFor({ state: 'visible', timeout: 30_000 });
-  await configureLater.click();
-  await configureLater.waitFor({ state: 'hidden' });
+  // The rc.3 native-browser observation exposes a Get started dialog with
+  // Close, Add API Key and Sign in. Close is its explicit no-account path;
+  // do not click either credential action or invent Configure later there.
+  const onboarding = version === '0.2.1-rc.3'
+    ? page.getByRole('dialog', { name: 'Get started', exact: true })
+    : null;
+  const deferSetup = onboarding
+    ? onboarding.getByRole('button', { name: 'Close', exact: true })
+    : page.getByRole('button', { name: 'Configure later', exact: true });
+  await deferSetup.waitFor({ state: 'visible', timeout: 30_000 });
+  await deferSetup.click();
+  await (onboarding || deferSetup).waitFor({ state: 'hidden' });
   // Handle only the already inspected, non-binding prompts if a legacy reload
   // presents them again. Unknown agreements or permission prompts still fail.
   await page.addLocatorHandler(notice, async () => {
     assert.equal(await page.getByRole('checkbox').count(), 0, 'unexpected consent control');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
   });
-  await page.addLocatorHandler(configureLater, async () => { await configureLater.click(); });
+  await page.addLocatorHandler(deferSetup, async () => { await deferSetup.click(); });
   await page.keyboard.press('Control+f');
   const bar = page.locator('#dsh-find-all-root');
   await bar.waitFor({ state: 'visible', timeout: 30_000 });
   // Keep bootstrap read-only with respect to history, including seeded runs.
-  await bar.locator('.scope').click(); // default Whole -> Page
-  await bar.locator('input').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
+  // Empty sessions require no history read in either mode. Keep modern
+  // whole-history default rather than relying on the removed legacy scope chip.
+  await bar.locator('input.query').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
   await page.waitForTimeout(400);
-  assert.equal(await bar.locator('.count').innerText(), '0/0');
+  assert.ok(['No results', 'Unavailable'].includes(await bar.locator('.count:visible').innerText()));
   report.initialSessionViews = await page.locator('[data-find-all-session]').count();
   if (report.initialSessionViews === 0) assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
   await captureSafePage(page, path.join(output, 'empty-session-find'), secrets, redact);
@@ -212,7 +243,11 @@ try {
   report.bootstrap = 'passed';
   if (full) {
     report.seeds = seeded;
-    report.historyEvidence = await exerciseHistory(page, home, queryPath, name => captureSafePage(page, path.join(output, name), secrets, redact), version);
+    const capture = name => captureSafePage(page, path.join(output, name), secrets, redact);
+    report.historyEvidence = version.startsWith('0.2.1-')
+      ? await exerciseModernHistory(page, capture)
+      : await exerciseHistory(page, home, queryPath, capture, version);
+    if (version.startsWith('0.2.1-')) report.projectionEvidence = await exerciseModernProjection(page, capture);
     if (version === '0.2.0-rc.2') {
       report.findButtonAppearance = {status: 'running', host: version};
       report.findButtonAppearance = await exerciseFindButtonAppearance(page, name => captureSafePage(page, path.join(output, name), secrets, redact));
@@ -222,6 +257,7 @@ try {
   }
   report.browserErrors = errors.map(redact);
   assert.deepEqual(errors, [], 'unhandled browser errors');
+  }
 } catch (error) {
   if (report.bootstrap !== 'passed') report.bootstrap = 'failed';
   else if (full) report.syntheticHistory = 'failed';
@@ -235,6 +271,7 @@ try {
   throw new Error(report.error);
 } finally {
   if (page) {
+    report.historyEvidence ||= page.findAllModernEvidence;
     try { report.firstShortcutFocusEvidence = await page.evaluate(() => window.__findAllFocusEvidence || []); }
     catch {}
   }

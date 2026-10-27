@@ -1,6 +1,8 @@
+> **0.1.15 / rc.3:** this version additionally admits exact `0.2.1-rc.3`; see [the separate native Web review and verification results](rc3-compatibility.md). Historical results below describe the rc.2 baseline and do not imply a new rc.3 Desktop pass.
+
 # Issue 35: modern user-text projection
 
-The package now admits official DSH `0.2.1-rc.2` through all four existing DSH peer ranges. Every previously listed release remains admitted; other `0.2.1` prereleases and future versions are not added. Normal installation needs no exact-version exemption. The current release's Web verification and the reported packaged Windows Desktop acceptance are recorded below.
+The package now admits official DSH `0.2.1-rc.2` through all four existing DSH peer ranges. Every previously listed release remains admitted; that released baseline did not add other `0.2.1` prereleases or future versions. Version 0.1.15 adds only exact rc.3 as noted above. Normal installation needs no exact-version exemption. The rc.2 baseline's Web verification and the reported packaged Windows Desktop acceptance are recorded below.
 
 The current-conversation whole-session path uses the retained Session's public `uiConversation.userText.createEvaluator()` when the legacy `ui.projectUserText` API is absent. It supplies the historical message's batch-derived session labels and skill names, not the current composer's facts. Official text/display, session/file/folder labels, command/skill names and default secret masks are projected without mounting hidden Chat rows. Unknown or malformed nodes, evaluator/renderer failures, missing capabilities and non-text user attachments produce explicit partial coverage. One failed source does not discard independent usable sources or fall back to its stored raw input.
 

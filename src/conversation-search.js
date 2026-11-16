@@ -1,4 +1,6 @@
 // Explicit, cancellable Host batches. No session activation until a row is opened.
+import { installConversationSearchSettings } from './conversation-search-settings.js';
+
 // Document-relative, like official session-log-export, for hosted subpaths.
 const ENDPOINT = "api/dsh-find-all/search";
 const DEFAULT_SCOPE = "ordinary-unarchived", ARCHIVED_SCOPE = "ordinary-including-archived";
@@ -8,7 +10,7 @@ const zh = typeof navigator !== 'undefined' && /^zh/i.test(navigator.language ||
 const L = zh ? {
   title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
   scope: '搜索范围：所有工作区',
-  scopeDetails: '搜索当前连接服务中、所有工作区的普通非空对话；默认不含归档，可勾选包含归档；不包含子代理对话。',
+  scopeDetails: '搜索当前连接服务中、所有工作区的普通非空对话。使用「包含归档」调整范围。搜索不包含子代理对话。',
   includeArchived: '包含归档', archived: '已归档', restore: '取消归档并打开', restoring: '正在取消归档…',
   restoreUnavailable: '当前宿主不支持取消归档。', restoreUnconfirmed: '未能确认取消归档，尚未打开；请稍后重试。',
   restoredOpenFailed: '已取消归档，但未能打开对话。可返回结果重试。', restoredFindFailed: '已取消归档，但未能接入聊天正文查找。可返回结果重试。', archivedNow: '该对话已归档；请使用“取消归档并打开”。',
@@ -32,7 +34,7 @@ const L = zh ? {
 } : {
   title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
   scope: 'Search scope: All workspaces',
-  scopeDetails: 'Searches ordinary, nonempty conversations across all workspaces on the connected server. Archived conversations are excluded unless Include archived is checked. Subagent conversations are excluded.',
+  scopeDetails: 'Searches ordinary, nonempty conversations across all workspaces on the connected server. Use Include archived to change the scope. Subagent conversations are excluded.',
   includeArchived: 'Include archived', archived: 'Archived', restore: 'Unarchive and open', restoring: 'Unarchiving…',
   restoreUnavailable: 'This Host does not support unarchiving.', restoreUnconfirmed: 'Unarchiving could not be confirmed, so the conversation was not opened. Try again shortly.',
   restoredOpenFailed: 'Unarchived, but the conversation could not be opened. Return to the results to retry.', restoredFindFailed: 'Unarchived, but chat text could not be reached for find. Return to the results to retry.', archivedNow: 'This conversation is archived. Use Unarchive and open.',
@@ -118,8 +120,10 @@ function searchValue(value, requestId, query, scope) {
 
 export function installConversationSearch(ctx, react, ui, bridge) {
   const h = react.createElement;
+  const readDefaults = installConversationSearchSettings(ctx, react, ui);
   let services = null, mounted = true, epoch = 0, request = null, timer = 0;
   let scanId = null, mode = 'title-body', includeArchived = false;
+  let titleOnlyDefault = false, includeArchivedDefault = false;
   let restoreOperation = null, restoreFeedback = null;
   const scope = () => includeArchived ? ARCHIVED_SCOPE : DEFAULT_SCOPE;
   const invalidateRestoreNavigation = () => { if (restoreOperation) restoreOperation.navigate = false; restoreFeedback = null; };
@@ -220,7 +224,21 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     if (!mounted) return;
     invalidateRestoreNavigation();
     cancelHandoff(); focusOrigin = document.activeElement; bridge.closeFind();
-    if (typeof seed === 'string' && seed !== query) { query = seed; scroll = 0; content = EMPTY; body = 'idle'; }
+    const defaults = readDefaults();
+    const previousMode = mode, previouslyIncludedArchived = includeArchived;
+    if (defaults) {
+      const nextTitleOnly = defaults.defaultTitleOnly === true;
+      const nextIncludeArchived = defaults.defaultIncludeArchived === true;
+      // Keep temporary choices until their corresponding profile defaults change.
+      if (titleOnlyDefault !== nextTitleOnly) mode = nextTitleOnly ? 'title' : 'title-body';
+      if (includeArchivedDefault !== nextIncludeArchived) includeArchived = nextIncludeArchived;
+      titleOnlyDefault = nextTitleOnly;
+      includeArchivedDefault = nextIncludeArchived;
+    }
+    if (mode !== previousMode || includeArchived !== previouslyIncludedArchived || (typeof seed === 'string' && seed !== query)) {
+      if (typeof seed === 'string') query = seed;
+      scroll = 0; content = EMPTY; body = 'idle';
+    }
     open = true; notice = '';
     if (!ui.Modal || !ui.Input) { open = false; notice = L.unsupported; publish(); return; }
     watchLists();

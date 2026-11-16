@@ -5,10 +5,12 @@ const FIELDS = ['defaultTitleOnly', 'defaultIncludeArchived'];
 
 const en = {
   description: 'Defaults for full-text conversation search.',
-  help: 'Choose the starting filters for full-text conversation search. You can still change them in the search dialog.',
   defaultTitleOnly: 'Search titles only by default',
+  defaultTitleOnlyHint: 'When off, search matches titles and message text. Either mode can be selected in the search dialog.',
   defaultIncludeArchived: 'Include archived conversations by default',
-  reset: 'Use inherited value',
+  defaultIncludeArchivedHint: 'Archived conversations can appear in results. Unarchive a conversation to open it.',
+  overridden: 'Overridden',
+  reset: 'Reset to default',
   unavailable: 'Search settings are unavailable.',
   readOnly: 'This profile’s settings are read-only.',
   save: 'Save',
@@ -18,16 +20,26 @@ const en = {
 
 const zh = {
   description: '对话全文搜索的默认选项。',
-  help: '选择对话全文搜索的默认筛选条件。打开搜索后仍可调整。',
   defaultTitleOnly: '默认仅搜索标题',
+  defaultTitleOnlyHint: '关闭后同时搜索标题和正文。打开搜索窗口后也可以切换。',
   defaultIncludeArchived: '默认包含已归档对话',
-  reset: '恢复继承值',
+  defaultIncludeArchivedHint: '让归档对话出现在搜索结果中。打开归档对话前需先取消归档。',
+  overridden: '已覆盖',
+  reset: '恢复默认',
   unavailable: '搜索设置暂不可用。',
   readOnly: '当前配置的设置为只读。',
   save: '保存',
   saving: '正在保存…',
   saveFailed: '宿主未确认保存，编辑内容仍保留。重新打开本页可读取已保存的值。',
 };
+
+const fieldRow = {
+  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16,
+  fontSize: 13, lineHeight: 1.5, color: 'var(--dsw-alias-label-primary)',
+};
+const fieldActions = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 };
+const fieldHint = { margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--dsw-alias-label-tertiary)' };
+const resetStyle = { height: 'auto', padding: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--dsw-alias-label-secondary)' };
 
 function booleanField(field) {
   return {
@@ -47,7 +59,7 @@ export function installConversationSearchSettings(ctx, react, ui) {
       source = configForms.get(ENTRY);
       return () => { source = undefined; };
     });
-    if (!ui.SettingsFormModel || !ui.SettingsForm || !ui.Checkbox) return;
+    if (!ui.SettingsFormModel || !ui.SettingsForm || !ui.Switch || !ui.Tag) return;
     child.effect(() => locale.register(LOCALE, { en, zh }));
     child.effect(() => configForms.whileServed([ENTRY], () => {
       const model = new ui.SettingsFormModel(configForms.get(ENTRY), FIELDS.map(booleanField));
@@ -62,19 +74,24 @@ export function installConversationSearchSettings(ctx, react, ui) {
         const { shell, fields } = react.useSyncExternalStore(store.subscribe, store.getSnapshot);
         if (view === 'summary') return t('description');
         const disabled = !shell.writable || shell.saving;
-        const controls = FIELDS.map(field => h('div', {
-          key: field,
-          style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-        },
-          h(ui.Checkbox, {
-            label: t(field), checked: fields[field].text === 'true', disabled,
-            onChange: checked => actions.edit(field, String(checked)),
-          }),
-          fields[field].overridden ? h(ui.Button, {
-            type: 'button', size: 'sm', variant: 'ghost', disabled,
-            'aria-label': `${t('reset')} · ${t(field)}`,
-            onClick: () => actions.resetField(field),
-          }, t('reset')) : null));
+        const controls = FIELDS.map((field, index) => {
+          const label = t(field);
+          const value = fields[field];
+          return h('div', { key: field, style: { display: 'grid', gap: 6, padding: '12px 0',
+            borderTop: index ? '0.5px solid var(--dsw-alias-border-l2)' : undefined } },
+          h('div', { style: fieldRow },
+            h('span', { style: { flex: 1, minWidth: 0 } }, label),
+            h('div', { style: fieldActions },
+              value.overridden && h(ui.Tag, { tone: 'neutral' }, t('overridden')),
+              value.overridden && h(ui.Button, {
+                type: 'button', size: 'sm', variant: 'ghost', disabled, style: resetStyle,
+                'aria-label': `${t('reset')} · ${label}`,
+                onClick: () => actions.resetField(field),
+              }, t('reset')),
+              h(ui.Switch, { checked: value.text === 'true', disabled, label,
+                onChange: checked => actions.edit(field, String(checked)) }))),
+          h('p', { style: fieldHint }, t(`${field}Hint`)));
+        });
         const labels = {
           unavailable: t('unavailable'), readOnly: t('readOnly'),
           save: t('save'), saving: t('saving'), saveFailed: t('saveFailed'),
@@ -82,7 +99,7 @@ export function installConversationSearchSettings(ctx, react, ui) {
         return h(ui.SettingsForm, {
           labels, state: { ...shell, dirty: shell.dirty && shell.writable },
           onSave: actions.save, onDiscard: actions.discard,
-        }, h('p', null, t('help')), controls);
+        }, controls);
       }
 
       const stop = child.slots.inject('plugins.row.config', () => child.slots.register({

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.16
+
+- Support DSH `0.2.2-rc.3` and native plugin updates.
+- Add full-text search defaults in the native plugin configuration form.
+- Preserve history jumps during DSH pagination.
+- Refresh English and Simplified Chinese usage guides and keep development artifacts outside the repository.
+
 ## 0.1.15
 
 - Based on `0.1.14`, with unchanged search logic; the generated bundle only updates its embedded version metadata.

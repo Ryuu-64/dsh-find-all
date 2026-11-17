@@ -9,8 +9,7 @@
 //
 //   node scripts/install-local.mjs [--tarball <path>] [--profile <dir>] [--dry-run]
 //
-// Default tarball: `npm pack` output beside this repo (`dsh-find-all-<version>.tgz`),
-// refreshed automatically when missing or stale.
+// Default tarball: freshly packed in temporary storage, then retained in the profile.
 //
 // Steps:
 //   1. build the tarball (or take the given one) and check the registration id inside it
@@ -77,12 +76,12 @@ try {
 	const tarballName = `${pkg.name.replace(/^@/, "").replace(/\//, "-")}-${pkg.version}.tgz`;
 	let tarball = args.tarball === undefined ? join(profile, tarballName) : resolve(args.tarball);
 	if (args.tarball === undefined) {
-		const built = join(REPO_ROOT, tarballName);
+		const built = join(staging, tarballName);
 		const stale = !existsSync(built)
 			|| statSync(built).mtimeMs < statSync(join(REPO_ROOT, "lib", "client.js")).mtimeMs;
 		if (stale) {
 			console.log(`  ..   packing ${pkg.name}@${pkg.version}`);
-			execFileSync("npm", ["pack", "--pack-destination", REPO_ROOT, "--silent"], {
+			execFileSync("npm", ["pack", "--pack-destination", staging, "--silent"], {
 				cwd: REPO_ROOT, encoding: "utf8", shell: process.platform === "win32",
 			});
 		} else {

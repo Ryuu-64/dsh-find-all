@@ -25,16 +25,16 @@ jobs:
         id: artifact
         shell: bash
         run: |
-          mkdir -p evidence/artifact
-          artifact=$(npm pack --ignore-scripts --pack-destination evidence/artifact --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename')
-          echo "path=evidence/artifact/$artifact" >> "$GITHUB_OUTPUT"
-          sha256sum "evidence/artifact/$artifact" | tee evidence/artifact/SHA256SUMS
-          git rev-parse HEAD > evidence/commit.txt
+          mkdir -p ${{ runner.temp }}/dsh-find-all-evidence/artifact
+          artifact=$(npm pack --ignore-scripts --pack-destination ${{ runner.temp }}/dsh-find-all-evidence/artifact --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8"))[0].filename')
+          echo "path=${{ runner.temp }}/dsh-find-all-evidence/artifact/$artifact" >> "$GITHUB_OUTPUT"
+          sha256sum "${{ runner.temp }}/dsh-find-all-evidence/artifact/$artifact" | tee ${{ runner.temp }}/dsh-find-all-evidence/artifact/SHA256SUMS
+          git rev-parse HEAD > ${{ runner.temp }}/dsh-find-all-evidence/commit.txt
       - name: Test native return inputs and retained paging anchors
-        run: node scripts/compat/return-position-web.mjs 0.2.0-rc.2 '${{ steps.artifact.outputs.path }}' evidence/rc2-web
+        run: node scripts/compat/return-position-web.mjs 0.2.0-rc.2 '${{ steps.artifact.outputs.path }}' ${{ runner.temp }}/dsh-find-all-evidence/rc2-web
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: ${{ !cancelled() }}
         with:
           name: return-reading-position-rc2
-          path: evidence/
+          path: ${{ runner.temp }}/dsh-find-all-evidence/
           retention-days: 7

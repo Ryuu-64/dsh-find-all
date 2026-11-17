@@ -52,10 +52,10 @@ explicitly unverified in this run.
 npm ci --ignore-scripts --legacy-peer-deps
 npm run check
 npm run verify:release
-mkdir -p evidence/artifact
-npm pack --ignore-scripts --pack-destination evidence/artifact
+mkdir -p ../../TaskArtifacts/dsh-find-all/artifact
+npm pack --ignore-scripts --pack-destination ../../TaskArtifacts/dsh-find-all/artifact
 FIND_ALL_FULL_ACCEPTANCE=1 node scripts/compat/web-smoke.mjs 0.2.1-rc.3 \
-  evidence/artifact/ryuu-64-dsh-find-all-0.1.15.tgz evidence/0.2.1-rc.3
+  ../../TaskArtifacts/dsh-find-all/artifact/ryuu-64-dsh-find-all-0.1.15.tgz ../../TaskArtifacts/dsh-find-all/0.2.1-rc.3
 ```
 
 The development dependency install flag is not used to bypass the host's plugin

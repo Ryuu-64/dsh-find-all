@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "对话查找",
-    "description": "跨会话搜索，或在当前对话中查找文字。"
+    "description": "跨会话搜索，或在当前对话中查找文字。",
+    "detail": "README.zh-CN.md"
   }
 }

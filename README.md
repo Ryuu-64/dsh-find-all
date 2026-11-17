@@ -1,30 +1,32 @@
-# dsh-find-all 对话全文搜索
+# dsh-find-all for DeepSeek Harness
 
-在 DeepSeek Harness（DSH）中搜索各工作区对话的标题和已保存正文，也可以按 **⌘F / Ctrl+F** 查找当前对话。
+English | [简体中文](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.zh-CN.md)
 
-## 效果预览
+Search conversation titles and saved messages across workspaces in DeepSeek Harness (DSH), or press **⌘F / Ctrl+F** to find text in the current conversation.
 
-记得聊过「离线导出」，却忘了在哪个对话？输入关键词，从正文片段中找回它。
+## Preview
 
-![在所有工作区搜索「离线导出」，结果显示两个对话的正文片段](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/conversation-search.png)
+Remember discussing offline export but can't remember which conversation? Search for `离线导出` (offline export) and use the message excerpts to find it.
 
-截图来自 DSH `0.2.2-rc.3` Web 上运行的源码版，使用演示对话。
+![Chinese DSH interface showing two conversations across workspaces with excerpts matching 离线导出 (offline export)](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/conversation-search.png)
 
-## 当前版本与安装
+The screenshots show the source build running on DSH `0.2.2-rc.3` Web in Chinese, with sample conversations.
 
-npm 已发布的 **`0.1.15`** 最高支持 DSH **`0.2.1-rc.3`**。如果你用的是 DSH **`0.2.2-rc.3` Web**，请用下面的源码安装方式。下文标注「源码版」的功能尚未发布到 npm。
+## Versions and installation
 
-如果装过 `dsh-find-bar`，请先卸载，避免快捷键冲突。
+The latest npm release, **`0.1.15`**, supports selected DSH versions through **`0.2.1-rc.3`**. For DSH **`0.2.2-rc.3` Web**, use the source installation below. Features marked **source build** are available from the repository.
 
-### 安装 npm 已发布版
+If you have `dsh-find-bar` installed, remove it first to avoid a shortcut conflict.
 
-1. 打开 DSH 的「插件」→「添加插件」。
-2. 输入 `@ryuu-64/dsh-find-all`，安装并启用。
-3. 重启 DSH（网页版需重启服务并刷新页面）。
+### Install the npm release
 
-### 在 DSH 0.2.2-rc.3 Web 上安装源码版
+1. In DSH, go to **Plugins** and choose **Add plugin**.
+2. Enter `@ryuu-64/dsh-find-all`, then install and enable it.
+3. Restart DSH. On Web, restart the server and refresh the page.
 
-在运行 DSH Web 服务的机器上准备 Node.js `24.9.0` 或更新的 24 系列版本，确认 `git`、`npm`、`pnpm` 和 `dsh` 可在终端运行。仓库已包含构建好的 `lib/`，可以直接打包。
+### Install the source build on DSH 0.2.2-rc.3 Web
+
+On the machine running the DSH Web server, use Node.js 24 (`24.9.0` or later) and make sure `git`, `npm`, `pnpm`, and `dsh` are available in your terminal. The repository includes the built `lib/` files, so you can pack it directly.
 
 ```sh
 git clone https://github.com/Ryuu-64/dsh-find-all.git
@@ -33,47 +35,49 @@ npm pack --ignore-scripts --pack-destination "$HOME"
 dsh plugin --profile web add "$HOME/ryuu-64-dsh-find-all-0.1.15.tgz" --ignore-scripts
 ```
 
-配置档会引用这个 `.tgz`，请保留文件。若你用的是自定义 Web 配置档，请将 `web` 换成对应名称。用原来的启动命令重启同一配置档的 Web 服务，再刷新浏览器。
+Keep the `.tgz` file because the profile references it. If you use a custom Web profile, replace `web` with its name. Restart that same profile with your usual Web start command, then refresh the browser.
 
-## 从搜索结果找到原文
+## Go from search results to the message
 
-1. 点侧栏「对话全文搜索」，输入「离线导出」。标题和正文一起搜索，结果会显示对话标题、工作区和含关键词的正文片段。
-2. 点「报表功能设计」。插件会打开对话，并在查找栏里继续查找「离线导出」。打开后的高亮位置可能与搜索摘要不同。
-3. 点查找栏的结果数量，输入 `2`，按 `Enter` 定位到第二处。点「返回搜索结果」，可以回到原查询和列表位置。
+1. Open **Full-text conversation search** in the sidebar and enter `离线导出`. The results show titles, workspaces, and message excerpts.
+2. Select **报表功能设计** (Report feature design). The conversation opens with the same query in the find bar. The highlight can land in a different place from the excerpt in the search results.
+3. Click the match count, enter `2`, and press `Enter` to jump to the second match. **Back to search results** restores your query and position in the list.
 
-![打开「报表功能设计」后沿用「离线导出」查找，结果计数为 2/2，正文高亮第二处](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/in-conversation-find.png)
+![Chinese DSH interface showing 离线导出 highlighted in the Report feature design conversation, with the match counter at 2/2](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/in-conversation-find.png)
 
-已经打开目标对话时，直接按 `⌘F / Ctrl+F`。用 `Enter` 和 `Shift+Enter` 切换匹配，按 `Esc` 关闭查找。
+If the conversation is already open, press `⌘F / Ctrl+F`. Use `Enter` or `Shift+Enter` to move between matches and `Esc` to close the find bar.
 
-## 常用设置与限制
+## Search options and limits
 
-- **跨工作区搜索**可勾选「仅标题」或「包含归档」。结果较多时点「继续加载结果」。要打开归档对话，先点「取消归档并打开」。对话有更新时，在搜索框按 `Enter` 重新搜索。
-- **当前对话查找**默认搜索用户消息和助手回复。点 `⋯`，可在「完整会话」与「已加载内容」间切换，也可选思考过程、工具等内容类型。完整会话不可用时，可用「已加载内容」继续查找。
-- **保存搜索默认值（源码版）**需要宿主提供插件配置表单。从侧栏「插件」打开本插件，再点组件行的「配置」。可为当前配置档设置默认只搜标题、默认包含已归档对话，下次打开搜索窗口时生效。
+- **Across workspaces**, select **Titles only** or **Include archived** to change what you search. Select **Load more results** if the search has more conversations to scan. Use **Unarchive and open** to open an archived conversation. Press `Enter` in the search field to rerun the search after conversations change.
+- **In the current conversation**, the default search includes user messages and assistant replies. Open `⋯` to choose **Whole conversation** or **Loaded content**, or add content types such as reasoning and tool calls. Use **Loaded content** when whole-conversation search is unavailable.
+- **Save search defaults (source build)** on a DSH host that supports plugin configuration forms. Open this plugin under **Plugins** in the sidebar and select **Configure** on its component row. You can set titles-only search and archived inclusion for that profile. The defaults apply the next time you open full-text search.
 
-![当前对话查找菜单展开，显示「完整会话」「已加载内容」及可选内容类型](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/find-options.png)
+![Chinese find bar menu showing Whole conversation, Loaded content, and the available content types](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/find-options.png)
 
-### 更新
+<a id="更新" name="更新"></a>
 
-已发布的 `0.1.15` 可从查找栏 `⋯` →「检查更新」查看版本。需要手动更新时，在当前配置档卸载，再从「插件」安装与宿主兼容的已发布版本。宿主提示重启时，重启后再使用。
+### Updating
 
-源码版可从 `⋯` →「在 DSH 中管理插件」打开插件详情。宿主提供「版本」区且插件从 npm 安装时，点「重新检查」查看可安装的兼容版本。
+In the npm release `0.1.15`, open `⋯` in the find bar and choose **Check for updates**. To update manually, uninstall the plugin in the active profile, then use **Plugins** to install a published release compatible with your DSH version. Restart if DSH prompts you to.
 
-### 搜索范围与隐私
+In the source build, `⋯` → **Manage plugin in DSH** opens the plugin details. If your host shows **Versions** for an npm installation, choose **Check again** to see compatible releases.
 
-- 跨对话搜索只查当前连接的 DSH 服务中的普通对话，覆盖已保存的用户消息和已完成的助手正文。它按原始 Markdown 做字面匹配，不区分大小写，跳过思考、工具、子代理、附件和图片文字。
-- 大型历史可能需要等待。未扫完或有读取失败时，结果区会提示。当前对话查找最多显示 5000 处匹配。
-- 搜索不改聊天记录，也不把搜索词或正文发给外部 AI。**跨对话搜索**由 DSH 服务扫描正文，浏览器收到的是匹配片段和对应的对话信息。**当前对话的完整会话查找**会读取该对话的历史。
+### What gets searched and where
 
-## 反馈与详细文档
+- Cross-conversation search covers ordinary conversations on the connected DSH server. It searches saved user messages and completed assistant text as case-insensitive literal text in the original Markdown. Reasoning, tools, subagent conversations, attachments, and text inside images are outside its scope.
+- Long histories can take time to scan. The results tell you when a scan is incomplete or some conversations could not be read. In-conversation find shows up to 5,000 matches.
+- Search is read-only and keeps queries and messages within DSH. For cross-conversation search, the DSH server scans the messages and sends matching excerpts and conversation details to the browser. Whole-conversation find reads the history of the current conversation in the browser.
 
-遇到问题请[到 GitHub 反馈](https://github.com/Ryuu-64/dsh-find-all/issues/new)，说明你做了什么、遇到什么问题，附上必要截图。可点 `⋯` →「复制诊断信息」后粘贴到反馈中。不要公开密钥或私密对话。
+## Feedback and documentation
 
-QQ 交流群 **1129212995**。跨对话搜索的规则也可在面板的「搜索说明」中查看。版本与平台细节见[兼容说明](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md)。
+[Report an issue on GitHub](https://github.com/Ryuu-64/dsh-find-all/issues/new) with steps to reproduce the problem and any relevant screenshots. You can use `⋯` → **Copy diagnostics** to include troubleshooting details. Keep API keys and private conversations out of public issues.
 
-## 作者与致谢
+The QQ group is **1129212995**. For search behavior, see **Search help** in the search dialog. For supported versions and tested platforms, see the [compatibility notes](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md).
 
-由 [Ryuu-64](https://github.com/Ryuu-64) 维护，基于 [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar) 开发，感谢 secyborg 的原作。
+## Credits
 
-[MIT 许可](https://github.com/Ryuu-64/dsh-find-all/blob/main/LICENSE)。Copyright (c) 2026 secyborg / Copyright (c) 2026 Ryuu-64。
-上游 README 见 [README.fork-origin.md](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.fork-origin.md)，改动与致谢见 [NOTICE.md](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md)。
+Maintained by [Ryuu-64](https://github.com/Ryuu-64). Based on [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar), with thanks to secyborg for the original plugin.
+
+[MIT License](https://github.com/Ryuu-64/dsh-find-all/blob/main/LICENSE). Copyright (c) 2026 secyborg / Copyright (c) 2026 Ryuu-64.
+See the [upstream README (Chinese)](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.fork-origin.md) and [notices and credits](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md).

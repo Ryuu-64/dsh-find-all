@@ -10,15 +10,13 @@ Remember discussing offline export but can't remember which conversation? Search
 
 ![Chinese DSH interface showing two conversations across workspaces with excerpts matching 离线导出 (offline export)](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/conversation-search.png)
 
-The screenshots show the source build running on DSH `0.2.2-rc.3` Web in Chinese, with sample conversations.
+The Chinese interface shows one matching conversation from each of two workspaces.
 
 ## Install
 
 Ask an AI assistant that can operate your computer to install the plugin.
 
 > Install this plugin in my DSH setup, check compatibility, and confirm it is enabled: https://github.com/Ryuu-64/dsh-find-all
-
-DSH `0.2.2-rc.3` Web requires the current repository source, and npm `0.1.15` supports selected DSH versions through `0.2.1-rc.3`.
 
 If you have `dsh-find-bar` installed, remove it first to avoid a shortcut conflict.
 
@@ -36,7 +34,7 @@ If the conversation is already open, press `⌘F / Ctrl+F`. Use `Enter` or `Shif
 
 - **Across workspaces**, select **Titles only** or **Include archived** to change what you search. Select **Load more results** if the search has more conversations to scan. Use **Unarchive and open** to open an archived conversation. Press `Enter` in the search field to rerun the search after conversations change.
 - **In the current conversation**, the default search includes user messages and assistant replies. Open `⋯` to choose **Whole conversation** or **Loaded content**, or add content types such as reasoning and tool calls. Use **Loaded content** when whole-conversation search is unavailable.
-- **Save search defaults (source build)** on a DSH host that supports plugin configuration forms. Open this plugin under **Plugins** in the sidebar and select **Configure** on its component row. You can set titles-only search and archived inclusion for that profile. The defaults apply the next time you open full-text search.
+- To **save search defaults**, open Find All under **Plugins** in the sidebar and select **Configure** on its component row. Set **Search titles only by default** and **Include archived conversations by default** for the current profile. Your choices apply the next time you open full-text search.
 
 ![Chinese find bar menu showing Whole conversation, Loaded content, and the available content types](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/find-options.png)
 
@@ -44,9 +42,7 @@ If the conversation is already open, press `⌘F / Ctrl+F`. Use `Enter` or `Shif
 
 ### Updating
 
-In the npm release `0.1.15`, open `⋯` in the find bar and choose **Check for updates**. To update manually, uninstall the plugin in the active profile, then use **Plugins** to install a published release compatible with your DSH version. Restart if DSH prompts you to.
-
-In the source build, `⋯` → **Manage plugin in DSH** opens the plugin details. If your host shows **Versions** for an npm installation, choose **Check again** to see compatible releases.
+In the find bar, open `⋯` and select **Manage plugin in DSH**. If **Versions** appears in the plugin details, select **Check again** to see compatible updates.
 
 ### What gets searched and where
 

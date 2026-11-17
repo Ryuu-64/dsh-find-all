@@ -2285,10 +2285,8 @@ var BAR_ID = "dsh-find-all-root";
             if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus(L.matchRevealFailed,false);return;}
             state.historyNavigating=true;
             try{
-                if(!sourceNode(source,store))await face.loadThrough(source.seq);
-                if(!current())return;
-                var started=Date.now(),mapped,node;
-                while(current()&&Date.now()-started<5000){
+                var started=Date.now(),requested=false,retryAfterPage=false,mapped,node;
+                while(current()&&Date.now()-started<PAGE_SETTLE_MS){
                     store=state.adapter.nodes(target);node=sourceNode(source,store);
                     if(node){
                         if(!hostNavigationReady(target,face)){await pause();continue;}
@@ -2301,6 +2299,18 @@ var BAR_ID = "dsh-find-all-root";
                             state.historyNavigating=false;navigateToRange(range);return;
                         }
                         if(!expandSource(target,node,source,activated)&&mapped.reason!=='renderer-not-expanded'&&mapped.reason!=='read-card-unavailable'&&mapped.reason!=='read-lines-not-expanded'&&mapped.reason!=='tool-card-not-expanded'&&mapped.reason!=='tool-field-not-expanded'&&mapped.reason!=='context-not-expanded')break;
+                    } else if (!requested || retryAfterPage) {
+                        var page = facePageState(face);
+                        var busy = !page || pendingLoads.has(face);
+                        // An active jump accepts an earlier target immediately. An ordinary
+                        // read instead returns without queuing the jump, so retry once when idle.
+                        if (!requested || (!busy && !page.reason && page.hasMore !== false)) {
+                            retryAfterPage = !requested && busy;
+                            requested = true;
+                            await face.loadThrough(source.seq);
+                            started = Date.now();
+                            continue;
+                        }
                     }
                     await pause();
                 }

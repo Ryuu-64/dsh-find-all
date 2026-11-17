@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {setImmediate} from 'node:timers/promises';
 import vm from 'node:vm';
 import {JSDOM} from 'jsdom';
 const code=readFileSync(new URL('../src/client.js',import.meta.url),'utf8');
@@ -37,6 +38,122 @@ test('modern exhausted history is ready for navigation while a pending render is
   } finally {
     dom.window.close();
   }
+});
+
+function historyJumpFixture(loadThrough, initiallyBusy = true) {
+  const hit = { source: { seq: 3 }, blockIndex: 0, start: 0, end: 6, text: 'needle' };
+  const earlier = { ...hit, source: { seq: 1 }, text: 'before' };
+  const store = {}, target = {};
+  const requests = [], selected = [], failures = [];
+  let busy = initiallyBusy, loadedThrough = Infinity, elapsed = 0, settle;
+  const host = {
+    setBusy(value) { busy = value; },
+    mountThrough(seq) { loadedThrough = seq; },
+  };
+  const face = {
+    async loadThrough(seq) {
+      requests.push(seq);
+      if (loadThrough) return loadThrough(seq, host);
+      if (!busy) host.mountThrough(seq);
+    },
+  };
+  const state = {
+    navigationToken: 0, queryToken: 0, target, scope: 'whole', hits: [hit, earlier], index: 0, ranges: [],
+    adapter: { face: () => face, nodes: () => store, valid: () => true },
+  };
+  const start = code.indexOf('async function navigateHistoryHit(');
+  const end = code.indexOf('function syncTarget(', start);
+  const jump = vm.runInNewContext(`${code.slice(start, end)};navigateHistoryHit`, {
+    state, PAGE_SETTLE_MS: 5000, pendingLoads: new WeakMap(), Date: { now: () => elapsed },
+    setTimeout: callback => { settle = callback; },
+    facePageState: () => busy ? null : { hasMore: true },
+    sourceNode: source => source.seq >= loadedThrough ? source : null,
+    sourceRows: () => [],
+    hostNavigationReady: () => true,
+    mapProjectedDocument: source => ({ blocks: [state.hits.find(hit => hit.source === source)] }),
+    rangeForBlock: hit => ({ toString: () => hit.text }),
+    isOpen: () => true,
+    paint() {},
+    historyStatus() {},
+    recordFailure: (_kind, failure) => failures.push(failure),
+    L: { matchRevealFailed: 'Unavailable' },
+    navigateToRange: match => selected.push(match.toString()),
+  });
+  return {
+    start: () => jump(hit),
+    selectEarlier() { state.index = 1; return jump(earlier); },
+    finishHostRead: () => { busy = false; },
+    advance(ms) { elapsed += ms; settle?.(); },
+    requests, selected, failures, state,
+  };
+}
+
+test('an offscreen match retries once after an ordinary Host page has finished', async () => {
+  const h = historyJumpFixture();
+  const navigation = h.start();
+  await setImmediate();
+  assert.deepEqual(h.requests, [3]);
+  h.finishHostRead();
+  h.advance(35);
+  await navigation;
+  assert.deepEqual(h.requests, [3, 3]);
+  assert.deepEqual(h.selected, ['needle']);
+});
+
+test('a busy no-op can settle in the same turn as the ordinary Host page', async () => {
+  let first = true;
+  const h = historyJumpFixture((seq, host) => {
+    if (first) { first = false; host.setBusy(false); }
+    else host.mountThrough(seq);
+  });
+  const navigation = h.start();
+  assert.deepEqual(h.requests, [3]);
+  await navigation;
+  assert.deepEqual(h.requests, [3, 3]);
+  assert.deepEqual(h.selected, ['needle']);
+});
+
+test('an earlier match retargets an active Host jump before the wait deadline', async () => {
+  let finishJump, jumpTarget = Infinity, activeJump;
+  const h = historyJumpFixture((seq, host) => {
+    jumpTarget = Math.min(jumpTarget, seq);
+    if (!activeJump) {
+      host.setBusy(true);
+      activeJump = new Promise(resolve => {
+        finishJump = () => { host.mountThrough(jumpTarget); host.setBusy(false); resolve(); };
+      });
+    }
+    return activeJump;
+  }, false);
+  const first = h.start();
+  const earlier = h.selectEarlier();
+  h.advance(5100);
+  assert.deepEqual(h.requests, [3, 1]);
+  finishJump();
+  await Promise.all([first, earlier]);
+  assert.deepEqual(h.selected, ['before']);
+  assert.deepEqual(h.failures, []);
+});
+
+test('waiting for the Host never issues a jump after cancellation or timeout', async () => {
+  for (const replace of [state => state.queryToken++, state => { state.target = {}; }]) {
+    const replaced = historyJumpFixture();
+    const cancelled = replaced.start();
+    await setImmediate();
+    replace(replaced.state);
+    replaced.finishHostRead();
+    replaced.advance(35);
+    await cancelled;
+    assert.deepEqual(replaced.requests, [3]);
+  }
+
+  const stalled = historyJumpFixture();
+  const timedOut = stalled.start();
+  await setImmediate();
+  stalled.advance(5000);
+  await timedOut;
+  assert.deepEqual(stalled.requests, [3]);
+  assert.deepEqual(stalled.failures, ['render']);
 });
 
 test('bar avoidance uses the same line margin as stable navigation, avoiding a false reversal',()=>{

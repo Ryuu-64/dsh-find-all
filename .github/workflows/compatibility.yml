@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Existing host matrix, or the focused RC2 acceptance first
+        description: Run the host matrix or one focused Web host
         type: choice
-        options: [matrix, rc2]
+        options: [matrix, rc2, rc3]
         default: matrix
 env:
   # Keep the full original matrix available; the button work branch runs RC2 first.
@@ -44,12 +44,15 @@ jobs:
           git rev-parse HEAD > evidence/commit.txt
       - name: Oldest exact host acceptance
         id: oldest
-        if: ${{ env.FIND_ALL_RC2_ONLY != 'true' }}
+        if: ${{ env.FIND_ALL_RC2_ONLY != 'true' && inputs.target != 'rc3' }}
         run: node scripts/compat/web-smoke.mjs 0.1.5-rc.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.5-rc.2
-      - name: Current exact host acceptance
+      - name: Exact host 0.2.0-rc.2 acceptance
         id: current
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.target != 'rc3' }}
         run: node scripts/compat/web-smoke.mjs 0.2.0-rc.2 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.2.0-rc.2
+      - name: Exact host 0.2.2-rc.3 acceptance
+        if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.artifact.outcome == 'success' }}
+        run: node scripts/compat/web-smoke.mjs 0.2.2-rc.3 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.2.2-rc.3
       - name: User runtime 0.1.7-rc.1 acceptance
         if: ${{ !cancelled() && env.FIND_ALL_RC2_ONLY != 'true' && steps.oldest.outcome == 'success' && steps.current.outcome == 'success' }}
         run: node scripts/compat/web-smoke.mjs 0.1.7-rc.1 'evidence/artifact/${{ steps.artifact.outputs.filename }}' evidence/0.1.7-rc.1
@@ -83,7 +86,7 @@ jobs:
 
   windows-desktop-smoke:
     needs: web-bootstrap
-    if: ${{ !cancelled() && inputs.target != 'rc2' && !(github.event_name == 'push' && github.ref_name == 'fix/native-find-button-and-scope-copy') }}
+    if: ${{ !cancelled() && inputs.target != 'rc2' && inputs.target != 'rc3' && !(github.event_name == 'push' && github.ref_name == 'fix/native-find-button-and-scope-copy') }}
     # Explicit second supported image distinguishes the recorded Server 2025
     # pre-plugin startup failure from plugin behavior; security stays enabled.
     runs-on: windows-2022

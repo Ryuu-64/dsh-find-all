@@ -12,30 +12,15 @@
 
 截图来自 DSH `0.2.2-rc.3` Web 上运行的源码版，使用演示对话。
 
-## 当前版本与安装
+## 安装
 
-npm 已发布的 **`0.1.15`** 最高支持 DSH **`0.2.1-rc.3`**。如果你用的是 DSH **`0.2.2-rc.3` Web**，请用下面的源码安装方式。下文标注「源码版」的功能尚未发布到 npm。
+可以把下面这条请求发给能操作你电脑的 AI 助手。
+
+> 请帮我安装这个 DSH 插件，检查兼容性并确认已启用：https://github.com/Ryuu-64/dsh-find-all
+
+DSH `0.2.2-rc.3` Web 需要安装仓库当前源码，npm `0.1.15` 支持的最高 DSH 版本为 `0.2.1-rc.3`。
 
 如果装过 `dsh-find-bar`，请先卸载，避免快捷键冲突。
-
-### 安装 npm 已发布版
-
-1. 打开 DSH 的「插件」→「添加插件」。
-2. 输入 `@ryuu-64/dsh-find-all`，安装并启用。
-3. 重启 DSH（网页版需重启服务并刷新页面）。
-
-### 在 DSH 0.2.2-rc.3 Web 上安装源码版
-
-在运行 DSH Web 服务的机器上准备 Node.js `24.9.0` 或更新的 24 系列版本，确认 `git`、`npm`、`pnpm` 和 `dsh` 可在终端运行。仓库已包含构建好的 `lib/`，可以直接打包。
-
-```sh
-git clone https://github.com/Ryuu-64/dsh-find-all.git
-cd dsh-find-all
-npm pack --ignore-scripts --pack-destination "$HOME"
-dsh plugin --profile web add "$HOME/ryuu-64-dsh-find-all-0.1.15.tgz" --ignore-scripts
-```
-
-配置档会引用这个 `.tgz`，请保留文件。若你用的是自定义 Web 配置档，请将 `web` 换成对应名称。用原来的启动命令重启同一配置档的 Web 服务，再刷新浏览器。
 
 ## 从搜索结果找到原文
 

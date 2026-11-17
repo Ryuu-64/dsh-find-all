@@ -12,30 +12,15 @@ Remember discussing offline export but can't remember which conversation? Search
 
 The screenshots show the source build running on DSH `0.2.2-rc.3` Web in Chinese, with sample conversations.
 
-## Versions and installation
+## Install
 
-The latest npm release, **`0.1.15`**, supports selected DSH versions through **`0.2.1-rc.3`**. For DSH **`0.2.2-rc.3` Web**, use the source installation below. Features marked **source build** are available from the repository.
+Ask an AI assistant that can operate your computer to install the plugin.
+
+> Install this plugin in my DSH setup, check compatibility, and confirm it is enabled: https://github.com/Ryuu-64/dsh-find-all
+
+DSH `0.2.2-rc.3` Web requires the current repository source, and npm `0.1.15` supports selected DSH versions through `0.2.1-rc.3`.
 
 If you have `dsh-find-bar` installed, remove it first to avoid a shortcut conflict.
-
-### Install the npm release
-
-1. In DSH, go to **Plugins** and choose **Add plugin**.
-2. Enter `@ryuu-64/dsh-find-all`, then install and enable it.
-3. Restart DSH. On Web, restart the server and refresh the page.
-
-### Install the source build on DSH 0.2.2-rc.3 Web
-
-On the machine running the DSH Web server, use Node.js 24 (`24.9.0` or later) and make sure `git`, `npm`, `pnpm`, and `dsh` are available in your terminal. The repository includes the built `lib/` files, so you can pack it directly.
-
-```sh
-git clone https://github.com/Ryuu-64/dsh-find-all.git
-cd dsh-find-all
-npm pack --ignore-scripts --pack-destination "$HOME"
-dsh plugin --profile web add "$HOME/ryuu-64-dsh-find-all-0.1.15.tgz" --ignore-scripts
-```
-
-Keep the `.tgz` file because the profile references it. If you use a custom Web profile, replace `web` with its name. Restart that same profile with your usual Web start command, then refresh the browser.
 
 ## Go from search results to the message
 

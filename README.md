@@ -1,6 +1,8 @@
 # dsh-find-all for DeepSeek Harness
 
-English | [简体中文](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.zh-CN.md)
+English | [简体中文](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/README.zh-CN.md)
+
+npm: [@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · Maintained by [Ryuu-64](https://github.com/Ryuu-64).
 
 Search conversation titles and saved messages across workspaces in DeepSeek Harness (DSH), or press **⌘F / Ctrl+F** to find text in the current conversation.
 
@@ -61,4 +63,4 @@ The QQ group is **1129212995**. For search behavior, see **Search help** in the 
 Maintained by [Ryuu-64](https://github.com/Ryuu-64). Based on [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar), with thanks to secyborg for the original plugin.
 
 [MIT License](https://github.com/Ryuu-64/dsh-find-all/blob/main/LICENSE). Copyright (c) 2026 secyborg / Copyright (c) 2026 Ryuu-64.
-See the [upstream README (Chinese)](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.fork-origin.md) and [notices and credits](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md).
+See the [upstream README (Chinese)](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/upstream-readme.md) and [notices and credits](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md).

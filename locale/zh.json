@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "对话查找",
-    "description": "跨会话搜索，或在当前对话中查找文字。",
-    "detail": "README.zh-CN.md"
+    "description": "在 DeepSeek Harness（DSH）中跨工作区搜索已保存对话的标题和正文，也可用 Ctrl+F / Cmd+F 查找当前聊天。",
+    "detail": "docs/README.zh-CN.md"
   }
 }

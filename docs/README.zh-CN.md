@@ -2,6 +2,8 @@
 
 [English](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.md) | 简体中文
 
+npm 包：[@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · 由 [Ryuu-64](https://github.com/Ryuu-64) 维护。
+
 在 DeepSeek Harness（DSH）中搜索各工作区对话的标题和已保存正文，也可以按 **⌘F / Ctrl+F** 查找当前对话。
 
 ## 效果预览
@@ -59,4 +61,4 @@ QQ 交流群 **1129212995**。跨对话搜索的规则也可在面板的「搜�
 由 [Ryuu-64](https://github.com/Ryuu-64) 维护，基于 [secyborg/dsh-find-bar](https://github.com/secyborg/dsh-find-bar) 开发，感谢 secyborg 的原作。
 
 [MIT 许可](https://github.com/Ryuu-64/dsh-find-all/blob/main/LICENSE)。Copyright (c) 2026 secyborg / Copyright (c) 2026 Ryuu-64。
-上游 README 见 [README.fork-origin.md](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.fork-origin.md)，改动与致谢见 [NOTICE.md](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md)。
+上游 README 见[上游原文](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/upstream-readme.md)，改动与致谢见 [NOTICE.md](https://github.com/Ryuu-64/dsh-find-all/blob/main/NOTICE.md)。

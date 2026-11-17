@@ -15,7 +15,7 @@
 上游的 MIT 许可证要求"上述版权声明和许可声明应包含在本软件的所有副本或实质性部分中"。本仓库据此**完整保留**了：
 
 - `LICENSE` —— 上游许可证原文，**未作任何修改**（包括版权行）；
-- `README.fork-origin.md` —— 上游 README 原文，未作修改；
+- `docs/upstream-readme.md` —— 上游 README 原文，未作修改；
 - `lib/index.js`、`lib/client.js`、`test/find-logic.test.mjs` 的文件头注释均注明来源为上游 fork。
 
 ## 本 fork 的修改 / Modifications in this fork

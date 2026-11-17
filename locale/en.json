@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Find All",
-    "description": "Search across conversations or find text in the current conversation.",
+    "description": "Search saved conversation titles and messages across DeepSeek Harness (DSH) workspaces, with Ctrl+F / Cmd+F inside the current chat.",
     "detail": "README.md"
   }
 }

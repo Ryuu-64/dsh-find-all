@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17
+
+- Use the English README as the default npm description; retain the Chinese guide in `docs/` and update the DSH Chinese detail path.
+- Add the full npm package identity and unversioned package link to both guides, and refresh the package description.
+- Correct current compatibility documentation to reflect the already published DSH `0.2.2-rc.3` support.
+
 ## 0.1.16
 
 - Support DSH `0.2.2-rc.3` and native plugin updates.

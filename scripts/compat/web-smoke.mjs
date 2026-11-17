@@ -32,6 +32,8 @@ const runtime = path.join(run, 'runtime');
 const home = process.env.FIND_ALL_REUSE_RUN ? fs.mkdtempSync(path.join(run, 'home-')) : path.join(run, 'home');
 const workspace = path.join(home, 'workspace');
 const full = process.env.FIND_ALL_FULL_ACCEPTANCE === '1';
+const hostAutoPaging = version === '0.2.2-rc.3';
+const modernHistory = version.startsWith('0.2.1-') || hostAutoPaging;
 const queryPath = path.join(run, 'content-index.sqlite');
 for (const dir of [discovery, runtime, home]) fs.mkdirSync(dir, { recursive: true });
 const manifest = { name: 'find-all-synthetic-acceptance', private: true, type: 'module', dependencies: { '@deepseek-ai/dsh': version } };
@@ -137,8 +139,8 @@ if (full) {
   seeded = await seedHistory(runtimeRequire, home, workspace, { sidebarChild: version === '0.2.0-rc.2' });
   // Modern acceptance uses the plugin's public sessionQuery route; do not
   // enable the host's separate optional SQLite full-text index.
-  if (version.startsWith('0.2.1-')) await seedModernProjection(runtimeRequire, home, workspace);
-  setFixturePatch(home, version.startsWith('0.2.1-') ? null : queryPath);
+  if (modernHistory) await seedModernProjection(runtimeRequire, home, workspace);
+  setFixturePatch(home, modernHistory ? null : queryPath);
 }
 let serverLog = '';
 const server = spawn(process.execPath, [bin, '--profile', 'web', '--no-open', '--host', '127.0.0.1', '--port', '4195'], { cwd: full ? workspace : runtime, env });
@@ -209,7 +211,7 @@ try {
   // The rc.3 native-browser observation exposes a Get started dialog with
   // Close, Add API Key and Sign in. Close is its explicit no-account path;
   // do not click either credential action or invent Configure later there.
-  const onboarding = version === '0.2.1-rc.3'
+  const onboarding = version === '0.2.1-rc.3' || hostAutoPaging
     ? page.getByRole('dialog', { name: 'Get started', exact: true })
     : null;
   const deferSetup = onboarding
@@ -225,29 +227,38 @@ try {
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
   });
   await page.addLocatorHandler(deferSetup, async () => { await deferSetup.click(); });
-  await page.keyboard.press('Control+f');
-  const bar = page.locator('#dsh-find-all-root');
-  await bar.waitFor({ state: 'visible', timeout: 30_000 });
-  // Keep bootstrap read-only with respect to history, including seeded runs.
-  // Empty sessions require no history read in either mode. Keep modern
-  // whole-history default rather than relying on the removed legacy scope chip.
-  await bar.locator('input.query').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
-  await page.waitForTimeout(400);
-  assert.ok(['No results', 'Unavailable'].includes(await bar.locator('.count:visible').innerText()));
   report.initialSessionViews = await page.locator('[data-find-all-session]').count();
-  if (report.initialSessionViews === 0) assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
-  await captureSafePage(page, path.join(output, 'empty-session-find'), secrets, redact);
-  await page.keyboard.press('Escape');
-  await bar.waitFor({ state: 'hidden' });
-  assert.equal(await page.evaluate(() => CSS.highlights?.has('dsh-find-all-hit') || false), false);
+  if (hostAutoPaging && report.initialSessionViews === 0) {
+    // The new workspace starts without a conversation. Start from the
+    // sidebar, and exercise Ctrl+F later in an opened synthetic conversation.
+    await page.getByRole('button', { name: 'Full-text conversation search', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Full-text conversation search', exact: true });
+    await dialog.waitFor({ state: 'visible' });
+    await captureSafePage(page, path.join(output, 'empty-session-find'), secrets, redact);
+    await dialog.getByRole('button', { name: 'Close full-text conversation search', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+  } else {
+    await page.keyboard.press('Control+f');
+    const bar = page.locator('#dsh-find-all-root');
+    await bar.waitFor({ state: 'visible', timeout: 30_000 });
+    // Keep bootstrap read-only with respect to history, including seeded runs.
+    await bar.locator('input.query').fill('FIND_ALL_EMPTY_PROFILE_NEEDLE');
+    await page.waitForTimeout(400);
+    assert.ok(['No results', 'Unavailable'].includes(await bar.locator('.count:visible').innerText()));
+    if (report.initialSessionViews === 0) assert.ok((await bar.locator('.status').innerText()).length > 0, 'empty session must explain why find is unavailable');
+    await captureSafePage(page, path.join(output, 'empty-session-find'), secrets, redact);
+    await page.keyboard.press('Escape');
+    await bar.waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => CSS.highlights?.has('dsh-find-all-hit') || false), false);
+  }
   report.bootstrap = 'passed';
   if (full) {
     report.seeds = seeded;
     const capture = name => captureSafePage(page, path.join(output, name), secrets, redact);
-    report.historyEvidence = version.startsWith('0.2.1-')
-      ? await exerciseModernHistory(page, capture)
+    report.historyEvidence = modernHistory
+      ? await exerciseModernHistory(page, capture, { hostAutoPaging })
       : await exerciseHistory(page, home, queryPath, capture, version);
-    if (version.startsWith('0.2.1-')) report.projectionEvidence = await exerciseModernProjection(page, capture);
+    if (modernHistory) report.projectionEvidence = await exerciseModernProjection(page, capture);
     if (version === '0.2.0-rc.2') {
       report.findButtonAppearance = {status: 'running', host: version};
       report.findButtonAppearance = await exerciseFindButtonAppearance(page, name => captureSafePage(page, path.join(output, name), secrets, redact));

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {JSDOM} from 'jsdom';
 const code=readFileSync(new URL('../src/client.js',import.meta.url),'utf8');
 const start=code.indexOf('function matchLineMargin('),end=code.indexOf('function scrollToRange(',start);
 assert.ok(start>=0&&end>start,'navigation helpers must remain available to the focused test');
@@ -15,6 +16,29 @@ function rangeAt(top,height=16){
  return {rect:{top,bottom:top+height,left:120,right:153,width:33,height},startContainer:{parentElement:{}}};
 }
 const api=helpers();
+test('modern exhausted history is ready for navigation while a pending render is not', () => {
+  const start = code.indexOf('function hostNavigationReady(');
+  const end = code.indexOf('// Exact navigation', start);
+  const ready = vm.runInNewContext(`${code.slice(start, end)};hostNavigationReady`, {
+    facePageState: () => ({ hasMore: false }),
+    pendingLoads: new WeakMap(),
+  });
+  const dom = new JSDOM('<main><div data-chat-history="idle"><button disabled>Start of conversation</button></div></main>');
+  try {
+    const root = dom.window.document.querySelector('main');
+    assert.equal(ready({ root }, {}), true);
+    const control = root.querySelector('[data-chat-history]');
+    control.setAttribute('data-chat-history', 'loading');
+    control.querySelector('button').disabled = false;
+    assert.equal(ready({ root }, {}), false);
+    control.removeAttribute('data-chat-history');
+    control.querySelector('button').disabled = true;
+    assert.equal(ready({ root }, {}), false, 'legacy disabled control still blocks navigation');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('bar avoidance uses the same line margin as stable navigation, avoiding a false reversal',()=>{
  const range={rect:{top:159,bottom:175,left:930,right:963,width:33,height:16},startContainer:{parentElement:{}}};
  const viewport={top:108,bottom:629,left:280,right:1178},scroll={scrollTop:0,scrollHeight:2167,clientHeight:649};

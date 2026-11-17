@@ -41,15 +41,46 @@ async function searchResponse(page, dialog, query, mode, action) {
     try { const body = request.postDataJSON(); return body.action === 'start' && body.query === query.trim() && body.mode === mode && body.scope === scope; }
     catch { return false; }
   }, {timeout:60_000});
-  await action();
-  const request = await pending;
-  const response = await request.response();
-  assert.ok(response, 'the newly emitted request must receive a response');
-  assert.equal(response.ok(), true, 'query-specific search HTTP response');
-  await response.finished();
-  const value = await response.json(), body = response.request().postDataJSON();
-  assert.equal(value.requestId, body.requestId);
-  assert.equal(value.complete, true, 'small synthetic catalog must complete in one batch');
+  // The Host has a soft per-batch time limit even for this small catalog.
+  // Subscribe before the search so an automatic continuation cannot race us.
+  const continuations = [];
+  function captureBatch(response) {
+    const request = response.request();
+    if (!request.url().endsWith('/api/dsh-find-all/search') || request.method() !== 'POST') return;
+    const body = request.postDataJSON();
+    if (body?.action === 'next' && body.query === query.trim() && body.mode === mode && body.scope === scope) {
+      continuations.push({ body, response });
+    }
+  }
+  async function readBatch(response, id) {
+    assert.ok(response, 'the newly emitted request must receive a response');
+    assert.equal(response.ok(), true, 'query-specific search HTTP response');
+    const batch = await response.json();
+    assert.equal(batch.requestId, id);
+    return batch;
+  }
+  let value;
+  page.on('response', captureBatch);
+  try {
+    await action();
+    const request = await pending;
+    const id = request.postDataJSON().requestId;
+    value = await readBatch(await request.response(), id);
+    const items = [...value.items], seen = new Set();
+    while (!value.complete) {
+      const cursor = value.cursor;
+      assert.ok(cursor && !seen.has(cursor), 'each unfinished batch must advance the cursor');
+      seen.add(cursor);
+      const next = await eventually(() => continuations.find(({ body }) => body.requestId === id && body.cursor === cursor), Boolean, 'automatic search continuation');
+      const previousScanned = value.scanned;
+      value = await readBatch(next.response, id);
+      assert.ok(value.scanned > previousScanned, 'automatic continuation must scan more sessions');
+      items.push(...value.items);
+    }
+    value = { ...value, items };
+  } finally {
+    page.off('response', captureBatch);
+  }
   await eventually(() => dialog.locator('.dsh-find-all-conversations-status').innerText(), `${value.items.length} conversations`, 'query-specific response rendered');
   await eventually(() => dialog.locator('.dsh-find-all-conversations-row').count(), value.items.length, 'query-specific rows rendered');
   const expectedTitles = value.items.map(item => item.title);
@@ -77,7 +108,7 @@ async function confirmCurrentRanges(page, bar, query, count, sessionId) {
   }, {query,sessionId}), value => value.valid && (count === 0 ? value.count === 0 : value.count > 0), 'ranges belong to current query and expected Host session');
 }
 
-export async function exerciseModernHistory(page, capture) {
+export async function exerciseModernHistory(page, capture, { hostAutoPaging = false } = {}) {
   const evidence = { counts: [], navigation: [], cancellations: [], crossConversation: {}, archive: 'not-run' };
   // Preserve completed checkpoints even if a later assertion fails.
   page.findAllModernEvidence = evidence;
@@ -123,6 +154,10 @@ export async function exerciseModernHistory(page, capture) {
     await confirmCurrentRanges(page, bar, query, expected, sessionId);
     return value;
   }
+  async function renderedMatches(label, kind) {
+    const transcript = await page.locator('[data-chat-flow]').innerText();
+    return transcript.split(`FIND_ALL_${label}_${kind}_`).length - 1;
+  }
   async function selectedRange(query, token) {
     return page.evaluate(({query, token}) => {
       const ranges = [...(CSS.highlights.get('dsh-find-all-cur') || [])];
@@ -155,14 +190,30 @@ export async function exerciseModernHistory(page, capture) {
   await page.evaluate(() => document.activeElement?.blur());
   assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
   for (const kind of ['USER', 'REPLY']) {
-    await find(`FIND_ALL_A_${kind}_`, 'loaded');
-    await total(25);
-    evidence.counts.push({scope:'loaded', kind, count:25});
-    await find(`FIND_ALL_A_${kind}_`, 'whole');
+    const query = `FIND_ALL_A_${kind}_`;
+    await find(query, 'loaded');
+    if (hostAutoPaging) {
+      const loaded = await eventually(async () => ({
+        label: await bar.locator('.count:visible').innerText(),
+        rendered: await renderedMatches('A', kind),
+      }), ({ label, rendered }) => rendered > 0 && completeCount(label, rendered), 'loaded search agrees with the Host window');
+      await confirmCurrentRanges(page, bar, query, loaded.rendered, 'find-all-synthetic-a');
+      evidence.counts.push({scope:'loaded', kind, count:loaded.rendered});
+    } else {
+      await total(25);
+      evidence.counts.push({scope:'loaded', kind, count:25});
+    }
+    await find(query, 'whole');
+    if (hostAutoPaging && kind === 'USER') {
+      // DSH 0.2.2 can prepend as the viewport approaches the history edge.
+      // Count while the search is passive, before selecting a matching row.
+      await eventually(() => bar.locator('.count:visible').innerText(), value => completeCount(value, 80), 'passive whole history total');
+      assert.ok(await renderedMatches('A', kind) < 80, 'whole search counts beyond the current Host window');
+    }
     await total(80);
-    const rendered = await page.locator('[data-chat-flow]').innerText();
-    assert.equal(rendered.split(`FIND_ALL_A_${kind}_`).length - 1, 25, 'whole search must not render all history');
-    evidence.counts.push({scope:'whole', kind, count:80, rendered:25});
+    const rendered = await renderedMatches('A', kind);
+    if (!hostAutoPaging) assert.equal(rendered, 25, 'whole search must not render all history');
+    evidence.counts.push({scope:'whole', kind, count:80, rendered});
   }
   await find('FIND_ALL_A_'); await total(160);
   evidence.counts.push({scope:'whole', kind:'shared-prefix', count:160});
@@ -170,7 +221,9 @@ export async function exerciseModernHistory(page, capture) {
   await closeFind();
   // Use untouched B, so assistant navigation cannot piggyback on user paging.
   await openSession('B');
-  assert.equal((await page.locator('[data-chat-flow]').innerText()).split('FIND_ALL_B_REPLY_').length - 1, 25);
+  const renderedB = await renderedMatches('B', 'REPLY');
+  if (hostAutoPaging) assert.ok(renderedB < 80, 'earliest assistant result starts outside the rendered window');
+  else assert.equal(renderedB, 25);
   await firstHit('B', 'REPLY');
   await closeFind(); await openSession('A');
 
@@ -279,7 +332,8 @@ export async function exerciseModernProjection(page, capture) {
   await find(masked,2); await jump(1);
   await eventually(()=>page.evaluate(()=>[...(CSS.highlights.get('dsh-find-all-cur')||[])].length),1,'first masked range');
   // Reveal only via the official explicit user control; search itself never clicks it.
-  await secrets.first().getByRole('button',{name:'Show secret',exact:true}).click();
+  // Activate by keyboard so the floating find bar cannot intercept a pointer.
+  await secrets.first().getByRole('button',{name:'Show secret',exact:true}).press('Enter');
   await eventually(()=>page.evaluate(()=>[...(CSS.highlights.get('dsh-find-all-cur')||[])].length),0,'revealed text invalidates its old masked range');
   assert.ok(completeCount(await bar.locator('.count:visible').innerText(),2),'whole-history mask count stays stable after local reveal');
   await jump(2);

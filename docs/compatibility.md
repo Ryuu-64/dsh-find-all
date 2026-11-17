@@ -1,5 +1,11 @@
 > **0.1.15 / rc.3:** this version additionally admits exact `0.2.1-rc.3`; see [the separate native Web review and verification results](rc3-compatibility.md). Historical results below describe the rc.2 baseline and do not imply a new rc.3 Desktop pass.
 
+## DSH 0.2.2-rc.3
+
+The current source adds exact `0.2.2-rc.3` to all four DSH peer ranges and retains the previous targets. The candidate installed through the official CLI into a disposable Web profile on Windows. Chrome checks with synthetic histories covered loaded and whole-conversation counts, early-result jumps, query replacement, session switching, cross-conversation search, archive and reopen, file labels, default secret masking, and navigation from the find options to the native plugin and configuration pages. The earlier hosts were retained in the compatibility declarations. This run covers Web, and the npm release remains at the compatibility level documented above.
+
+The `0.2.2-rc.3` Chat keeps its disabled "Start of conversation" control mounted when all earlier history has loaded. Find All now reads the explicit `data-chat-history` loading state on that host so a completed jump can land. The older Chat control remains the fallback where that marker is absent. [Tagged ChatView implementation](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.3/packages/client/ui-chat/src/client/chat/ChatView.tsx)
+
 # Issue 35: modern user-text projection
 
 The package now admits official DSH `0.2.1-rc.2` through all four existing DSH peer ranges. Every previously listed release remains admitted; that released baseline did not add other `0.2.1` prereleases or future versions. Version 0.1.15 adds only exact rc.3 as noted above. Normal installation needs no exact-version exemption. The rc.2 baseline's Web verification and the reported packaged Windows Desktop acceptance are recorded below.

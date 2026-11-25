@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.18
+
+- Fix whole-conversation searches that reported incomplete results after reading job registration or settlement records. [#39](https://github.com/Ryuu-64/dsh-find-all/issues/39)
+- Add a setting to hide the sidebar search button. When hidden, open full-text conversation search from the plugin details or the conversation find menu. [#40](https://github.com/Ryuu-64/dsh-find-all/issues/40)
+
 ## 0.1.17
 
 - Use the English README as the default npm description; retain the Chinese guide in `docs/` and update the DSH Chinese detail path.

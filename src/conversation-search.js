@@ -9,6 +9,7 @@ const EMPTY = { items: [], cursor: null, scanned: 0, total: 0, failed: 0, skippe
 const zh = typeof navigator !== 'undefined' && /^zh/i.test(navigator.language || '');
 const L = zh ? {
   title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
+  openFromDetails: '打开对话全文搜索',
   scope: '搜索范围：所有工作区',
   scopeDetails: '搜索当前连接服务中、所有工作区的普通非空对话。使用「包含归档」调整范围。搜索不包含子代理对话。',
   includeArchived: '包含归档', archived: '已归档', restore: '取消归档并打开', restoring: '正在取消归档…',
@@ -33,6 +34,7 @@ const L = zh ? {
   interrupted: '已停止继续查找；可重新打开搜索结果。', back: '返回搜索结果',
 } : {
   title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
+  openFromDetails: 'Open full-text conversation search',
   scope: 'Search scope: All workspaces',
   scopeDetails: 'Searches ordinary, nonempty conversations across all workspaces on the connected server. Use Include archived to change the scope. Subagent conversations are excluded.',
   includeArchived: 'Include archived', archived: 'Archived', restore: 'Unarchive and open', restoring: 'Unarchiving…',
@@ -120,7 +122,6 @@ function searchValue(value, requestId, query, scope) {
 
 export function installConversationSearch(ctx, react, ui, bridge) {
   const h = react.createElement;
-  const readDefaults = installConversationSearchSettings(ctx, react, ui);
   let services = null, mounted = true, epoch = 0, request = null, timer = 0;
   let scanId = null, mode = 'title-body', includeArchived = false;
   let titleOnlyDefault = false, includeArchivedDefault = false;
@@ -132,6 +133,12 @@ export function installConversationSearch(ctx, react, ui, bridge) {
   const listeners = new Set();
   let revision = 0;
   const publish = () => { revision++; for (const listener of listeners) listener(); };
+  const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
+  const getRevision = () => revision;
+  let hasOverlay = false, hasDetailsAction = false;
+  const canToggleSidebar = () => hasOverlay && hasDetailsAction && !!ui.Modal && !!ui.Input;
+  const readDefaults = installConversationSearchSettings(ctx, react, ui, { onChange: publish, canToggleSidebar });
+  const sidebarHidden = () => canToggleSidebar() && readDefaults()?.showSidebarEntry === false;
   const currentCatalog = () => {
     try { return services ? catalog(ctx.sessions, services.workspaces, includeArchived) : { status: 'unsupported', rows: [] }; }
     catch (_) { return { status: 'failedList', rows: [] }; }
@@ -423,15 +430,43 @@ export function installConversationSearch(ctx, react, ui, bridge) {
         h('div', { id: helpId, hidden: !helpOpen, className: 'dsh-find-all-conversations-help-content' },
           h('p', null, L.scopeDetails), h('p', null, L.order), h('p', null, L.snapshot), h('p', null, L.semantics), h('p', null, L.handoff))));
   }
-  function Entry(props) {
-    react.useSyncExternalStore(listener => { listeners.add(listener); return () => listeners.delete(listener); }, () => revision);
+  function SidebarEntry(props) {
+    react.useSyncExternalStore(subscribe, getRevision);
+    if (sidebarHidden()) return null;
     const Icon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
     return h(react.Fragment, null,
       h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', title: notice || L.title, 'aria-label': L.title, onClick: () => show(), style: { width: '100%', justifyContent: props.wide ? 'flex-start' : 'center', gap: 8 } }, Icon ? h(Icon, { size: 16 }) : null, props.wide ? L.title : null),
       notice && !open ? h('div', { role: 'status', style: { fontSize: 12, padding: 8, overflowWrap: 'anywhere' } }, notice) : null,
-      open && ui.Modal ? h(Panel) : null);
+      !hasOverlay && open && ui.Modal ? h(Panel) : null);
   }
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'dsh-find-all-search', order: 10 }, Entry));
+  function SearchOverlay() {
+    react.useSyncExternalStore(subscribe, getRevision);
+    if (open && ui.Modal) return h(Panel);
+    if (!notice || !sidebarHidden()) return null;
+    const message = notice;
+    return ui.Toast ? h(ui.Toast, { key: message, text: message, onDone: () => {
+      if (notice === message) { notice = ''; publish(); }
+    } }) : h('div', { role: 'status' }, message);
+  }
+  function DetailsAction({ subject }) {
+    react.useSyncExternalStore(subscribe, getRevision);
+    if (!sidebarHidden() || subject?.kind !== 'bundle' || subject.pkg?.name !== __DSH_FIND_ALL_PACKAGE__ ||
+        !subject.pkg.installed || !subject.pkg.enabled) return null;
+    return h(ui.Button, { type: 'button', size: 'sm', variant: 'outline', onClick: () => show() }, L.openFromDetails);
+  }
+  ctx.slots.inject('shell.overlay', () => {
+    const stop = ctx.slots.register({ name: 'shell.overlay', id: 'dsh-find-all-search' }, SearchOverlay);
+    hasOverlay = true;
+    publish();
+    return () => { hasOverlay = false; stop(); publish(); };
+  });
+  ctx.slots.inject('plugins.detail.actions', () => {
+    const stop = ctx.slots.register({ name: 'plugins.detail.actions', id: 'dsh-find-all-search' }, DetailsAction);
+    hasDetailsAction = true;
+    publish();
+    return () => { hasDetailsAction = false; stop(); publish(); };
+  });
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'dsh-find-all-search', order: 10 }, SidebarEntry));
   if (typeof ctx.inject === 'function') ctx.inject(['uiWorkspace', 'workspaces', 'layout'], child => {
     child.effect(() => {
       if (typeof child.uiWorkspace?.openSession !== 'function' || typeof child.layout?.panelInfo?.subscribe !== 'function' || typeof child.layout?.panelInfo?.getSnapshot !== 'function' || typeof child.workspaces?.list?.subscribe !== 'function' || typeof ctx.sessions?.list?.subscribe !== 'function') return;

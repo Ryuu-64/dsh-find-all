@@ -9,13 +9,13 @@ import { prepareContext, finishContext, projectInboxSplice, createContextClassif
 
 const TEXT_TYPES = new Set(["text", "reasoning"]);
 const BOUNDARIES = new Set(["assistant/message", "tool/call", "tool/result", "llm/retry", "turn/end", "turn/start"]);
-// Explicit RC2 non-body vocabulary. Known is not synonymous with searchable:
+// Explicit non-body vocabulary for the supported hosts. Known is not synonymous with searchable:
 // other visible body schemas below are reported as coverage gaps, not skipped.
 const NON_BODY_EVENTS = new Set([
 	"agent-preset/selected", "agent/inbox/spliced", "approval/asked", "approval/decided", "approval/policy",
 	"command/run", "compaction/end", "compaction/prune", "compaction/start", "deliverables/presented",
 	"feedback/message-delete", "feedback/message-put", "feedback/record", "goal/change", "hook/invoked", "hook/result",
-	"image/offload", "llm/retry", "llm/retry-started", "model/selection", "permission/preset", "plan/mode",
+	"image/offload", "job/registered", "job/settled", "llm/retry", "llm/retry-started", "model/selection", "permission/preset", "plan/mode",
 	"request/context", "request/header", "sandbox/mode", "schedule/change", "session-log-deepseek/delivery-accepted",
 	"session/end-seed", "session/title", "session/title-llm-request", "step/end", "step/start", "subagent/catalog",
 	"subagent/descriptor", "subagent/model-selection-policy", "team/member", "team/message/delivered",

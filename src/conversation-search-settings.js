@@ -1,14 +1,16 @@
 const ENTRY = 'find-all';
 const ROW = '@ryuu-64/dsh-find-all#find-all';
 const LOCALE = 'dsh-find-all.settings';
-const FIELDS = ['defaultTitleOnly', 'defaultIncludeArchived'];
+const FIELDS = ['defaultTitleOnly', 'defaultIncludeArchived', 'showSidebarEntry'];
 
 const en = {
-  description: 'Defaults for full-text conversation search.',
+  description: 'Full-text conversation search settings.',
   defaultTitleOnly: 'Search titles only by default',
   defaultTitleOnlyHint: 'When off, search matches titles and message text. Either mode can be selected in the search dialog.',
   defaultIncludeArchived: 'Include archived conversations by default',
   defaultIncludeArchivedHint: 'Archived conversations can appear in results. Unarchive a conversation to open it.',
+  showSidebarEntry: 'Show full-text conversation search in the sidebar',
+  showSidebarEntryHint: 'When off, open full-text search from the plugin details.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   unavailable: 'Search settings are unavailable.',
@@ -19,11 +21,13 @@ const en = {
 };
 
 const zh = {
-  description: '对话全文搜索的默认选项。',
+  description: '对话全文搜索设置。',
   defaultTitleOnly: '默认仅搜索标题',
   defaultTitleOnlyHint: '关闭后同时搜索标题和正文。打开搜索窗口后也可以切换。',
   defaultIncludeArchived: '默认包含已归档对话',
   defaultIncludeArchivedHint: '让归档对话出现在搜索结果中。打开归档对话前需先取消归档。',
+  showSidebarEntry: '在侧栏显示对话全文搜索',
+  showSidebarEntryHint: '关闭后，可从插件详情页打开对话全文搜索。',
   overridden: '已覆盖',
   reset: '恢复默认',
   unavailable: '搜索设置暂不可用。',
@@ -50,14 +54,20 @@ function booleanField(field) {
 }
 
 // Hosts before the live profile settings API still run the search plugin.
-export function installConversationSearchSettings(ctx, react, ui) {
+export function installConversationSearchSettings(ctx, react, ui, { onChange, canToggleSidebar }) {
   let source;
   ctx.inject(['configForms', 'locale'], child => {
     const { configForms, locale } = child;
     if (typeof configForms?.whileServed !== 'function' || typeof locale?.register !== 'function') return;
     child.effect(() => {
       source = configForms.get(ENTRY);
-      return () => { source = undefined; };
+      const stop = source.subscribe(onChange);
+      onChange();
+      return () => {
+        stop();
+        source = undefined;
+        onChange();
+      };
     });
     if (!ui.SettingsFormModel || !ui.SettingsForm || !ui.Switch || !ui.Tag) return;
     child.effect(() => locale.register(LOCALE, { en, zh }));
@@ -74,7 +84,8 @@ export function installConversationSearchSettings(ctx, react, ui) {
         const { shell, fields } = react.useSyncExternalStore(store.subscribe, store.getSnapshot);
         if (view === 'summary') return t('description');
         const disabled = !shell.writable || shell.saving;
-        const controls = FIELDS.map((field, index) => {
+        const visibleFields = canToggleSidebar() ? FIELDS : FIELDS.filter(field => field !== 'showSidebarEntry');
+        const controls = visibleFields.map((field, index) => {
           const label = t(field);
           const value = fields[field];
           return h('div', { key: field, style: { display: 'grid', gap: 6, padding: '12px 0',

@@ -32,6 +32,8 @@ If you have `dsh-find-bar` installed, remove it first to avoid a shortcut confli
 
 If the conversation is already open, press `⌘F / Ctrl+F`. Use `Enter` or `Shift+Enter` to move between matches and `Esc` to close the find bar.
 
+Full-text conversation search has no default shortcut. To set one, find **Full-text conversation search** in DSH’s **Keyboard shortcuts** settings.
+
 ## Search options and limits
 
 - **Across workspaces**, select **Titles only** or **Include archived** to change what you search. Select **Load more results** if the search has more conversations to scan. Use **Unarchive and open** to open an archived conversation. Press `Enter` in the search field to rerun the search after conversations change.

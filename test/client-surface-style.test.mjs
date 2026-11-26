@@ -6,7 +6,7 @@ const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'
 
 test('the in-conversation find bar uses the compact, title-free move surface', () => {
   const styleStart = source.indexOf('" .move-header{display:flex');
-  const start = source.indexOf('function buildMoveHeader(bar, controls)');
+  const start = source.indexOf('function buildMoveHeader(bar, controls, localize)');
   const end = source.indexOf('function scheduleBarPosition()', start);
   assert.notEqual(styleStart, -1, 'the move header must be styled as the drag surface');
   assert.notEqual(start, -1, 'the find bar must build one focusable move header');
@@ -19,8 +19,8 @@ test('the in-conversation find bar uses the compact, title-free move surface', (
   assert.doesNotMatch(header, /move-title|title\.textContent/);
   assert.match(header, /event\.target\.closest\("input, button, select, textarea, a, \[contenteditable\]"\)/,
     "dragging must not intercept inputs or buttons");
-  assert.match(source, /bar\.setAttribute\("aria-label", L\d*\.findTitle\)/);
-  assert.match(header, /header\.setAttribute\("aria-label", L\d*\.move\)/);
+  assert.match(source, /bar\.setAttribute\("aria-label", t\("findTitle"\)\)/);
+  assert.match(header, /setLabel\(header, t\("move"\)\)/);
   assert.match(header, /event\.target !== event\.currentTarget/,
     'keyboard movement must not consume keys from the header action buttons');
   assert.match(header, /event\.key === " "\).*event\.preventDefault\(\)/s,

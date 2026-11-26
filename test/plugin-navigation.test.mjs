@@ -30,7 +30,7 @@ test('older hosts still show update instructions without exposing a nonfunctiona
     ui.w.document.querySelector('.content-filter').click();
     const section = ui.w.document.querySelector('.update-command');
     assert.equal(section.querySelector('button').hidden, true);
-    assert.equal(section.querySelector('a[href]').hash, '#%E6%9B%B4%E6%96%B0');
+    assert.equal(section.querySelector('a[href]').hash, '#updating');
   } finally {
     await ui.finish();
   }

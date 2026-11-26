@@ -1,6 +1,7 @@
 /*! dsh-find-all. Copyright (c) 2026 secyborg; Copyright (c) 2026 Ryuu-64. MIT.
  * Forked from secyborg/dsh-find-bar ce7eb75efe94d768127c5977c649ecd950a9356c. See LICENSE and NOTICE.md. */
 import { installConversationSearch } from "./conversation-search.js";
+import { installClientLocale } from "./locale.js";
 import { createHistoryRevisionTracker } from "./history-revision.js";
 import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
@@ -32,8 +33,22 @@ var BAR_ID = "dsh-find-all-root";
 			TH: 1, THEAD: 1, TR: 1, UL: 1
 		};
 
-		var ZH = typeof navigator !== "undefined" && /^zh/i.test(navigator.language || "");
-		var L = ZH ? {
+		const FIND_LOCALE = "dsh-find-all.find";
+		const zh = {
+			updateGuideHref: "https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/README.zh-CN.md#更新",
+			searchReturn: "返回搜索结果",
+			searchConversations: "对话全文搜索",
+			notVisible: "已找到结果，但它没有显示在对话正文中。",
+			imageDescription: "在图片说明中找到结果，但无法在正文中高亮。",
+			partiallyVisible: "已找到结果，但这部分内容未在对话中完整显示。",
+			wholeUnavailable: "完整会话搜索不可用：宿主缺少历史读取或文本投影能力。请切换到已加载内容",
+			liveCount: "当前正在生成的回复中另有 {n} 个匹配。",
+			maskedCount: "全文计数使用默认遮挡文字；展开只改变当前消息显示。",
+			historyTruncated: "部分内容没有完整保存，搜索结果可能不完整。",
+			chooseLoaded: "无法搜索完整对话，请选择“已加载内容”。",
+			sourceChanged: "此消息的显示已变化，原高亮已清除；全文计数仍按默认显示计算。",
+			crossFinding: "正在此对话内查找。",
+			crossNoMatch: "此会话的当前搜索范围内未找到该关键词；跨对话匹配规则可能不同。可返回搜索结果。",
 			placeholder: "在此会话中查找…",
 			prev: "上一个匹配",
 			next: "下一个匹配",
@@ -56,7 +71,7 @@ var BAR_ID = "dsh-find-all-root";
 			optionsChanged: "；已修改默认设置",
 			contentLegend: "选择要搜索的内容类型",
 			contentReset: "恢复默认内容类型",
-			contentTypes: { user: "用户发送的消息", assistant: "助手最终回复", "assistant-rich": "最终回复中的代码、链接、引用和列表", reasoning: "思考过程", tool: "工具调用和工具结果", subagent: "子代理原始回传", context: "注入上下文" },
+			"contentType.user": "用户发送的消息", "contentType.assistant": "助手最终回复", "contentType.assistant-rich": "最终回复中的代码、链接、引用和列表", "contentType.reasoning": "思考过程", "contentType.tool": "工具调用和工具结果", "contentType.subagent": "子代理原始回传", "contentType.context": "注入上下文",
 			scopeWhole: "完整会话",
 			scopePage: "已加载内容",
 			loading: "正在搜索完整对话…",
@@ -78,7 +93,22 @@ var BAR_ID = "dsh-find-all-root";
 			return_unavailable: "宿主无法提供所需内容或定位能力。", return_capped: "已达到历史加载上限，可重试。",
 			return_stalled: "等待内容时没有进展，可重试。", return_error: "读取原内容失败，可重试。",
 			return_position: "宿主未保持原段落可见。可先在正文内滚动，再重试。"
-		} : {
+		};
+		const en = {
+			updateGuideHref: "https://github.com/Ryuu-64/dsh-find-all#updating",
+			searchReturn: "Back to search results",
+			searchConversations: "Full-text conversation search",
+			notVisible: "A result was found, but it is not shown in the conversation.",
+			imageDescription: "A result was found in an image description, but it cannot be highlighted in the conversation.",
+			partiallyVisible: "A result was found, but this content is not fully shown in the conversation.",
+			wholeUnavailable: "Whole-session search unavailable: history or text projection capability missing. Switch to Loaded content",
+			liveCount: "The reply being generated contains {n} additional matches.",
+			maskedCount: "Whole-history counts use default masked text; revealing changes only the displayed message.",
+			historyTruncated: "Some content was not saved in full, so results may be incomplete.",
+			chooseLoaded: "The whole conversation cannot be searched. Choose “Loaded content”.",
+			sourceChanged: "This message display changed; its highlight was cleared. Whole-history counts still use the default display.",
+			crossFinding: "Finding in this conversation.",
+			crossNoMatch: "No match in this conversation’s current search scope. Cross-conversation matching differs; you can return to the results.",
 			placeholder: "Find in this conversation…",
 			prev: "Previous match",
 			next: "Next match",
@@ -101,7 +131,7 @@ var BAR_ID = "dsh-find-all-root";
 			optionsChanged: "; defaults changed",
 			contentLegend: "Choose content types to search",
 			contentReset: "Reset content types",
-			contentTypes: { user: "User messages", assistant: "Assistant final replies", "assistant-rich": "Code, links, quotes, and lists in final replies", reasoning: "Reasoning", tool: "Tool calls and results", subagent: "Raw subagent returns", context: "Injected context" },
+			"contentType.user": "User messages", "contentType.assistant": "Assistant final replies", "contentType.assistant-rich": "Code, links, quotes, and lists in final replies", "contentType.reasoning": "Reasoning", "contentType.tool": "Tool calls and results", "contentType.subagent": "Raw subagent returns", "contentType.context": "Injected context",
 			scopeWhole: "Whole conversation",
 			scopePage: "Loaded content",
 			loading: "Searching the whole conversation…",
@@ -991,7 +1021,7 @@ var BAR_ID = "dsh-find-all-root";
 			var available = originValid(state.origin) && state.origin.navigated;
 			state.returnBtn.hidden = !state.restoring && !available;
 			state.returnBtn.disabled = !!state.restoring;
-			var label = state.restoring ? L.returning : L.returnPosition;
+			var label = state.restoring ? t('returning') : t('returnPosition');
 			state.returnBtn.querySelector('.return-label').textContent = label;
 			state.returnBtn.setAttribute('aria-label', label);
 			state.returnBtn.title = label;
@@ -1021,7 +1051,7 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
         function navigateToRange(range) {
-            cancelReturn(L.returnCancelled);
+            cancelReturn('returnCancelled');
             cancelNavigation();
             var target = state.target, face = state.adapter && state.adapter.face(target);
             var origin = state.origin, token = state.navigationToken, queryToken = state.queryToken, query = state.query, started = Date.now();
@@ -1032,9 +1062,8 @@ var BAR_ID = "dsh-find-all-root";
             function fail(code) {
                 var reason=diagnosticCode(code || navigationPhase);
                 recordFailure('jump', reason);
-                setStatus(L.matchRevealFailed, false);
-                state.status.title=L.matchRevealFailed+' ('+reason+')';
-                if (state.announcement) state.announcement.textContent = L.matchRevealFailed;
+                setStatus('matchRevealFailed', false, reason);
+                announce('matchRevealFailed');
             }
             function check() {
                 state.navigationTimer = 0;
@@ -1109,7 +1138,7 @@ var BAR_ID = "dsh-find-all-root";
                     updateReturnButton();
                     if (state.jumpStatus !== null) setStatus(state.jumpStatus, false);
                     else if (dataHit) historyStatus();
-                    else if (state.status.textContent === L.matchRevealFailed || announceReturn) setStatus("", false);
+                    else if (state.statusMessage === 'matchRevealFailed' || announceReturn) setStatus("", false);
                     // Return/status rows change the overlay. Inspect that layout too.
                     previous = null; stable = 0; retry(); return;
                 }
@@ -1120,7 +1149,7 @@ var BAR_ID = "dsh-find-all-root";
                 // This bounded observation verifies actual geometry; it is not a
                 // host completion API or a promise that later layout cannot change.
                 if (stable < 2) { navigationPhase="navigation-settling"; retry(); return; }
-                if (announceReturn && state.announcement) state.announcement.textContent = L.returnAvailable;
+                if (announceReturn) announce('returnAvailable');
             }
             check();
         }
@@ -1189,7 +1218,8 @@ var BAR_ID = "dsh-find-all-root";
 		}
 
 		function returnFailure(reason) {
-			return L.returnFailed + ' ' + (L['return_' + reason] || L.return_unavailable);
+			const key = 'return_' + reason;
+			return () => t('returnFailed') + ' ' + t(Object.hasOwn(en, key) ? key : 'return_unavailable');
 		}
 
 		async function returnToOrigin() {
@@ -1200,7 +1230,7 @@ var BAR_ID = "dsh-find-all-root";
 			if (state.paging || state.scanBusy) cancelPageIn(); cancelNavigation();
 			var task = { origin: origin };
 			state.restoring = task;
-			setStatus(L.returning, false); updateReturnButton();
+			setStatus('returning', false); updateReturnButton();
 			function cancelled() { return state.restoring !== task || !originValid(origin); }
 			function finishFailure(reason) {
 				if (cancelled()) return;
@@ -1305,7 +1335,7 @@ var BAR_ID = "dsh-find-all-root";
 				if (state.input) state.input.focus({ preventScroll: true });
 				if (state.scope === "whole") historyStatus(); else setStatus("", false);
 				updateReturnButton();
-				if (state.announcement) state.announcement.textContent = L.returned;
+				announce('returned');
 			} catch (error) { finishFailure('error'); }
 			finally {
 				if (state.restoring === task && !originValid(origin)) {
@@ -1440,11 +1470,15 @@ var BAR_ID = "dsh-find-all-root";
             state.copyEpoch++;
             state.copyPending = false;
             if (state.diagnosticBtn) state.diagnosticBtn.removeAttribute('aria-busy');
-            if (state.diagnosticFeedback) state.diagnosticFeedback.textContent = '';
+            setDiagnosticMessage('');
         }
         function clearDiagnostics() {
             resetDiagnosticCopy();
             state.lastFailure = null;
+        }
+        function setDiagnosticMessage(key) {
+            state.diagnosticMessage = key;
+            if (state.diagnosticFeedback) state.diagnosticFeedback.textContent = key ? t(key) : '';
         }
         async function copyDiagnostics() {
             if (state.copyPending || !state.mounted) return;
@@ -1454,7 +1488,7 @@ var BAR_ID = "dsh-find-all-root";
             var epoch = ++state.copyEpoch, feedback = state.diagnosticFeedback;
             state.copyPending = true;
             state.diagnosticBtn.setAttribute('aria-busy', 'true');
-            feedback.textContent = L.copyingDiagnostics;
+            setDiagnosticMessage('copyingDiagnostics');
             var copied = false;
             try {
                 var summary = { schemaVersion: 1, pluginVersion: __DSH_FIND_ALL_VERSION__, current: diagnosticState(), lastFailure: state.lastFailure };
@@ -1463,7 +1497,7 @@ var BAR_ID = "dsh-find-all-root";
             if (!state.mounted || epoch !== state.copyEpoch || state.diagnosticFeedback !== feedback || !feedback.isConnected) return;
             state.copyPending = false;
             state.diagnosticBtn.removeAttribute('aria-busy');
-            feedback.textContent = copied ? L.copiedDiagnostics : L.copyDiagnosticsFailed;
+            setDiagnosticMessage(copied ? 'copiedDiagnostics' : 'copyDiagnosticsFailed');
         }
 
 		function barAnchor(target) {
@@ -1543,17 +1577,16 @@ var BAR_ID = "dsh-find-all-root";
 			scheduleBarPosition();
 		}
 
-		function buildMoveHeader(bar, controls) {
+		function buildMoveHeader(bar, controls, localize) {
 			var header = document.createElement("div");
 			header.className = "move-header";
 			header.tabIndex = 0;
 			header.setAttribute("role", "group");
-			header.setAttribute("aria-label", L.move);
-			header.title = L.move;
+			localize(() => setLabel(header, t('move')));
 			var actions = document.createElement("div");
 			actions.className = "move-actions";
-			var reset = button(L.resetPosition, "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
-			var closeBtn = button(L.close, "M18 6 6 18M6 6l12 12", close);
+			var reset = button(localize, 'resetPosition', "M3 10a9 9 0 1 1 2 8M3 4v6h6", resetBarPosition);
+			var closeBtn = button(localize, 'close', "M18 6 6 18M6 6l12 12", close);
 			[reset, closeBtn].forEach(function (action) {
 				action.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
 			});
@@ -1656,15 +1689,15 @@ var BAR_ID = "dsh-find-all-root";
                 (state.paging || state.scanBusy || !state.historySnapshot ||
                     state.historySnapshot.status === "reading" || state.historySnapshot.status === "projecting");
             var label;
-            if (!state.query) label = L.countReady;
-            else if (!n) label = complete ? L.countEmpty : searching ? L.countSearching :
-                (!valid || (whole && !wholeAvailable)) ? L.countUnavailable : L.countIncomplete;
-            else if (state.index < 0) label = L.resultCount.replace("{n}", String(total) + suffix);
+            if (!state.query) label = t('countReady');
+            else if (!n) label = complete ? t('countEmpty') : searching ? t('countSearching') :
+                (!valid || (whole && !wholeAvailable)) ? t('countUnavailable') : t('countIncomplete');
+            else if (state.index < 0) label = t('resultCount', { n: String(total) + suffix });
             else label = (state.index + 1) + "/" + total + suffix;
-            var cap = state.capped ? L.cap.replace("{n}", String(MAX_MATCHES)) : "";
+            var cap = state.capped ? t('cap', { n: String(MAX_MATCHES) }) : "";
             state.count.textContent = label;
             state.count.title = label + (cap ? "; " + cap : "");
-            state.count.setAttribute("aria-label", state.count.title + "; " + L.jumpNumber);
+            state.count.setAttribute("aria-label", state.count.title + "; " + t('jumpNumber'));
             state.count.setAttribute("aria-disabled", String(!available));
             if (state.countEdit && !available) cancelCountEdit(false);
             state.count.hidden = !available || !!state.countEdit;
@@ -1678,8 +1711,8 @@ var BAR_ID = "dsh-find-all-root";
                 state.crossSearchReturn.hidden = !fromSearch;
                 state.crossSearchHint.hidden = !fromSearch;
                 state.crossSearchHint.textContent = fromSearch && complete && !n
-                    ? (ZH ? '此会话的当前搜索范围内未找到该关键词；跨对话匹配规则可能不同。可返回搜索结果。' : 'No match in this conversation’s current search scope. Cross-conversation matching differs; you can return to the results.')
-                    : (ZH ? '正在此对话内查找。' : 'Finding in this conversation.');
+                    ? (t('crossNoMatch'))
+                    : (t('crossFinding'));
             }
             var announcement = !state.query || available || complete ? label : "";
             if (state.countLive && state.countLive.textContent !== announcement) state.countLive.textContent = announcement;
@@ -1692,8 +1725,8 @@ var BAR_ID = "dsh-find-all-root";
         function updateCountHint() {
             if (!state.countEdit) return;
             var invalid = state.countInput.getAttribute("aria-invalid") === "true";
-            state.countHint.textContent = (invalid ? L.jumpInvalid : L.jumpRange).replace("{n}", String(resultLength()));
-            if (state.capped) state.countHint.textContent += " " + L.cap.replace("{n}", String(resultLength()));
+            state.countHint.textContent = t(invalid ? 'jumpInvalid' : 'jumpRange', { n: resultLength() });
+            if (state.capped) state.countHint.textContent += " " + t('cap', { n: String(resultLength()) });
         }
         function cancelCountEdit(restoreFocus) {
             if (!state.countEdit) return;
@@ -1708,7 +1741,7 @@ var BAR_ID = "dsh-find-all-root";
             if (state.scope === "page" && state.observer?.takeRecords().length) scheduleRescan();
             if (state.scope === "page" && state.pageDirty) runSearch(true);
             if (!resultLength() || !state.adapter?.valid(state.target)) return;
-            cancelReturn(L.returnCancelled); cancelNavigation(); closeContentPanel();
+            cancelReturn('returnCancelled'); cancelNavigation(); closeContentPanel();
             state.countEdit = { target: state.target, query: state.query, scope: state.scope, revision: state.resultsRevision, composing: false };
             state.countInput.value = String(state.index < 0 ? 1 : state.index + 1);
             state.countInput.removeAttribute("aria-invalid"); state.countHint.removeAttribute("data-error");
@@ -1746,19 +1779,29 @@ var BAR_ID = "dsh-find-all-root";
             return false;
         }
 
-		function setStatus(text, busy) {
+		function setStatus(message, busy, detail) {
 			if (!state.status) return;
 			state.jumpStatus = null;
-			state.status.textContent = text || "";
-			state.status.title = busy ? L.stopTip : (text || "");
-			if (busy) state.status.setAttribute("data-busy", "1");
-			else state.status.removeAttribute("data-busy");
+			state.statusMessage = message;
+			state.renderStatus = () => {
+				const text = typeof message === 'function' ? message() : message ? t(message) : '';
+				state.status.textContent = text;
+				state.status.title = detail ? text + ' (' + detail + ')' : busy && detail === undefined ? t('stopTip') : text;
+			};
+			state.renderStatus();
+			if (busy) state.status.setAttribute('data-busy', '1');
+			else state.status.removeAttribute('data-busy');
 			updateCount();
 		}
 
 		function setJumpStatus(base) {
-			setStatus(L.jumpHint.replace("{n}", String(resultLength())) + (base ? " " + base : ""), false);
-			state.jumpStatus = base || "";
+			setStatus(() => t('jumpHint', { n: resultLength() }) + (base ? ' ' + t(base) : ''), false);
+			state.jumpStatus = base || '';
+		}
+
+		function announce(key) {
+			state.announcementKey = key;
+			if (state.announcement) state.announcement.textContent = key ? t(key) : '';
 		}
 
 		function updateScopeButton() {
@@ -1767,7 +1810,7 @@ var BAR_ID = "dsh-find-all-root";
 			state.scopeInputs.page.checked = state.scope === "page";
 			if (state.refreshBtn) {
 				state.refreshBtn.disabled = state.scope !== "whole";
-				state.refreshBtn.title = state.scope === "whole" ? L.refreshHistory : L.refreshUnavailable;
+				state.refreshBtn.title = state.scope === "whole" ? t('refreshHistory') : t('refreshUnavailable');
 			}
 			updateContentButton();
 		}
@@ -1784,7 +1827,7 @@ var BAR_ID = "dsh-find-all-root";
 			if (!state.contentBtn) return;
 			var count = selectedContentCount();
 			var changed = state.scope !== "whole" || !contentSelectionIsDefault();
-			var label = L.contentButtonLabel.replace("{n}", String(count)).replace("{scope}", state.scope === "whole" ? L.scopeWhole : L.scopePage).replace("{changed}", changed ? L.optionsChanged : "");
+			var label = t('contentButtonLabel', { n: count, scope: t(state.scope === 'whole' ? 'scopeWhole' : 'scopePage'), changed: changed ? t('optionsChanged') : '' });
 			state.contentBtn.setAttribute("aria-label", label);
 			state.contentBtn.title = label;
 			if (!changed) state.contentBtn.removeAttribute("data-filtered");
@@ -1844,7 +1887,7 @@ var BAR_ID = "dsh-find-all-root";
             var owner = state.target && state.aboutViews.get(state.target.anchor);
             if (!state.aboutAvailable || !owner || state.aboutOwner || !state.mounted) return;
             cancelCountEdit(false);
-            cancelReturn(L.returnCancelled);
+            cancelReturn('returnCancelled');
             cancelNavigation();
             // The host Modal must remember the persistent trigger, not this hidden menu item.
             closeContentPanel(true);
@@ -1928,14 +1971,14 @@ var BAR_ID = "dsh-find-all-root";
 
 		function contentSelectionChanged() {
             cancelCountEdit(false);
-			cancelReturn(L.returnCancelled); cancelNavigation();
+			cancelReturn('returnCancelled'); cancelNavigation();
 			state.selection = null; state.ranges = []; state.index = -1;
 			updateContentButton(); setStatus("", false); runSearch(false);
 			if (state.scope === "whole" && state.query) schedulePageIn();
 		}
 
 		function unavailableStatus() {
-			return state.target || (state.adapter && state.adapter.scopeUnavailable()) ? L.noRoot : L.noTarget;
+			return state.target || (state.adapter && state.adapter.scopeUnavailable()) ? 'noRoot' : 'noTarget';
 		}
 
 		// The code content wrapper survives the host's plain-pre -> Shiki tree
@@ -2053,7 +2096,7 @@ var BAR_ID = "dsh-find-all-root";
         }
         function activateMatch(index) {
             if (!Number.isInteger(index) || index < 0 || index >= resultLength()) return;
-            cancelReturn(L.returnCancelled); cancelNavigation();
+            cancelReturn('returnCancelled'); cancelNavigation();
             if (!state.adapter?.valid(state.target)) { runSearch(false); return; }
             if (state.scope === "whole") { activateHistoryMatch(index); return; }
             var range = state.ranges[index];
@@ -2071,7 +2114,7 @@ var BAR_ID = "dsh-find-all-root";
                 var range=mapped?.blocks&&rangeForBlock(mapped.blocks[hit.blockIndex],hit.start,hit.end);
                 if(!range || range.toString()!==hit.text) {
                     cancelNavigation();state.ranges=[];paint();
-                    state.sourceNotice=ZH?'此消息的显示已变化，原高亮已清除；全文计数仍按默认显示计算。':'This message display changed; its highlight was cleared. Whole-history counts still use the default display.';
+                    state.sourceNotice='sourceChanged';
                     historyStatus();
                 } else {state.ranges[state.index]=range;paint();}
             }
@@ -2127,21 +2170,24 @@ var BAR_ID = "dsh-find-all-root";
             var snapshot=state.historySnapshot;
 			var relevantErrors=selectedHistoryErrors(snapshot);
 			var projectionComplete=selectedProjectionComplete(snapshot);
-            var text;
-			if(!state.projector)text=ZH?'无法搜索完整对话，请选择“已加载内容”。':'The whole conversation cannot be searched. Choose “Loaded content”.';
-			else if(!snapshot)text=state.query?(ZH?'正在搜索完整对话…':'Searching the whole conversation…'):'';
-			else if(snapshot.status==='reading'||snapshot.status==='projecting'||state.scanBusy)text=ZH?'正在搜索完整对话…':'Searching the whole conversation…';
-			else if(snapshot.readComplete&&snapshot.status==='partial'&&!state.scanCancelled&&state.scanCursor>=snapshot.documents.length&&relevantErrors.length&&relevantErrors.every(function(error){return error.code==='truncated-tool-output';}))text=ZH?'部分内容没有完整保存，搜索结果可能不完整。':'Some content was not saved in full, so results may be incomplete.';
-			else if(!snapshot.readComplete||!projectionComplete||!state.scanComplete)text=L.incomplete;
-			else text='';
-			function add(part){if(part)text+=(text?' · ':'')+part;}
-			if(state.capped)add(L.cap.replace('{n}',String(MAX_MATCHES)));
-			if(snapshot?.documents?.some(function(doc){return doc.defaultMasked && contentTypeEnabled(sourceContentType(doc));}))add(ZH?"全文计数使用默认遮挡文字；展开只改变当前消息显示。":"Whole-history counts use default masked text; revealing changes only the displayed message.");
-			add(state.sourceNotice);
-			if(state.liveCount)add((ZH?'当前正在生成的回复中另有 ':'The reply being generated contains ')+state.liveCount+(state.liveCapped?'+':'')+(ZH?' 个匹配。':' additional matches.'));
-            setStatus(text,state.paging||state.scanBusy);
-            var errorCodes=[...new Set(relevantErrors.map(function(error){return diagnosticCode(error.code);}))].join(", ");
-            state.status.title=text+(errorCodes?" ("+errorCodes+")":"");
+            function renderMessage() {
+                const parts = [];
+                if (!state.projector) parts.push(t('chooseLoaded'));
+                else if (!snapshot) {
+                    if (state.query) parts.push(t('loading'));
+                } else if (snapshot.status === 'reading' || snapshot.status === 'projecting' || state.scanBusy) parts.push(t('loading'));
+                else if (snapshot.readComplete && snapshot.status === 'partial' && !state.scanCancelled &&
+                    state.scanCursor >= snapshot.documents.length && relevantErrors.length &&
+                    relevantErrors.every(error => error.code === 'truncated-tool-output')) parts.push(t('historyTruncated'));
+                else if (!snapshot.readComplete || !projectionComplete || !state.scanComplete) parts.push(t('incomplete'));
+                if (state.capped) parts.push(t('cap', { n: MAX_MATCHES }));
+                if (snapshot?.documents?.some(doc => doc.defaultMasked && contentTypeEnabled(sourceContentType(doc)))) parts.push(t('maskedCount'));
+                if (state.sourceNotice) parts.push(t(state.sourceNotice));
+                if (state.liveCount) parts.push(t('liveCount', { n: state.liveCount + (state.liveCapped ? '+' : '') }));
+                return parts.join(' · ');
+            }
+            var errorCodes=[...new Set(relevantErrors.map(function(error){return diagnosticCode(error.code);}))].join(', ');
+            setStatus(renderMessage, state.paging || state.scanBusy, errorCodes);
 
         }
         function startPageIn() {
@@ -2151,7 +2197,7 @@ var BAR_ID = "dsh-find-all-root";
             var remote=state.remote&&state.remote.session;
             if(!state.projector||!remote||typeof remote.follow!=='function'||typeof remote.page!=='function'){
                 recordFailure('capability', 'unsupported-host');
-                setStatus(ZH?"完整会话搜索不可用：宿主缺少历史读取或文本投影能力。请切换到已加载内容":"Whole-session search unavailable: history or text projection capability missing. Switch to Loaded content",false);return;
+                setStatus('wholeUnavailable',false);return;
             }
             if(state.history&&state.historySnapshot&&state.historySnapshot.sessionId===target.id&& !['cancelled','error'].includes(state.historySnapshot.status)){
                 searchHistory(false);return;
@@ -2270,10 +2316,10 @@ var BAR_ID = "dsh-find-all-root";
             var hit=state.hits[state.index],source=hit.source;
 			state.sourceNotice='';
             historyStatus();
-			if(source.blocks[hit.blockIndex].rendered===false||(source.blocks[hit.blockIndex].visibleChars!==undefined&&hit.end>source.blocks[hit.blockIndex].visibleChars)){state.sourceNotice=ZH?'已找到结果，但这部分内容未在对话中完整显示。':'A result was found, but this content is not fully shown in the conversation.';historyStatus();return;}
-			if(source.blocks[hit.blockIndex].imageDescription){state.sourceNotice=ZH?'在图片说明中找到结果，但无法在正文中高亮。':'A result was found in an image description, but it cannot be highlighted in the conversation.';historyStatus();return;}
+			if(source.blocks[hit.blockIndex].rendered===false||(source.blocks[hit.blockIndex].visibleChars!==undefined&&hit.end>source.blocks[hit.blockIndex].visibleChars)){state.sourceNotice='partiallyVisible';historyStatus();return;}
+			if(source.blocks[hit.blockIndex].imageDescription){state.sourceNotice='imageDescription';historyStatus();return;}
             if(source.transcriptVisible===false||source.mapping==='stored'){
-				state.sourceNotice=ZH?'已找到结果，但它没有显示在对话正文中。':'A result was found, but it is not shown in the conversation.';historyStatus();return;
+				state.sourceNotice='notVisible';historyStatus();return;
             }
             navigateHistoryHit(hit);
         }
@@ -2282,7 +2328,7 @@ var BAR_ID = "dsh-find-all-root";
             var face=state.adapter.face(target),store=state.adapter.nodes(target),activated=new Set();
             function current(){return token===state.navigationToken&&queryToken===state.queryToken&&state.target===target&&state.scope==='whole'&&isOpen()&&state.adapter.valid(target)&&state.adapter.face(target)===face&&state.adapter.nodes(target)===store&&state.hits[state.index]===hit;}
             function pause(){return new Promise(resolve=>setTimeout(resolve,35));}
-            if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus(L.matchRevealFailed,false);return;}
+            if(!face||typeof face.loadThrough!=='function'||!store){if(current())recordFailure('jump','unavailable');setStatus('matchRevealFailed',false);return;}
             state.historyNavigating=true;
             try{
                 var started=Date.now(),requested=false,retryAfterPage=false,mapped,node;
@@ -2317,9 +2363,9 @@ var BAR_ID = "dsh-find-all-root";
                 if(current()){
                     recordFailure('jump','render');
                     state.historyNavigating=false;
-					state.sourceNotice=L.matchRevealFailed;historyStatus();
+					state.sourceNotice='matchRevealFailed';historyStatus();
                 }
-			}catch(error){if(current()){recordFailure('jump','error');state.historyNavigating=false;state.sourceNotice=L.matchRevealFailed;historyStatus();}}
+			}catch(error){if(current()){recordFailure('jump','error');state.historyNavigating=false;state.sourceNotice='matchRevealFailed';historyStatus();}}
         }
 
 		function syncTarget(target, passive) {
@@ -2402,11 +2448,15 @@ var BAR_ID = "dsh-find-all-root";
             return svg;
         }
 
-		function button(label, d, onClick) {
+		function setLabel(node, label) {
+			node.setAttribute("aria-label", label);
+			node.title = label;
+		}
+
+		function button(localize, key, d, onClick) {
 			var btn = document.createElement("button");
 			btn.type = "button";
-			btn.setAttribute("aria-label", label);
-			btn.title = label;
+			localize(() => setLabel(btn, t(key)));
 			btn.appendChild(icon(d, 14));
 			btn.addEventListener("click", onClick);
 			return btn;
@@ -2414,7 +2464,7 @@ var BAR_ID = "dsh-find-all-root";
 
         function onQueryInput(input) {
             cancelCountEdit(false);
-            cancelReturn(L.returnCancelled); cancelNavigation();
+            cancelReturn('returnCancelled'); cancelNavigation();
             state.query = input.value;
             if (state.scope === "whole") { searchHistory(true); if (state.query) schedulePageIn(); return; }
             setStatus("", false); runSearch(false);
@@ -2423,7 +2473,7 @@ var BAR_ID = "dsh-find-all-root";
         function setScope(scope) {
             if (state.scope === scope) return;
             cancelCountEdit(false);
-            cancelReturn(L.returnCancelled); cancelNavigation(); cancelPageIn();
+            cancelReturn('returnCancelled'); cancelNavigation(); cancelPageIn();
             state.scope = scope;
             state.ranges=[];state.index=-1;state.selection=null;updateScopeButton();setStatus("",false);
             runSearch(false);
@@ -2431,21 +2481,23 @@ var BAR_ID = "dsh-find-all-root";
         }
 
 		function buildBar() {
+			const copies = [];
+			function localize(write) { copies.push(write); write(); }
 			var bar = document.createElement("div");
 			bar.id = BAR_ID;
 			bar.setAttribute("role", "search");
-			bar.setAttribute("aria-label", L.findTitle);
+			localize(() => bar.setAttribute("aria-label", t('findTitle')));
 			var controls = document.createElement("div");
 			controls.className = "controls";
-			var closeBtn = buildMoveHeader(bar, controls);
+			var closeBtn = buildMoveHeader(bar, controls, localize);
 			var navigation = document.createElement("div");
 			navigation.className = "navigation-controls";
 
 			var input = document.createElement("input");
 			input.type = "text";
 			input.className = "query";
-			input.placeholder = L.placeholder;
-			input.setAttribute("aria-label", L.placeholder);
+			localize(() => { input.placeholder = t('placeholder'); });
+			localize(() => input.setAttribute("aria-label", t('placeholder')));
 			input.addEventListener("input", function () { onQueryInput(input); });
 
 			var contentBtn = document.createElement("button");
@@ -2461,14 +2513,14 @@ var BAR_ID = "dsh-find-all-root";
 			contentPanel.className = "content-panel";
 			contentPanel.hidden = true;
 			contentPanel.setAttribute("role", "group");
-			contentPanel.setAttribute("aria-label", L.contentButton);
+			localize(() => contentPanel.setAttribute("aria-label", t('contentButton')));
 			// Keep the menu material on the fixed shell while only its contents scroll.
 			var contentViewport = document.createElement("div");
 			contentViewport.className = "content-viewport";
 			var scopeGroup = document.createElement("fieldset");
 			scopeGroup.className = "scope-group";
 			var scopeLegend = document.createElement("legend");
-			scopeLegend.textContent = L.scopeLegend;
+			localize(() => { scopeLegend.textContent = t('scopeLegend'); });
 			scopeGroup.appendChild(scopeLegend);
 			var scopeInputs = {};
 			["whole", "page"].forEach(function (scope) {
@@ -2481,14 +2533,14 @@ var BAR_ID = "dsh-find-all-root";
 				radio.checked = state.scope === scope;
 				radio.addEventListener("change", function () { if (radio.checked) setScope(scope); });
 				var label = document.createElement("span");
-				label.textContent = scope === "whole" ? L.scopeWhole : L.scopePage;
+				localize(() => { label.textContent = scope === "whole" ? t('scopeWhole') : t('scopePage'); });
 				option.appendChild(radio); option.appendChild(label); scopeGroup.appendChild(option);
 				scopeInputs[scope] = radio;
 			});
 			contentViewport.appendChild(scopeGroup);
 			var contentGroup = document.createElement("fieldset");
 			var legend = document.createElement("legend");
-			legend.textContent = L.contentLegend;
+			localize(() => { legend.textContent = t('contentLegend'); });
 			contentGroup.appendChild(legend);
 			var contentOptions = document.createElement("div");
 			contentOptions.className = "content-options";
@@ -2503,7 +2555,7 @@ var BAR_ID = "dsh-find-all-root";
 				checkbox.checked = state.contentTypes[type] === true;
 				checkbox.addEventListener("change", function () { state.contentTypes[type] = checkbox.checked; contentSelectionChanged(); });
 				var label = document.createElement("span");
-				label.textContent = L.contentTypes[type];
+				localize(() => { label.textContent = t('contentType.' + type); });
 				option.appendChild(checkbox); option.appendChild(label); contentOptions.appendChild(option); contentInputs[type] = checkbox;
 			});
 			contentGroup.appendChild(contentOptions);
@@ -2511,7 +2563,7 @@ var BAR_ID = "dsh-find-all-root";
 			var resetContent = document.createElement("button");
 			resetContent.type = "button";
 			resetContent.className = "content-reset";
-			resetContent.textContent = L.contentReset;
+			localize(() => { resetContent.textContent = t('contentReset'); });
 			resetContent.addEventListener("click", function () {
 				CONTENT_TYPES.forEach(function (type) { state.contentTypes[type] = DEFAULT_CONTENT_TYPES[type]; contentInputs[type].checked = DEFAULT_CONTENT_TYPES[type]; });
 				contentSelectionChanged();
@@ -2529,7 +2581,7 @@ var BAR_ID = "dsh-find-all-root";
             countEditor.className = "count-editor"; countEditor.hidden = true;
             var countInput = document.createElement("input");
             countInput.className = "count-input"; countInput.type = "text"; countInput.inputMode = "numeric"; countInput.autocomplete = "off";
-            countInput.setAttribute("aria-label", L.jumpNumber); countInput.setAttribute("aria-describedby", BAR_ID + "-count-hint");
+            localize(() => countInput.setAttribute("aria-label", t('jumpNumber'))); countInput.setAttribute("aria-describedby", BAR_ID + "-count-hint");
             countInput.addEventListener("input", function () { countInput.removeAttribute("aria-invalid"); state.countHint.removeAttribute("data-error"); updateCountHint(); });
             countInput.addEventListener("blur", function () { cancelCountEdit(false); });
             countInput.addEventListener("compositionstart", function () { if (state.countEdit) state.countEdit.composing = true; });
@@ -2548,23 +2600,23 @@ var BAR_ID = "dsh-find-all-root";
 			status.setAttribute("role", "status");
 			status.setAttribute("aria-live", "polite");
 			status.setAttribute("aria-atomic", "true");
-			status.title = L.stopTip;
+			localize(() => { status.title = t('stopTip'); });
 			status.addEventListener("click", function () {
 				if (!state.paging && !state.scanBusy) return;
 				cancelPageIn();
-				setStatus(L.incomplete, false);
+				setStatus('incomplete', false);
 			});
 
 			controls.appendChild(input);
 			controls.appendChild(countState); controls.appendChild(count); controls.appendChild(countEditor);
-			var refreshBtn = button(L.refreshHistory, "M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2", function () {
+			var refreshBtn = button(localize, 'refreshHistory', "M20 7v5h-5M4 17v-5h5M6 8a7 7 0 0 1 12-2l2 3M4 15l2 3a7 7 0 0 0 12-2", function () {
 				if (state.scope !== "whole") return;
 				closeContentPanel(true);
 				cancelPageIn(); cancelNavigation(); state.history = null; state.historySnapshot = null;
 				searchHistory(true); startPageIn();
 			});
 			var refreshLabel = document.createElement("span");
-			refreshLabel.textContent = L.refreshHistory;
+			localize(() => { refreshLabel.textContent = t('refreshHistory'); });
 			refreshBtn.appendChild(refreshLabel);
 			var historyCommand = document.createElement("div");
 			historyCommand.className = "history-command";
@@ -2572,7 +2624,7 @@ var BAR_ID = "dsh-find-all-root";
 			contentViewport.appendChild(historyCommand);
             var searchCommand = document.createElement('div'); searchCommand.className = 'history-command';
             var searchConversations = document.createElement('button'); searchConversations.type = 'button';
-            searchConversations.textContent = ZH ? '对话全文搜索' : 'Full-text conversation search';
+            localize(() => { searchConversations.textContent = t('searchConversations'); });
             searchConversations.addEventListener('click', function () { state.conversationSearch?.open(state.query); });
             searchCommand.appendChild(searchConversations); contentViewport.appendChild(searchCommand);
 			state.refreshBtn = refreshBtn;
@@ -2580,14 +2632,14 @@ var BAR_ID = "dsh-find-all-root";
             updateCommand.className = 'history-command update-command';
             var currentVersion = document.createElement('p');
             currentVersion.className = 'update-version';
-            currentVersion.textContent = L.currentVersion + ' ' + __DSH_FIND_ALL_VERSION__;
+            localize(() => { currentVersion.textContent = t('currentVersion') + ' ' + __DSH_FIND_ALL_VERSION__; });
             var openPluginBtn = document.createElement('button');
             openPluginBtn.type = 'button';
-            openPluginBtn.textContent = L.openPlugin;
+            localize(() => { openPluginBtn.textContent = t('openPlugin'); });
             openPluginBtn.hidden = true;
             var updateGuide = document.createElement('a');
-            updateGuide.className = 'feedback-issue'; updateGuide.textContent = L.updateGuide;
-            updateGuide.href = 'https://github.com/Ryuu-64/dsh-find-all#更新';
+            updateGuide.className = 'feedback-issue'; localize(() => { updateGuide.textContent = t('updateGuide'); });
+            localize(() => { updateGuide.href = t('updateGuideHref'); });
             updateGuide.target = '_blank'; updateGuide.rel = 'noopener noreferrer';
             openPluginBtn.addEventListener('click', function () {
                 var navigation = state.ctx?.get?.('pluginNavigation');
@@ -2604,36 +2656,39 @@ var BAR_ID = "dsh-find-all-root";
             state.openPluginBtn = openPluginBtn;
             var diagnosticCommand = document.createElement('div');
             diagnosticCommand.className = 'history-command diagnostic-command';
-            var diagnosticBtn = button(L.copyDiagnostics, 'M9 5H5v16h12v-4M9 3h12v12H9z', copyDiagnostics);
+            var diagnosticBtn = button(localize, 'copyDiagnostics', 'M9 5H5v16h12v-4M9 3h12v12H9z', copyDiagnostics);
             var diagnosticLabel = document.createElement('span');
-            diagnosticLabel.textContent = L.copyDiagnostics;
+            localize(() => { diagnosticLabel.textContent = t('copyDiagnostics'); });
             diagnosticBtn.appendChild(diagnosticLabel);
             var diagnosticFeedback = document.createElement('span');
             diagnosticFeedback.className = 'diagnostic-feedback';
             diagnosticFeedback.setAttribute('role', 'status');
             var feedbackIssue = document.createElement('a');
-            feedbackIssue.className = 'feedback-issue'; feedbackIssue.textContent = L.feedbackIssue;
+            feedbackIssue.className = 'feedback-issue';
+            var feedbackLabel = document.createTextNode('');
+            feedbackIssue.appendChild(feedbackLabel);
+            localize(() => { feedbackLabel.data = t('feedbackIssue'); });
             feedbackIssue.href = 'https://github.com/Ryuu-64/dsh-find-all/issues/new';
             feedbackIssue.target = '_blank'; feedbackIssue.rel = 'noopener noreferrer';
             feedbackIssue.appendChild(icon('M14 3h7v7M21 3l-9 9M10 5H5v14h14v-5', 14));
             var feedbackPrivacy = document.createElement('p');
-            feedbackPrivacy.className = 'feedback-privacy'; feedbackPrivacy.textContent = L.feedbackPrivacy;
+            feedbackPrivacy.className = 'feedback-privacy'; localize(() => { feedbackPrivacy.textContent = t('feedbackPrivacy'); });
             feedbackPrivacy.id = BAR_ID + '-feedback-privacy'; feedbackIssue.setAttribute('aria-describedby', feedbackPrivacy.id);
             diagnosticCommand.append(diagnosticBtn, diagnosticFeedback, feedbackIssue, feedbackPrivacy);
             contentViewport.appendChild(diagnosticCommand);
             var aboutCommand = document.createElement('div');
             aboutCommand.className = 'history-command';
             var aboutBtn = document.createElement('button');
-            aboutBtn.type = 'button'; aboutBtn.textContent = L.about;
+            aboutBtn.type = 'button'; localize(() => { aboutBtn.textContent = t('about'); });
             aboutBtn.disabled = !state.aboutAvailable;
-            if (!state.aboutAvailable) aboutBtn.title = L.aboutUnavailable;
+            if (!state.aboutAvailable) localize(() => { aboutBtn.title = t('aboutUnavailable'); });
             aboutBtn.setAttribute('aria-haspopup', 'dialog');
             aboutBtn.addEventListener('click', openAbout);
             aboutCommand.appendChild(aboutBtn); contentViewport.appendChild(aboutCommand);
             state.diagnosticBtn = diagnosticBtn;
             state.diagnosticFeedback = diagnosticFeedback;
-			navigation.appendChild(button(L.prev, "m18 15-6-6-6 6", function () { goTo(-1); }));
-			navigation.appendChild(button(L.next, "m6 9 6 6 6-6", function () { goTo(1); }));
+			navigation.appendChild(button(localize, 'prev', "m18 15-6-6-6 6", function () { goTo(-1); }));
+			navigation.appendChild(button(localize, 'next', "m6 9 6 6 6-6", function () { goTo(1); }));
 			var returnBtn = document.createElement('button');
 			returnBtn.type = 'button'; returnBtn.setAttribute('data-find-all-return', '');
 			returnBtn.hidden = true;
@@ -2657,7 +2712,7 @@ var BAR_ID = "dsh-find-all-root";
 			controls.appendChild(navigation);
 			bar.appendChild(countHint); bar.appendChild(status); bar.appendChild(countLive);
             var searchReturn = document.createElement('button'); searchReturn.type = 'button'; searchReturn.hidden = true;
-            searchReturn.textContent = ZH ? '返回搜索结果' : 'Back to search results';
+            localize(() => { searchReturn.textContent = t('searchReturn'); });
             searchReturn.style.cssText = 'align-self:flex-start;background:transparent;color:inherit;border:0;text-decoration:underline;cursor:pointer;font-size:12px';
             searchReturn.addEventListener('click', function () { state.conversationSearch?.open(); });
             var searchHint = document.createElement('span'); searchHint.hidden = true;
@@ -2673,6 +2728,15 @@ var BAR_ID = "dsh-find-all-root";
 			state.contentBtn = contentBtn;
 			state.contentPanel = contentPanel;
 			state.contentInputs = contentInputs;
+			state.refreshCopy = () => {
+				for (const write of copies) write();
+				updateScopeButton();
+				updateReturnButton();
+				state.renderStatus?.();
+				announce(state.announcementKey);
+				setDiagnosticMessage(state.diagnosticMessage);
+				updateCount();
+			};
 			updateScopeButton();
 			updateContentButton();
 			document.body.appendChild(bar);
@@ -2694,7 +2758,7 @@ var BAR_ID = "dsh-find-all-root";
 			state.bar.style.display = "flex";
 			startBarPositioning();
 			updateReturnButton();
-			if (state.announcement) state.announcement.textContent = "";
+			announce('');
 			var selection = "";
 			try { selection = String(window.getSelection()).trim(); } catch (error) {}
             if (typeof seed === "string") state.query = seed;
@@ -2706,7 +2770,7 @@ var BAR_ID = "dsh-find-all-root";
 			state.input.select();
 			runSearch(false);
 			if (!state.query && state.target && state.adapter && state.adapter.valid(state.target) && !state.origin) {
-				setStatus(L.originUnavailable, false);
+				setStatus('originUnavailable', false);
 			}
 			startObserver();
 			watchSession();
@@ -2740,12 +2804,15 @@ var BAR_ID = "dsh-find-all-root";
 			return !!state.bar && state.bar.style.display !== "none";
 		}
 
+		function t(key, params) { return state.translate(key, params); }
+
 		function apply(ctx) {
 			var react = require("react");
 			var ui = require("@deepseek-ai/dsh-client-ui-primitives");
 			state.aboutAvailable = !!ui.Modal;
 			var SearchIcon = ui.IconSearchOutlineRegular || ui.IconSearchOutline16;
 			state.ctx = ctx;
+			state.translate = installClientLocale(ctx, FIND_LOCALE, { zh, en }, () => state.refreshCopy?.());
 			state.searchContent=createSearchContentService(searchContentChanged);
 			if(typeof ctx.provide==='function')ctx.provide(SEARCH_CONTENT_SERVICE,state.searchContent);
             state.writeClipboard = typeof ui.writeClipboard === "function" ? ui.writeClipboard : null;
@@ -2755,7 +2822,7 @@ var BAR_ID = "dsh-find-all-root";
                 remoteCtx.effect(function(){
                     state.remote=remoteCtx.remote;
                     if(isOpen()&&state.scope==='whole'&&state.query)schedulePageIn();
-                    return function(){cancelCountEdit(false);clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus(L.noService,false);}};
+                    return function(){cancelCountEdit(false);clearDiagnostics();cancelNavigation();cancelPageIn();state.remote=null;state.history=null;state.historySnapshot=null;state.hits=[];state.total=0;state.scanQuery=null;if(state.scope==='whole'){state.ranges=[];state.index=-1;paint();if(isOpen())setStatus('noService',false);}};
                 });
             });
             try {
@@ -2837,24 +2904,24 @@ var BAR_ID = "dsh-find-all-root";
                 var repository = 'https://github.com/Ryuu-64/dsh-find-all';
                 return react.createElement(ui.Modal, {
                     open: true, onClose: requestClose, title: 'dsh-find-all',
-                    closeLabel: L.aboutClose, description: L.aboutDescription,
+                    closeLabel: t('aboutClose'), description: t('aboutDescription'),
                     className: 'dsh-find-all-about', contentClassName: 'dsh-find-all-about-content'
                 }, react.createElement('div', { ref: details, className: 'dsh-find-all-about-details' },
-                    react.createElement('p', null, L.aboutAuthor + ': ', link('Ryuu-64', 'https://github.com/Ryuu-64')),
+                    react.createElement('p', null, t('aboutAuthor') + ': ', link('Ryuu-64', 'https://github.com/Ryuu-64')),
                     react.createElement('section', null,
-                        react.createElement('h3', null, L.aboutSupport),
-                        react.createElement('div', { className: 'dsh-find-all-about-links' }, link(L.feedbackIssue, repository + '/issues/new'), link(L.aboutRepository, repository)),
-                        react.createElement('p', { className: 'dsh-find-all-about-status' }, L.feedbackPrivacy),
+                        react.createElement('h3', null, t('aboutSupport')),
+                        react.createElement('div', { className: 'dsh-find-all-about-links' }, link(t('feedbackIssue'), repository + '/issues/new'), link(t('aboutRepository'), repository)),
+                        react.createElement('p', { className: 'dsh-find-all-about-status' }, t('feedbackPrivacy')),
                         react.createElement('div', { className: 'dsh-find-all-about-group' },
-                            react.createElement('span', null, L.aboutGroup + ': 1129212995'),
-                            react.createElement(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', disabled: copyStatus === 'pending', onClick: copyGroup }, L.aboutCopy)),
-                        react.createElement('p', { role: 'status', className: 'dsh-find-all-about-status' }, copyStatus === 'pending' ? L.aboutCopying : copyStatus === 'copied' ? L.aboutCopied : copyStatus === 'failed' ? L.aboutCopyFailed : '')),
+                            react.createElement('span', null, t('aboutGroup') + ': 1129212995'),
+                            react.createElement(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', disabled: copyStatus === 'pending', onClick: copyGroup }, t('aboutCopy'))),
+                        react.createElement('p', { role: 'status', className: 'dsh-find-all-about-status' }, copyStatus === 'pending' ? t('aboutCopying') : copyStatus === 'copied' ? t('aboutCopied') : copyStatus === 'failed' ? t('aboutCopyFailed') : '')),
                     react.createElement('section', null,
-                        react.createElement('h3', null, L.aboutCredits),
-                        react.createElement('p', null, L.aboutUpstream),
+                        react.createElement('h3', null, t('aboutCredits')),
+                        react.createElement('p', null, t('aboutUpstream')),
                         react.createElement('div', { className: 'dsh-find-all-about-links' },
                             link('secyborg/dsh-find-bar', 'https://github.com/secyborg/dsh-find-bar'),
-                            link('MIT', repository + '/blob/main/LICENSE'), link(L.aboutNotices, repository + '/blob/main/NOTICE.md')))));
+                            link('MIT', repository + '/blob/main/LICENSE'), link(t('aboutNotices'), repository + '/blob/main/NOTICE.md')))));
             }
 			function SessionFind(props) {
 				var anchor = react.useRef(null);
@@ -2879,14 +2946,14 @@ var BAR_ID = "dsh-find-all-root";
 				}, [props.sessionId, nodes]);
 				return react.createElement("span", { ref: anchor, style: { display: "inline-flex", flex: "none" } },
 					react.createElement(ui.Button, {
-					type: "button", size: "sm", variant: "ghost", title: L.find, "aria-label": L.find,
+					type: "button", size: "sm", variant: "ghost", title: t('find'), "aria-label": t('find'),
 					style: { flex: "none", width: 28, padding: 0, color: "var(--dsw-alias-label-secondary)" },
 					"data-find-all-session": props.sessionId,
 					onClick: function (event) { open(event.currentTarget); }
 				}, react.createElement(SearchIcon, { size: 15 })), about[0] ? react.createElement(AboutPanel) : null);
 			}
 			ctx.slots.inject("conversation.session.header.utilities", function () {
-				return ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all" }, SessionFind);
+				return ctx.slots.register({ name: "conversation.session.header.utilities", id: "dsh-find-all", locale: FIND_LOCALE }, SessionFind);
 			});
 			ctx.effect(function () {
                 state.mounted = true;
@@ -2921,7 +2988,7 @@ var BAR_ID = "dsh-find-all-root";
 					if (!viewport || !viewport.scroll.contains(event.target)) return;
 					if (event.type === 'keydown' && !/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(event.key)) return;
 					if (event.target.closest('input, textarea, [contenteditable="true"]')) return;
-					cancelReturn(L.returnCancelled); cancelNavigation();
+					cancelReturn('returnCancelled'); cancelNavigation();
 				}
 				['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) { window.addEventListener(type, interruptReading, true); });
 				window.addEventListener("keydown", handler, true);
@@ -2956,6 +3023,7 @@ var BAR_ID = "dsh-find-all-root";
                     state.bar = state.input = state.count = state.status = state.scopeInputs = state.contentBtn = state.contentPanel = state.contentInputs = null;
                     state.conversationSearch = state.crossSearch = state.crossSearchReturn = state.crossSearchHint = null;
 					state.adapter.clear();
+					state.refreshCopy = state.renderStatus = null;
 					state.target = state.ctx = state.remote = state.history = state.historySnapshot = state.projector = state.searchContent = null;
 				};
 			}, "find-all: browser lifecycle");

@@ -7,10 +7,12 @@ import { createHistoryReader } from "./history.js";
 import { createProjector, collectProjectedBlocks, rangeForBlock, mapProjectedDocument } from "./projection.js";
 import { createUserProjectionBinding } from "./user-projection-binding.js";
 import { createSearchContentService, SEARCH_CONTENT_SERVICE } from "./search-content.js";
+import { projectAnchor } from "./search-anchor.js";
 
 var BAR_ID = "dsh-find-all-root";
 		var HL_ALL = "dsh-find-all-hit";
 		var HL_CUR = "dsh-find-all-cur";
+		var HL_CROSS = "dsh-find-all-cross-result";
 		var MAX_MATCHES = 5000;
 		var CONTENT_TYPES = ["user", "assistant", "assistant-rich", "reasoning", "tool", "subagent", "context"];
 		var DEFAULT_CONTENT_TYPES = { user: true, assistant: true, "assistant-rich": true, reasoning: false, tool: false, subagent: false, context: false };
@@ -324,8 +326,11 @@ var BAR_ID = "dsh-find-all-root";
                 ".dsh-find-all-conversations-archived-row{cursor:default}.dsh-find-all-conversations-row-heading{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;max-width:100%}.dsh-find-all-conversations-row-heading>.dsh-find-all-conversations-title{flex:1;min-width:0}.dsh-find-all-conversations-archive-label{flex:none;font-size:12px;line-height:17px;color:var(--dsw-alias-label-tertiary)}.dsh-find-all-conversations-restore{flex:none}.dsh-find-all-conversations-row-error{min-width:0;max-width:100%;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}" +
                 ".dsh-find-all-conversations-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;font-weight:400}.dsh-find-all-conversations-meta{display:flex;align-items:center;gap:6px;min-width:0;min-height:17px}.dsh-find-all-conversations-info,.dsh-find-all-conversations-snippet{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:17px}.dsh-find-all-conversations-info{flex:none;max-width:40%;color:var(--dsw-alias-label-tertiary)}.dsh-find-all-conversations-info:only-child{max-width:100%}.dsh-find-all-conversations-snippet{flex:1;min-width:0;color:var(--dsw-alias-label-secondary)}" +
                 ".dsh-find-all-about{max-height:100%;font-family:var(--dsw-font-family)}.dsh-find-all-about-content{min-height:0;overflow:auto}.dsh-find-all-about-details{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family);overflow-wrap:anywhere}.dsh-find-all-about-details p{margin:0}.dsh-find-all-about-details h3{margin:0 0 6px;font:500 13px/20px var(--dsw-font-family)}.dsh-find-all-about-details a{color:var(--dsw-alias-state-business-primary);text-underline-offset:3px}.dsh-find-all-about-links{display:flex;flex-wrap:wrap;gap:6px 16px}.dsh-find-all-about-group{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.dsh-find-all-about-status{color:var(--dsw-alias-label-secondary)}.dsh-find-all-about-details :focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}" +
+                ".dsh-find-all-dock{display:flex;height:100%;min-height:0;min-width:0;font-family:var(--dsw-font-family)}" +
+                ".dsh-find-all-dock .dsh-find-all-conversations-layout{overflow:hidden}.dsh-find-all-dock .dsh-find-all-conversations-header{padding:8px 10px}.dsh-find-all-dock .dsh-find-all-conversations-toolbar{padding:0 10px 8px;gap:6px 12px}.dsh-find-all-dock .dsh-find-all-conversations-options{margin-left:0}.dsh-find-all-dock .dsh-find-all-conversations-list{flex:1;max-height:none;padding:4px 8px}.dsh-find-all-dock .dsh-find-all-conversations-footer{padding:4px 10px}.dsh-find-all-dock .dsh-find-all-conversations-meta{flex-wrap:wrap}.dsh-find-all-dock .dsh-find-all-conversations-info{max-width:100%}" +
+                ".dsh-find-all-dock-result{cursor:default;gap:1px;padding:5px 8px}.dsh-find-all-dock-result[data-selected=true],.dsh-find-all-dock-result:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsh-find-all-dock-result button{background:transparent;border:0;padding:0;min-width:0;text-align:left;color:inherit;font-family:inherit;cursor:pointer;border-radius:var(--dsw-radius-sm)}.dsh-find-all-dock-result button .dsh-find-all-conversations-title{display:block}.dsh-find-all-dock-result button:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}.dsh-find-all-dock-result .dsh-find-all-conversations-snippet{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow-wrap:anywhere;color:var(--dsw-alias-label-secondary)}.dsh-find-all-dock-result button.dsh-find-all-conversations-snippet:hover{text-decoration:underline}" +
                 "::highlight(" + HL_ALL + "){background-color:rgba(245,197,24,.42)}" +
-				"::highlight(" + HL_CUR + "){background-color:#f5a623;color:#141414}";
+				"::highlight(" + HL_CUR + "),::highlight(" + HL_CROSS + "){background-color:#f5a623;color:#141414}";
 		}
 
 		function injectCss() {
@@ -1032,6 +1037,11 @@ var BAR_ID = "dsh-find-all-root";
 			state.navigationTimer = 0;
 			state.navigationToken += 1;
             state.historyNavigating=false;state.avoidMatchRange=null;
+            if (state.exactNavigation) {
+                const finish = state.exactNavigation;
+                state.exactNavigation = null;
+                finish(false);
+            }
             if(isOpen())scheduleBarPosition();
 		}
 
@@ -1050,31 +1060,42 @@ var BAR_ID = "dsh-find-all-root";
 			updateReturnButton();
 		}
 
-        function navigateToRange(range) {
+        function navigateToRange(range, external) {
             cancelReturn('returnCancelled');
             cancelNavigation();
-            var target = state.target, face = state.adapter && state.adapter.face(target);
+            var target = external?.target ?? state.target, face = state.adapter && state.adapter.face(target);
             var origin = state.origin, token = state.navigationToken, queryToken = state.queryToken, query = state.query, started = Date.now();
-            var dataHit = state.scope === "whole" ? state.hits[state.index] : null;
+            var dataHit = external?.hit ?? (state.scope === "whole" ? state.hits[state.index] : null);
             var selection = state.selection, activated = new Set(), announceReturn = false, statusApplied = false;
             var transferred = false, directAttempted = false, corrections = 0, previous = null, stable = 0, navigationPhase="navigation-loading";
+            if (external) state.exactNavigation = external.finish;
+            function finish(ok) {
+                state.exactNavigation = null;
+                external.finish(ok);
+            }
             function retry() { state.navigationTimer = setTimeout(check, 100); }
             function fail(code) {
                 var reason=diagnosticCode(code || navigationPhase);
                 recordFailure('jump', reason);
+                if (external) { finish(false); return; }
                 setStatus('matchRevealFailed', false, reason);
                 announce('matchRevealFailed');
             }
             function check() {
                 state.navigationTimer = 0;
-                if (token !== state.navigationToken || queryToken !== state.queryToken || query !== state.query ||
-                    state.target !== target || !state.adapter.valid(target) || state.adapter.face(target) !== face || !isOpen() ||
-                    (dataHit && state.hits[state.index] !== dataHit)) return;
+                if (token !== state.navigationToken) return;
+                if (external ? !external.current() || state.adapter.face(target) !== face :
+                    queryToken !== state.queryToken || query !== state.query || state.target !== target ||
+                    !state.adapter.valid(target) || state.adapter.face(target) !== face || !isOpen() ||
+                    (dataHit && state.hits[state.index] !== dataHit)) {
+                    if (external) finish(false);
+                    return;
+                }
                 if (Date.now() - started >= 1500) { fail(); return; }
                 // Readiness is only permission to try the loaded host action, not
                 // evidence of its landing. Unknown/loading hosts never get writes.
                 if (!face || !hostNavigationReady(target, face)) { previous = null; stable = 0; retry(); return; }
-                positionBar();
+                if (!external) positionBar();
                 var current = state.ranges[state.index], store = state.adapter.nodes(target);
                 if (dataHit) {
                     current = null;
@@ -1097,7 +1118,8 @@ var BAR_ID = "dsh-find-all-root";
                 var geometry = attached && !concealed && matchAnchorRect(current);
                 if (attached && (!geometry || concealed)) revealMatchRange(target, current, activated);
                 if (!geometry) { navigationPhase="navigation-geometry"; previous = null; stable = 0; retry(); return; }
-                state.ranges[state.index] = current; paint();
+                if (external) CSS.highlights.set(HL_CROSS, makeHighlight([current]));
+                else { state.ranges[state.index] = current; paint(); }
                 var viewport = readingViewport(target), landing = matchLanding(current, viewport);
                 if (!landing) { navigationPhase="navigation-viewport"; retry(); return; }
                 if (!transferred && !landing.settled) {
@@ -1124,14 +1146,14 @@ var BAR_ID = "dsh-find-all-root";
                     corrections++;
                     scrollToRange(current);
                     viewport = readingViewport(target); landing = matchLanding(current, viewport);
-                    if (dataHit && landing && !landing.readable) {
+                    if (!external && dataHit && landing && !landing.readable) {
                         state.avoidMatchRange = current; positionBar();
                         landing = matchLanding(current, readingViewport(target));
                     }
                     previous = null; stable = 0;
                     retry(); return;
                 }
-                if (!statusApplied) {
+                if (!external && !statusApplied) {
                     statusApplied = true;
                     announceReturn = originValid(origin) && !origin.navigated;
                     if (originValid(origin)) origin.navigated = true;
@@ -1149,7 +1171,8 @@ var BAR_ID = "dsh-find-all-root";
                 // This bounded observation verifies actual geometry; it is not a
                 // host completion API or a promise that later layout cannot change.
                 if (stable < 2) { navigationPhase="navigation-settling"; retry(); return; }
-                if (announceReturn) announce('returnAvailable');
+                if (external) finish(true);
+                else if (announceReturn) announce('returnAvailable');
             }
             check();
         }
@@ -2293,6 +2316,68 @@ var BAR_ID = "dsh-find-all-root";
         function sourceRows(target,node){
             return Array.from(target.root.querySelectorAll('[data-chat-node-key]')).filter(function(row){return row.dataset.chatNodeKey===node.key;});
         }
+		function clearConversationJump() {
+			if (state.exactNavigation) cancelNavigation();
+			if (highlightsSupported()) CSS.highlights.delete(HL_CROSS);
+		}
+
+		function sourceForAnchor(node, sessionId, anchor) {
+			const data = node.data;
+			const user = data?.seq === anchor.seq && Array.isArray(data.content);
+			if (user && (!data.messageId || data.messageId === anchor.messageId) && anchor.contentIndex === 0) {
+				const raw = data.content.filter(part => part?.type === 'text').map(part => part.text).join('');
+				return { ...anchor, sessionId, kind: 'user', sourceKind: 'user', raw,
+					referenceLabels: data.referenceLabels, skillNames: data.skillNames };
+			}
+			const block = data?.blocks?.[anchor.contentIndex];
+			if (data?.finalNode?.seq === anchor.seq && data.finalNode.messageId === anchor.messageId && block?.kind === 'text') {
+				return { ...anchor, sessionId, kind: 'assistant', format: 'markdown', raw: block.text };
+			}
+			return null;
+		}
+
+		async function jumpToSummary(result, signal) {
+			if (!state.projector || !highlightsSupported()) return false;
+			const { sessionId, anchor } = result;
+			const deadline = Date.now() + 10000;
+			const expanded = new Set();
+			let requestedFace, readFailed = false, hit;
+			while (!signal.aborted && state.mounted && Date.now() < deadline) {
+				const target = state.adapter?.forSession(sessionId);
+				const face = target && state.adapter.face(target);
+				const nodes = target && state.adapter.nodes(target);
+				if (face && nodes && hostNavigationReady(target, face)) {
+					const found = nodes.values().flatMap(node => {
+						const source = sourceForAnchor(node, sessionId, anchor);
+						return source ? [{ node, source }] : [];
+					});
+					if (found.length > 1) return false;
+					if (found.length === 1) {
+						const { node, source } = found[0];
+						hit ??= projectAnchor(state.projector, source, result);
+						if (!hit) return false;
+						const mapped = mapProjectedDocument(hit.source, node, sourceRows(target, node), hit.blockIndex);
+						if (mapped.blocks) {
+							const range = rangeForBlock(mapped.blocks[hit.blockIndex], hit.start, hit.end);
+							if (!range || range.toString() !== hit.text) return false;
+							return new Promise(resolve => navigateToRange(range, {
+								target, hit,
+								current: () => !signal.aborted && state.adapter?.valid(target) && state.adapter.nodes(target) === nodes,
+								finish(ok) { if (!ok) CSS.highlights.delete(HL_CROSS); resolve(ok); },
+							}));
+						}
+						if (mapped.reason === 'source-changed') return false;
+						expandSource(target, node, hit.source, expanded);
+					} else if (requestedFace !== face && typeof face.loadThrough === 'function') {
+						requestedFace = face;
+						Promise.resolve(face.loadThrough(anchor.seq)).catch(() => { if (requestedFace === face) readFailed = true; });
+					} else if (readFailed) return false;
+				}
+				await new Promise(resolve => setTimeout(resolve, 50));
+			}
+			return false;
+		}
+
         function expandSource(target,node,source,activated){
             var rows=sourceRows(target,node),buttons=[];
             // Expand only the target Turn, its containing process group and its
@@ -2751,6 +2836,8 @@ var BAR_ID = "dsh-find-all-root";
 
 		function open(target, seed) {
 			if (typeof document === "undefined" || document.body === null) return;
+			state.conversationSearch?.interruptDockJump();
+			clearConversationJump();
 			var wasOpen = isOpen();
 			syncTarget(target || document.activeElement, false);
 			if (!wasOpen) state.origin = captureReadingOrigin();
@@ -2835,6 +2922,8 @@ var BAR_ID = "dsh-find-all-root";
 			});
             if (typeof ctx.inject === "function") state.conversationSearch = installConversationSearch(ctx, react, ui, {
                 closeFind: close,
+                clearJump: clearConversationJump,
+                jumpToSummary: jumpToSummary,
                 openFind: function (sessionId, query) {
                     if (!state.mounted || !state.adapter) return false;
                     var target = state.adapter.forSession(sessionId);
@@ -2983,6 +3072,11 @@ var BAR_ID = "dsh-find-all-root";
 					if (event.isTrusted && event.target && event.target.closest && event.target.closest('[data-conversation-scroll]')) focus(event);
 				}
 				function interruptReading(event) {
+					if (event.isTrusted && event.target.closest?.('[data-conversation-scroll]') &&
+						!event.target.closest('input, textarea, [contenteditable="true"]') &&
+						(event.type !== 'keydown' || /^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(event.key))) {
+						state.conversationSearch?.interruptDockJump();
+					}
 					if ((!state.restoring && !state.navigationTimer && !state.historyNavigating) || !state.target) return;
 					var viewport = readingViewport(state.target);
 					if (!viewport || !viewport.scroll.contains(event.target)) return;

@@ -8,11 +8,9 @@ Search conversation titles and saved messages across workspaces in DeepSeek Harn
 
 ## Preview
 
-Remember discussing offline export but can't remember which conversation? Search for `离线导出` (offline export) and use the message excerpts to find it.
+Search for `DOMAIN` across workspaces and browse the matching conversations from the right sidebar.
 
-![Chinese DSH interface showing two conversations across workspaces with excerpts matching 离线导出 (offline export)](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/conversation-search.png)
-
-The Chinese interface shows one matching conversation from each of two workspaces.
+![DSH showing the conversation beside right-sidebar search results for DOMAIN from two workspaces](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/conversation-search.png)
 
 ## Install
 
@@ -24,11 +22,11 @@ If you have `dsh-find-bar` installed, remove it first to avoid a shortcut confli
 
 ## Go from search results to the message
 
-1. Open **Full-text conversation search** in the sidebar and enter `离线导出`. The results show titles, workspaces, and message excerpts.
-2. Select **报表功能设计** (Report feature design). The conversation opens with the same query in the find bar. The highlight can land in a different place from the excerpt in the search results.
-3. Click the match count, enter `2`, and press `Enter` to jump to the second match. **Back to search results** restores your query and position in the list.
+1. Open **Full-text conversation search** in the left sidebar or **Search** in the right sidebar tools, then enter `离线导出`. Results show titles, workspaces, and message excerpts.
+2. Select a title to open a conversation, or select its excerpt to jump to that match. The right sidebar keeps your query, filters, and list position as you switch conversations.
+3. In a narrow window, selecting a result collapses the fullscreen sidebar so you can read the conversation. Reopen Search to continue browsing.
 
-![Chinese DSH interface showing 离线导出 highlighted in the Report feature design conversation, with the match counter at 2/2](https://raw.githubusercontent.com/Ryuu-64/dsh-find-all/main/docs/screenshots/in-conversation-find.png)
+On hosts and pages without a right sidebar, search opens in a dialog. A result passes its query to in-conversation find, and **Back to search results** restores the list position.
 
 If the conversation is already open, press `⌘F / Ctrl+F`. Use `Enter` or `Shift+Enter` to move between matches and `Esc` to close the find bar.
 
@@ -36,7 +34,7 @@ Full-text conversation search has no default shortcut. To set one, find **Full-t
 
 ## Search options and limits
 
-- **Across workspaces**, select **Titles only** or **Include archived** to change what you search. Select **Load more results** if the search has more conversations to scan. Use **Unarchive and open** to open an archived conversation. Press `Enter` in the search field to rerun the search after conversations change.
+- **Across workspaces**, select **Titles only** or **Include archived** to change what you search. Select **Load more results** if the search has more conversations to scan. Use **Unarchive** on an archived result to restore it. Press `Enter` in the search field to rerun the search after conversations change.
 - **In the current conversation**, the default search includes user messages and assistant replies. Open `⋯` to choose **Whole conversation** or **Loaded content**, or add content types such as reasoning and tool calls. Use **Loaded content** when whole-conversation search is unavailable.
 - To **save search defaults**, open Find All under **Plugins** in the sidebar and select **Configure** on its component row. Set **Search titles only by default** and **Include archived conversations by default** for the current profile. Your choices apply the next time you open full-text search.
 
@@ -58,7 +56,7 @@ In the find bar, open `⋯` and select **Manage plugin in DSH**. If **Versions**
 
 [Report an issue on GitHub](https://github.com/Ryuu-64/dsh-find-all/issues/new) with steps to reproduce the problem and any relevant screenshots. You can use `⋯` → **Copy diagnostics** to include troubleshooting details. Keep API keys and private conversations out of public issues.
 
-The QQ group is **1129212995**. For search behavior, see **Search help** in the search dialog. For supported versions and tested platforms, see the [compatibility notes](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md).
+The QQ group is **1129212995**. For search behavior, see **Search help** in the results. For supported versions and tested platforms, see the [compatibility notes](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md).
 
 ## Credits
 

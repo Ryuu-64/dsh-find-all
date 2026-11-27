@@ -1,5 +1,6 @@
 // Explicit, cancellable Host batches. No session activation until a row is opened.
 import { installConversationSearchSettings } from './conversation-search-settings.js';
+import { installSearchDock } from './conversation-search-dock.js';
 import { installClientLocale } from './locale.js';
 
 // Document-relative, like official session-log-export, for hosted subpaths.
@@ -11,6 +12,9 @@ const LOCALE = 'dsh-find-all.conversations';
 const zh = {
   title: '对话全文搜索', close: '关闭对话全文搜索', placeholder: '搜索标题和正文…', titlePlaceholder: '搜索标题…',
   openFromDetails: '打开对话全文搜索',
+  dockTitle: '搜索', dockDescription: '搜索所有工作区的对话', unarchive: '取消归档',
+  jump: '定位到命中消息', jumping: '正在定位…', jumpFailed: '无法定位到这处命中。请重试或刷新搜索。',
+  dockHelp: '点击标题打开对话，点击摘要定位到命中消息。',
   scope: '搜索范围：所有工作区',
   scopeDetails: '搜索当前连接服务中、所有工作区的普通非空对话。使用「包含归档」调整范围。搜索不包含子代理对话。',
   includeArchived: '包含归档', archived: '已归档', restore: '取消归档并打开', restoring: '正在取消归档…',
@@ -37,6 +41,9 @@ const zh = {
 const en = {
   title: 'Full-text conversation search', close: 'Close full-text conversation search', placeholder: 'Search titles and message text…', titlePlaceholder: 'Search titles…',
   openFromDetails: 'Open full-text conversation search',
+  dockTitle: 'Search', dockDescription: 'Search conversations across all workspaces', unarchive: 'Unarchive',
+  jump: 'Go to matching message', jumping: 'Locating match…', jumpFailed: 'Could not locate this match. Try again or refresh the search.',
+  dockHelp: 'Select a title to open its conversation, or an excerpt to go to the matching message.',
   scope: 'Search scope: All workspaces',
   scopeDetails: 'Searches ordinary, nonempty conversations across all workspaces on the connected server. Use Include archived to change the scope. Subagent conversations are excluded.',
   includeArchived: 'Include archived', archived: 'Archived', restore: 'Unarchive and open', restoring: 'Unarchiving…',
@@ -117,7 +124,12 @@ function searchValue(value, requestId, query, scope) {
           range.end > row.snippet.length || !literalRanges(row.snippet.slice(range.start, range.end), query).some(match => match.start === 0 && match.end === range.end - range.start)) return null;
       last = range.end;
     }
-    items.push({ sessionId: row.sessionId, archived: row.archived, ...(row.title !== undefined ? { title: row.title } : {}), titleMatch: row.titleMatch, bodyMatch: row.bodyMatch, snippet: row.snippet, ranges: row.ranges });
+    const message = row.message;
+    const anchor = message && typeof message.messageId === 'string' && message.messageId &&
+      ['seq', 'contentIndex', 'start', 'end', 'excerptStart', 'excerptEnd'].every(key => Number.isSafeInteger(message[key]) && message[key] >= 0) &&
+      row.ranges.length === 1 && message.excerptStart <= message.start && message.end <= message.excerptEnd &&
+      message.end - message.start === row.ranges[0].end - row.ranges[0].start;
+    items.push({ sessionId: row.sessionId, archived: row.archived, ...(row.title !== undefined ? { title: row.title } : {}), titleMatch: row.titleMatch, bodyMatch: row.bodyMatch, snippet: row.snippet, ranges: row.ranges, ...(anchor ? { message } : {}) });
   }
   return { items, cursor: value.cursor, scanned: value.scanned, total: value.total, failed: value.failed, skipped: value.skipped, complete: value.complete };
 }
@@ -130,7 +142,8 @@ export function installConversationSearch(ctx, react, ui, bridge) {
   let restoreOperation = null, restoreFeedback = null;
   const scope = () => includeArchived ? ARCHIVED_SCOPE : DEFAULT_SCOPE;
   const invalidateRestoreNavigation = () => { if (restoreOperation) restoreOperation.navigate = false; restoreFeedback = null; };
-  let open = false, query = '', body = 'idle', content = EMPTY, scroll = 0, notice = '', focusOrigin = null;
+  let open = false, modalOpen = false, query = '', body = 'idle', content = EMPTY, scroll = 0, notice = '', focusOrigin = null;
+  let dockJump = null, dockFeedback = null;
   let handoff = null, handoffTimer = 0, handoffStops = [], listStops = [], lastCatalogStatus = '';
   const listeners = new Set();
   let revision = 0;
@@ -138,6 +151,17 @@ export function installConversationSearch(ctx, react, ui, bridge) {
   const t = installClientLocale(ctx, LOCALE, { zh, en }, publish);
   const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
   const getRevision = () => revision;
+  const getDock = installSearchDock(ctx, react, ui, t, {
+    Panel, subscribe, getRevision,
+    activate() { if (mounted && !open) activateSearch(); },
+    foregroundChanged() { bridge.clearJump?.(); },
+    focusInput(root) { root?.querySelector('input[type="search"]')?.focus({ preventScroll: true }); },
+    focusResult(root, intent) {
+      const buttons = root?.querySelectorAll('[data-search-action]') ?? [];
+      [...buttons].find(button => button.dataset.searchSession === intent.sessionId &&
+        button.dataset.searchAction === (intent.summary ? 'summary' : 'title'))?.focus({ preventScroll: true });
+    },
+  });
   let hasOverlay = false, hasDetailsAction = false;
   const canToggleSidebar = () => hasOverlay && hasDetailsAction && !!ui.Modal && !!ui.Input;
   const readDefaults = installConversationSearchSettings(ctx, react, ui, { onChange: publish, canToggleSidebar });
@@ -178,7 +202,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     changed();
   }
   function schedule() {
-    cancelRequest(); content = EMPTY;
+    clearDockJump(); cancelRequest(); content = EMPTY;
     const q = query.trim();
     body = !q ? 'idle' : q.length > 500 || q.includes('\0') ? 'invalid' : 'pending';
     if (body !== 'pending' || !open) { publish(); return; }
@@ -230,10 +254,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (alive()) { request = null; publish(); }
     }
   }
-  function show(seed) {
-    if (!mounted) return;
-    invalidateRestoreNavigation();
-    cancelHandoff(); focusOrigin = document.activeElement; bridge.closeFind();
+  function activateSearch(seed) {
     const defaults = readDefaults();
     const previousMode = mode, previouslyIncludedArchived = includeArchived;
     if (defaults) {
@@ -249,22 +270,70 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (typeof seed === 'string') query = seed;
       scroll = 0; content = EMPTY; body = 'idle';
     }
+    const wasOpen = open;
     open = true; notice = '';
-    if (!ui.Modal || !ui.Input) { open = false; notice = 'unsupported'; publish(); return; }
-    watchLists();
-    // Back preserves completed or stopped results. A changed query starts a fresh scan.
-    if (body === 'idle' || body === 'pending') schedule(); else publish();
+    if (!wasOpen) watchLists();
+    if (body === 'idle') schedule(); else publish();
+  }
+  function show(seed) {
+    if (!mounted) return;
+    invalidateRestoreNavigation();
+    cancelHandoff(); focusOrigin = document.activeElement; bridge.closeFind();
+    if (ui.Input && getDock()?.show()) {
+      modalOpen = false;
+      activateSearch(seed);
+      return;
+    }
+    if (!ui.Modal || !ui.Input) { notice = 'unsupported'; publish(); return; }
+    modalOpen = true;
+    activateSearch(seed);
   }
   function dismiss() {
     invalidateRestoreNavigation();
     const unfinished = body === 'pending' || (!content.complete && !!scanId);
-    open = false; cancelRequest(); stopLists(); cancelHandoff();
+    modalOpen = false; open = false; cancelRequest(); stopLists(); cancelHandoff();
     if (unfinished) body = 'stopped';
     publish();
   }
   function change(value) {
     invalidateRestoreNavigation();
     query = value; scroll = 0; notice = ''; cancelHandoff(); schedule();
+  }
+  function clearDockJump() {
+    dockJump?.abort();
+    dockJump = null;
+    dockFeedback = null;
+    bridge.clearJump?.();
+  }
+  function openDockResult(row, summary, event) {
+    invalidateRestoreNavigation();
+    cancelHandoff();
+    clearDockJump();
+    notice = '';
+    const owner = services;
+    const current = currentCatalog().rows.find(item => item.id === row.id);
+    if (!owner || !current || current.archived) { notice = current?.archived ? 'archivedNow' : 'missing'; publish(); return; }
+    const anchor = summary && row.message;
+    try {
+      getDock()?.beforeOpen(row.id, summary, event.currentTarget === document.activeElement);
+      if (!current.selected) owner.uiWorkspace.openSession(row.id);
+    } catch (_) { notice = 'openFailed'; publish(); return; }
+    if (!anchor || typeof bridge.jumpToSummary !== 'function') { publish(); return; }
+    const controller = new AbortController();
+    const selected = () => owner === services && ctx.sessions.list.getSnapshot()?.byId?.[row.id]?.retainedBy?.mainView > 0 &&
+      owner.layout.panelInfo.getSnapshot()?.activePanelId === null;
+    dockJump = controller;
+    dockFeedback = { id: row.id, key: 'jumping' };
+    const check = () => { if (!selected()) clearDockJump(); publish(); };
+    const stops = [ctx.sessions.list.subscribe(check), owner.layout.panelInfo.subscribe(check)];
+    const result = { sessionId: row.id, anchor, snippet: row.snippet, range: row.ranges[0] };
+    publish();
+    Promise.resolve().then(() => bridge.jumpToSummary(result, controller.signal)).catch(() => false).then(ok => {
+      if (dockJump !== controller || controller.signal.aborted) return;
+      dockJump = null;
+      dockFeedback = ok || !selected() ? null : { id: row.id, key: 'jumpFailed' };
+      publish();
+    }).finally(() => stops.forEach(stop => stop()));
   }
   function launch(row, restored = false) {
     invalidateRestoreNavigation();
@@ -301,7 +370,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     // Let the Host Modal unmount/restore focus before focusing the find input.
     handoffTimer = setTimeout(attempt, 0);
   }
-  async function restoreAndOpen(row) {
+  async function restoreAndOpen(row, docked = false) {
     if (restoreOperation) return;
     cancelHandoff();
     const owner = services, available = currentCatalog();
@@ -320,7 +389,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (fresh.status !== 'ready' || !current || current.archived) {
         restoreFeedback = { id: row.id, key: 'restoreUnconfirmed' }; publish(); return;
       }
-      launch(current, true);
+      if (!docked) launch(current, true);
     } catch (_) {
       if (mounted && services === owner && operation.navigate && open) {
         restoreFeedback = { id: row.id, key: 'restoreUnconfirmed' }; publish();
@@ -329,12 +398,16 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (restoreOperation === operation) { restoreOperation = null; if (mounted && services === owner) publish(); }
     }
   }
-  function Panel() {
+  function Panel({ docked = false }) {
+    react.useSyncExternalStore(subscribe, getRevision);
     const details = react.useRef(null), list = react.useRef(null);
     const [helpOpen, setHelpOpen] = react.useState(false);
     const helpId = react.useId();
     react.useLayoutEffect(() => {
       if (list.current) list.current.scrollTop = scroll;
+    }, [query, mode, includeArchived]);
+    react.useLayoutEffect(() => {
+      if (docked) return;
       const dialog = details.current?.closest('[role="dialog"]');
       const trigger = focusOrigin;
       const legacy = typeof ui.useModalLayer !== 'function';
@@ -397,21 +470,28 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       } }, t('retry')) : null,
       pending || content.cursor ? h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', onClick: () => { cancelRequest(); body = 'stopped'; publish(); } }, t('cancel')) : null,
       !pending && content.cursor ? h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', onClick: () => scanBatch(true) }, t('more')) : null) : null;
-    return h(ui.Modal, { open: true, headless: true, title: t('title'), onClose: requestClose, className: 'dsh-find-all-conversations' },
-      h('div', { ref: details, className: 'dsh-find-all-conversations-layout' },
+    function moveBetweenResults(event) {
+      if (!docked || event.altKey || event.ctrlKey || event.metaKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      const rows = [...list.current.querySelectorAll('[data-search-action="title"]')];
+      const current = event.target.closest('[data-search-action]')?.dataset.searchSession;
+      const index = rows.findIndex(button => button.dataset.searchSession === current);
+      const next = rows[index + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (next) { event.preventDefault(); next.focus(); }
+    }
+    const panel = h('div', { ref: details, className: 'dsh-find-all-conversations-layout' },
         h('div', { className: 'dsh-find-all-conversations-header' },
-          h(ui.Input, { type: 'search', value: query, 'data-modal-autofocus': true, 'aria-label': t('title'), placeholder: mode === 'title' ? t('titlePlaceholder') : t('placeholder'),
+          h(ui.Input, { type: 'search', value: query, 'data-modal-autofocus': !docked || undefined, 'aria-label': t('title'), placeholder: mode === 'title' ? t('titlePlaceholder') : t('placeholder'),
             icon: ui.IconSearchOutlineRegular ? h(ui.IconSearchOutlineRegular, { size: 16 }) : undefined,
             onChange: event => change(event.target.value), onKeyDown: event => {
               if (event.key !== 'Enter' || event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || event.repeat) return;
               event.preventDefault(); invalidateRestoreNavigation(); notice = ''; cancelHandoff(); schedule();
             }, className: 'dsh-find-all-conversations-input' }),
-          h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', 'aria-label': t('close'), title: t('close'), onClick: requestClose, className: 'dsh-find-all-conversations-close' },
+          !docked && h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', 'aria-label': t('close'), title: t('close'), onClick: requestClose, className: 'dsh-find-all-conversations-close' },
             ui.IconCloseOutlineRegular ? h(ui.IconCloseOutlineRegular, { size: 14 }) : '×')),
         h('div', { className: 'dsh-find-all-conversations-toolbar' },
           h('span', { className: 'dsh-find-all-conversations-scope' }, t('scope')),
           h('div', { className: 'dsh-find-all-conversations-options' }, checkbox(mode === 'title', setTitleOnly, t('titleOnly')), checkbox(includeArchived, setIncludeArchived, t('includeArchived')))),
-        h('div', { ref: list, onScroll: event => { scroll = event.currentTarget.scrollTop; }, className: 'dsh-find-all-conversations-list' },
+        h('div', { ref: list, onScroll: event => { scroll = event.currentTarget.scrollTop; }, onKeyDown: moveBetweenResults, className: 'dsh-find-all-conversations-list' },
           !results.items.length && emptyStatus ? h('div', { className: 'dsh-find-all-conversations-empty' }, emptyStatus) : null,
           ...results.items.map(row => {
             const title = row.titleMatch ? highlightedText(h, row.title, literalRanges(row.title, query)) : row.title || t('untitled');
@@ -419,19 +499,29 @@ export function installConversationSearch(ctx, react, ui, bridge) {
             const meta = h('span', { className: 'dsh-find-all-conversations-meta' },
               row.workspace ? h('span', { className: 'dsh-find-all-conversations-info', title: row.workspace }, row.workspace) : null,
               row.snippet ? h('span', { className: 'dsh-find-all-conversations-snippet', title: row.snippet }, highlightedText(h, row.snippet, row.ranges)) : null);
-            const error = restoreFeedback?.id === row.id ? h('span', { className: 'dsh-find-all-conversations-row-error' }, t(restoreFeedback.key)) : null;
+            const feedback = restoreFeedback?.id === row.id ? restoreFeedback : dockFeedback?.id === row.id ? dockFeedback : null;
+            const error = feedback ? h('span', { role: 'status', className: 'dsh-find-all-conversations-row-error' }, t(feedback.key)) : null;
+            if (docked && !row.archived) return h('div', { key: row.id, className: 'dsh-find-all-conversations-row dsh-find-all-dock-result', 'data-selected': row.selected || undefined },
+              h('button', { type: 'button', 'data-search-action': 'title', 'data-search-session': row.id, 'aria-current': row.selected || undefined,
+                onClick: event => openDockResult(row, false, event) }, titleNode),
+              row.workspace ? h('span', { className: 'dsh-find-all-conversations-info', title: row.workspace }, row.workspace) : null,
+              row.snippet ? (row.message ? h('button', { type: 'button', 'data-search-action': 'summary', 'data-search-session': row.id,
+                className: 'dsh-find-all-conversations-snippet', title: t('jump'), onClick: event => openDockResult(row, true, event) }, highlightedText(h, row.snippet, row.ranges)) :
+                h('span', { className: 'dsh-find-all-conversations-snippet' }, highlightedText(h, row.snippet, row.ranges))) : null,
+              error);
             if (!row.archived) return h('button', { key: row.id, type: 'button', onClick: () => launch(row), className: 'dsh-find-all-conversations-row', 'aria-current': row.selected ? 'true' : undefined }, titleNode, meta, error);
             return h('div', { key: row.id, className: 'dsh-find-all-conversations-row dsh-find-all-conversations-archived-row' },
               h('div', { className: 'dsh-find-all-conversations-row-heading' }, titleNode,
                 h('span', { className: 'dsh-find-all-conversations-archive-label' }, t('archived')),
-                h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', className: 'dsh-find-all-conversations-restore', 'aria-disabled': !!restoreOperation, 'aria-label': `${t('restore')}: ${row.title || t('untitled')}`, onClick: () => restoreAndOpen(row) }, restoreOperation?.id === row.id ? t('restoring') : t('restore'))), meta, error);
+                h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', className: 'dsh-find-all-conversations-restore', 'aria-disabled': !!restoreOperation, 'aria-label': `${t(docked ? 'unarchive' : 'restore')}: ${row.title || t('untitled')}`, onClick: () => restoreAndOpen(row, docked) }, restoreOperation?.id === row.id ? t('restoring') : t(docked ? 'unarchive' : 'restore'))), meta, error);
           })),
         h('div', { className: 'dsh-find-all-conversations-footer' },
           h('div', { className: 'dsh-find-all-conversations-status-actions' },
             h('div', { role: 'status', 'aria-live': 'polite', className: 'dsh-find-all-conversations-status' }, announcement), actions),
           h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', 'aria-expanded': helpOpen, 'aria-controls': helpId, onClick: () => setHelpOpen(value => !value), className: 'dsh-find-all-conversations-help' }, t('help'))),
         h('div', { id: helpId, hidden: !helpOpen, className: 'dsh-find-all-conversations-help-content' },
-          h('p', null, t('scopeDetails')), h('p', null, t('order')), h('p', null, t('snapshot')), h('p', null, t('semantics')), h('p', null, t('handoff')))));
+          h('p', null, t('scopeDetails')), h('p', null, t('order')), h('p', null, t('snapshot')), h('p', null, t('semantics')), h('p', null, t(docked ? 'dockHelp' : 'handoff'))));
+    return docked ? panel : h(ui.Modal, { open: true, headless: true, title: t('title'), onClose: requestClose, className: 'dsh-find-all-conversations' }, panel);
   }
   function SidebarEntry(props) {
     react.useSyncExternalStore(subscribe, getRevision);
@@ -440,12 +530,12 @@ export function installConversationSearch(ctx, react, ui, bridge) {
     return h(react.Fragment, null,
       h(ui.Button, { type: 'button', size: 'sm', variant: 'ghost', title: t(notice || 'title'), 'aria-label': t('title'), onClick: () => show(), style: { width: '100%', justifyContent: props.wide ? 'flex-start' : 'center', gap: 8 } }, Icon ? h(Icon, { size: 16 }) : null, props.wide ? t('title') : null),
       notice && !open ? h('div', { role: 'status', style: { fontSize: 12, padding: 8, overflowWrap: 'anywhere' } }, t(notice)) : null,
-      !hasOverlay && open && ui.Modal ? h(Panel) : null);
+      !hasOverlay && modalOpen && ui.Modal ? h(Panel) : null);
   }
   function SearchOverlay() {
     react.useSyncExternalStore(subscribe, getRevision);
-    if (open && ui.Modal) return h(Panel);
-    if (!notice || !sidebarHidden()) return null;
+    if (modalOpen && ui.Modal) return h(Panel);
+    if (!notice || (open && !modalOpen) || !sidebarHidden()) return null;
     const key = notice;
     const message = t(key);
     return ui.Toast ? h(ui.Toast, { key, text: message, onDone: () => {
@@ -481,7 +571,7 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       regions: ['page', 'editable'],
       modals: [],
       resolve: ({ modal }) => {
-        if (!mounted || open || modal) return { status: 'pass' };
+        if (!mounted || modalOpen || modal) return { status: 'pass' };
         return { status: 'handled', run: show };
       },
     }));
@@ -491,21 +581,24 @@ export function installConversationSearch(ctx, react, ui, bridge) {
       if (typeof child.uiWorkspace?.openSession !== 'function' || typeof child.layout?.panelInfo?.subscribe !== 'function' || typeof child.layout?.panelInfo?.getSnapshot !== 'function' || typeof child.workspaces?.list?.subscribe !== 'function' || typeof ctx.sessions?.list?.subscribe !== 'function') return;
       const owner = { uiWorkspace: child.uiWorkspace, workspaces: child.workspaces, layout: child.layout };
       cancelRequest(); services = owner; content = EMPTY; body = 'idle'; watchLists(); if (open) schedule(); publish();
-      return () => { if (services !== owner) return; invalidateRestoreNavigation(); services = null; cancelRequest(); stopLists(); cancelHandoff('interrupted'); content = EMPTY; body = 'idle'; publish(); };
+      return () => { if (services !== owner) return; invalidateRestoreNavigation(); services = null; clearDockJump(); cancelRequest(); stopLists(); cancelHandoff('interrupted'); content = EMPTY; body = 'idle'; publish(); };
     });
   });
   if (typeof ctx.on === 'function') ctx.on('connection/reset', () => {
     invalidateRestoreNavigation();
-    cancelRequest(); cancelHandoff('interrupted'); content = EMPTY; body = 'idle';
+    clearDockJump(); cancelRequest(); cancelHandoff('interrupted'); content = EMPTY; body = 'idle';
     if (open) { watchLists(); schedule(); } else publish();
   });
   ctx.effect(() => {
     function interrupt(event) { if (handoff && event.isTrusted) cancelHandoff('interrupted'); }
     window.addEventListener('pointerdown', interrupt, true); window.addEventListener('keydown', interrupt, true);
     return () => {
-      invalidateRestoreNavigation(); mounted = false; open = false; cancelRequest(); stopLists(); cancelHandoff(); content = EMPTY; query = ''; listeners.clear();
+      invalidateRestoreNavigation(); mounted = false; open = false; modalOpen = false; clearDockJump(); cancelRequest(); stopLists(); cancelHandoff(); content = EMPTY; query = ''; listeners.clear();
       window.removeEventListener('pointerdown', interrupt, true); window.removeEventListener('keydown', interrupt, true);
     };
   });
-  return { open: show, label: () => query ? t('back') : t('title'), isOpen: () => open, cancelHandoff };
+  return {
+    open: show, label: () => query ? t('back') : t('title'), isOpen: () => modalOpen, cancelHandoff,
+    interruptDockJump() { if (dockJump) { clearDockJump(); publish(); } },
+  };
 }

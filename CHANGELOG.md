@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.21
+
+- Open full-text conversation search in the DSH right sidebar. The query, filters, loaded results, and list position stay available while switching conversations.
+- Select a result title to open a conversation or its excerpt to jump to the exact saved match, including matches in older history.
+- Keep the dialog available on hosts and pages without a compatible right sidebar.
+
 ## 0.1.20
 
 - Support DSH `0.2.2-rc.5` while retaining the existing supported releases.

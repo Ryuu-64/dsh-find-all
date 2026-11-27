@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const output = await build({ absWorkingDir: root, entryPoints: ['src/client.js'], bundle: true, write: false,
+  // Keep bundled module names relative to the worktree when node_modules is linked.
+  preserveSymlinks: true,
   metafile: true, format: 'cjs', platform: 'browser', target: ['chrome105'], external: ['react', '@deepseek-ai/dsh-client-ui-primitives'],
   define: {
     'process.env.NODE_ENV': '"production"',

@@ -15,6 +15,33 @@ test('facts cross page boundary but not turn boundary',async()=>{
  const seen=[];const r=reader([user('first'),user('recall',{kind:'session-reference',references:[{label:'A'}]}),user('skill',{kind:'skill-invocation',name:'demo'}),end(),user('next'),end()],s=>{seen.push(s);return {blocks:[{text:s.raw}],errors:[]};});
  const snap=await r.start();assert.equal(snap.readComplete,true);const [a,b]=seen.filter(s=>s.kind==='user');assert.deepEqual(a.userTextFacts,{sessionLabels:['A'],skillNames:['demo']});assert.deepEqual(b.userTextFacts,{sessionLabels:[],skillNames:[]});
 });
+test('job lifecycle records preserve complete history without adding searchable text', async () => {
+  const job = { jobId: 'j1', owner: 's', kind: 'bash', label: 'job metadata', startedAt: 1 };
+  const registered = { type: 'job/registered', data: job };
+  const settled = { type: 'job/settled', data: {
+    ...job, finishedAt: 2, status: 'completed', cause: 'producer', producerReported: true,
+  } };
+  const project = source => ({ blocks: [{ text: source.raw }], errors: [] });
+  for (const lifecycle of [[], [registered], [registered, settled]]) {
+    const snapshot = await reader([user('first'), ...lifecycle, user('second'), end()], project).start();
+    assert.equal(snapshot.readComplete, true);
+    assert.equal(snapshot.coverageComplete, true);
+    assert.equal(snapshot.projectionComplete, true);
+    assert.equal(snapshot.status, 'complete');
+    assert.deepEqual(snapshot.errors, []);
+    assert.deepEqual(snapshot.documents.flatMap(doc => doc.blocks.map(block => block.text)), ['first', 'second']);
+  }
+});
+
+test('unknown job event types still mark history projection partial', async () => {
+  const events = [user('first'), { type: 'job/future', data: {} }, end()];
+  const snapshot = await reader(events, source => ({ blocks: [{ text: source.raw }], errors: [] })).start();
+  assert.equal(snapshot.readComplete, true);
+  assert.equal(snapshot.projectionComplete, false);
+  assert.equal(snapshot.status, 'partial');
+  assert.deepEqual(snapshot.errors.map(error => error.code), ['unsupported-event']);
+});
+
 test('projection failure preserves unrelated results as partial',async()=>{
  for(const mode of ['throw','identity','invalid']){
   const r=reader([user('bad'),user('good'),end()],s=>{if(s.raw==='bad'){if(mode==='throw')throw Error('private payload');if(mode==='invalid')return null;return {source:{...s,seq:99},blocks:[{text:'wrong'}]};}return {blocks:[{text:s.raw}],errors:[]};});

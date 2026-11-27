@@ -1,4 +1,8 @@
-> **Current npm release:** DSH `0.2.2-rc.3` support ships in `0.1.16` and later releases. Earlier supported targets remain in the peer requirements. See the [npm package](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) and [package manifest](../package.json). The separate [0.1.15 / DSH 0.2.1-rc.3 review](rc3-compatibility.md) and the rc.2 results below are historical evidence; they do not imply a new Desktop pass.
+> DSH `0.2.2-rc.5` is supported from Find All `0.1.20`. DSH `0.2.2-rc.3` is supported from `0.1.16`. Earlier targets remain in the [package manifest](../package.json). The [0.1.15 / DSH 0.2.1-rc.3 review](rc3-compatibility.md) records separate historical evidence.
+
+## DSH 0.2.2-rc.5
+
+The official DSH CLI installed the `0.1.20` package into an isolated Web profile on Windows. The in-conversation find bar and cross-conversation full-text search both returned saved messages. Changing DSH's own language setting updated both search interfaces immediately and preserved the active query and results.
 
 ## DSH 0.2.2-rc.3
 

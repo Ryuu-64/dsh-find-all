@@ -32,7 +32,7 @@ const runtime = path.join(run, 'runtime');
 const home = process.env.FIND_ALL_REUSE_RUN ? fs.mkdtempSync(path.join(run, 'home-')) : path.join(run, 'home');
 const workspace = path.join(home, 'workspace');
 const full = process.env.FIND_ALL_FULL_ACCEPTANCE === '1';
-const hostAutoPaging = version === '0.2.2-rc.3';
+const hostAutoPaging = ['0.2.2-rc.3', '0.2.2-rc.5'].includes(version);
 const modernHistory = version.startsWith('0.2.1-') || hostAutoPaging;
 const queryPath = path.join(run, 'content-index.sqlite');
 for (const dir of [discovery, runtime, home]) fs.mkdirSync(dir, { recursive: true });

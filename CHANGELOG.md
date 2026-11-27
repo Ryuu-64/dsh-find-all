@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.20
+
+- Support DSH `0.2.2-rc.5` while retaining the existing supported releases.
+
 ## 0.1.19
 
 - Follow the DSH interface language in the in-conversation find bar, search options, and full-text search. Switching languages preserves the query and results.

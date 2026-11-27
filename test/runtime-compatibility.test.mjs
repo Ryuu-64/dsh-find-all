@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import semver from 'semver';
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
-const versions = ['0.1.5-rc.2','0.1.5-rc.3','0.1.6-alpha.1','0.1.6-alpha.2','0.1.7-alpha.1','0.1.7-alpha.2','0.1.7-rc.1','0.1.7-rc.2','0.2.0-rc.1','0.2.0-rc.2','0.2.1-rc.2','0.2.1-rc.3','0.2.2-rc.3'];
+const versions = ['0.1.5-rc.2','0.1.5-rc.3','0.1.6-alpha.1','0.1.6-alpha.2','0.1.7-alpha.1','0.1.7-alpha.2','0.1.7-rc.1','0.1.7-rc.2','0.2.0-rc.1','0.2.0-rc.2','0.2.1-rc.2','0.2.1-rc.3','0.2.2-rc.3','0.2.2-rc.5'];
 // Official rc.3 app-boot/plugin-compatibility.ts includes prereleases. These
 // manifest assertions are a declaration check, not real-host API acceptance.
 test('all four DSH peers admit only the explicitly reviewed host versions', () => {

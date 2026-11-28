@@ -1,7 +1,7 @@
 {
   "name": "@ryuu-64/dsh-find-all",
   "version": "0.1.21",
-  "description": "Search saved conversation titles and messages across DeepSeek Harness (DSH) workspaces, with Ctrl+F / Cmd+F inside the current chat.",
+  "description": "Full-text conversation search for DeepSeek Harness. Search across workspaces, keep results in the right sidebar, and jump to the original message.",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -33,7 +33,7 @@
     "type": "git",
     "url": "git+https://github.com/Ryuu-64/dsh-find-all.git"
   },
-  "homepage": "https://github.com/Ryuu-64/dsh-find-all#readme",
+  "homepage": "https://ryuu-64.github.io/dsh/en/dsh-find-all/",
   "bugs": {
     "url": "https://github.com/Ryuu-64/dsh-find-all/issues"
   },
@@ -65,7 +65,9 @@
     "search",
     "conversation",
     "conversation-search",
-    "ctrl-f"
+    "ctrl-f",
+    "full-text-search",
+    "right-sidebar"
   ],
   "dsh": {
     "bundle": {

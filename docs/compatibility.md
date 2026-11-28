@@ -1,5 +1,9 @@
 > DSH `0.2.2-rc.5` is supported from Find All `0.1.20`. DSH `0.2.2-rc.3` is supported from `0.1.16`. Earlier targets remain in the [package manifest](../package.json). The [0.1.15 / DSH 0.2.1-rc.3 review](rc3-compatibility.md) records separate historical evidence.
 
+## Find All 0.1.21 · right-sidebar search
+
+Find All 0.1.21 was verified in DSH 0.2.2-rc.5 Desktop on Windows. Where the right-sidebar controls are available, the search panel retains the query, filters and results across conversation switches. Selecting an excerpt jumps to the matching message, including older history. Without a compatible right sidebar, the dialog opens the conversation with the search query and offers **Back to search results**. [Release notes](https://github.com/Ryuu-64/dsh-find-all/releases/tag/v0.1.21)
+
 ## DSH 0.2.2-rc.5
 
 The official DSH CLI installed the `0.1.20` package into an isolated Web profile on Windows. The in-conversation find bar and cross-conversation full-text search both returned saved messages. Changing DSH's own language setting updated both search interfaces immediately and preserved the active query and results.
@@ -47,6 +51,8 @@ The historical host matrix below is not rerun automatically by these changes. Ne
 ---
 
 # Full-text conversation search
+
+> Historical implementation for DSH 0.2.0-rc.2. The 0.1.21 right-sidebar behavior is documented above.
 
 The Full-text conversation search entry's original contract targets public DSH `0.2.0-rc.2` at [`639ed015`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84). This contract history does not claim that every historical peer version or Electron Desktop has passed acceptance. Current `0.2.1-rc.2` support and verification are recorded above.
 

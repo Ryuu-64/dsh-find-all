@@ -2,9 +2,9 @@
 
 [English](https://github.com/Ryuu-64/dsh-find-all/blob/main/README.md) | 简体中文
 
-npm 包：[@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · 由 [Ryuu-64](https://github.com/Ryuu-64) 维护。
+npm 包：[@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · 由 [Ryuu-64](https://github.com/Ryuu-64) 维护。 · [插件页面](https://ryuu-64.github.io/dsh/dsh-find-all/)
 
-在 DeepSeek Harness（DSH）中搜索各工作区对话的标题和已保存正文，也可以按 **⌘F / Ctrl+F** 查找当前对话。
+在 DeepSeek Harness 中跨工作区搜索已保存的对话标题和正文。右栏在切换对话时保留结果，点摘要可直达原文。单个对话里可以用 **⌘F / Ctrl+F** 查找。
 
 ## 效果预览
 
@@ -14,15 +14,25 @@ npm 包：[@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-fin
 
 ## 安装
 
-可以把下面这条请求发给能操作你电脑的 AI 助手。
+**桌面版**
 
-> 请帮我安装这个 DSH 插件，检查兼容性并确认已启用：https://github.com/Ryuu-64/dsh-find-all
+```sh
+dsh plugin --profile desktop add @ryuu-64/dsh-find-all
+```
 
-如果装过 `dsh-find-bar`，请先卸载，避免快捷键冲突。
+**Web 版**
+
+```sh
+dsh plugin --profile web add @ryuu-64/dsh-find-all
+```
+
+这套操作适用 DSH `0.2.2-rc.5`。各版本的实测环境和限制见[兼容说明](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md)。
+
+如已安装 `dsh-find-bar`，请先移除它，避免快捷键冲突。
 
 ## 从搜索结果找到原文
 
-1. 点左栏「对话全文搜索」，或在右栏工具里选「搜索」，输入「离线导出」。结果显示标题、工作区和正文摘要。
+1. 点左栏「对话全文搜索」，或在右栏工具里选「搜索」，输入「DOMAIN」。结果显示标题、工作区和正文摘要。
 2. 点标题打开对话，点摘要定位到那处命中。切换对话时，右栏保留查询、筛选和列表位置。
 3. 窄窗口里，点击结果会收起全屏右栏以显示正文。再次打开搜索可继续浏览。
 

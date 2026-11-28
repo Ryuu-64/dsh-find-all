@@ -2,9 +2,9 @@
 
 English | [简体中文](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/README.zh-CN.md)
 
-npm: [@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · Maintained by [Ryuu-64](https://github.com/Ryuu-64).
+npm: [@ryuu-64/dsh-find-all](https://www.npmjs.com/package/@ryuu-64/dsh-find-all) · Maintained by [Ryuu-64](https://github.com/Ryuu-64). · [Plugin page](https://ryuu-64.github.io/dsh/en/dsh-find-all/)
 
-Search conversation titles and saved messages across workspaces in DeepSeek Harness (DSH), or press **⌘F / Ctrl+F** to find text in the current conversation.
+Search saved conversation titles and messages across DeepSeek Harness workspaces. Keep search results in the right sidebar while switching chats, and select an excerpt to jump to the original message. Use **⌘F / Ctrl+F** to search the current chat.
 
 ## Preview
 
@@ -14,15 +14,25 @@ Search for `DOMAIN` across workspaces and browse the matching conversations from
 
 ## Install
 
-Ask an AI assistant that can operate your computer to install the plugin.
+**Desktop**
 
-> Install this plugin in my DSH setup, check compatibility, and confirm it is enabled: https://github.com/Ryuu-64/dsh-find-all
+```sh
+dsh plugin --profile desktop add @ryuu-64/dsh-find-all
+```
 
-If you have `dsh-find-bar` installed, remove it first to avoid a shortcut conflict.
+**Web**
+
+```sh
+dsh plugin --profile web add @ryuu-64/dsh-find-all
+```
+
+Supported DSH versions for this workflow: `0.2.2-rc.5`. See the [compatibility notes](https://github.com/Ryuu-64/dsh-find-all/blob/main/docs/compatibility.md) for tested hosts and limits.
+
+Remove an installed `dsh-find-bar` first to avoid a shortcut conflict.
 
 ## Go from search results to the message
 
-1. Open **Full-text conversation search** in the left sidebar or **Search** in the right sidebar tools, then enter `离线导出`. Results show titles, workspaces, and message excerpts.
+1. Open **Full-text conversation search** in the left sidebar or **Search** in the right sidebar tools, then enter `DOMAIN`. Results show titles, workspaces, and message excerpts.
 2. Select a title to open a conversation, or select its excerpt to jump to that match. The right sidebar keeps your query, filters, and list position as you switch conversations.
 3. In a narrow window, selecting a result collapses the fullscreen sidebar so you can read the conversation. Reopen Search to continue browsing.
 
